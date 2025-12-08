@@ -18,6 +18,78 @@ def cerate_app():
         
         Time table data are being scraped from IDOS API, IDOS uses PID timetable data."""
         )
+        
+        with gr.Accordion("How Does It Work?", open=False):
+            gr.Markdown(
+                """
+### Problem Formulation
+
+Given a set of **k** starting stops **S = {s₁, s₂, ..., sₖ}**, we want to find an optimal target stop **t*** ∈ **T** (where **T** is the set of all 1463 stops in Prague) that minimizes travel distance/time for all participants.
+
+### Distance Functions
+
+We define two distance metrics:
+
+1. **Geographic Distance**: `d_geo(sᵢ, t) = ||GPS(sᵢ) - GPS(t)||` (distance between stops on a globein kilometers)
+
+2. **Temporal Distance**: `d_time(sᵢ, t, dt) = travel_time(sᵢ → t, dt)` (minutes to travel from sᵢ to t at datetime dt)
+
+The temporal distance is computed by scraping actual public transport schedules from IDOS/DPP APIs for ~2.1M stop combinations.
+
+### Optimization Objectives
+
+We consider two optimization criteria:
+
+#### 1. Minimize Worst Case (Min-Max)
+Find **t*** that minimizes the maximum travel time/distance:
+
+```
+t* = argmin_{t ∈ T} max_{i=1..k} d(sᵢ, t)
+```
+
+Where `d(sᵢ, t)` can be either `d_geo(sᵢ, t)` or `d_time(sᵢ, t, dt)`.
+
+**Objective function**: `f_worst(t) = max(d(s₁, t), d(s₂, t), ..., d(sₖ, t))`
+
+#### 2. Minimize Total Time (Sum)
+Find **t*** that minimizes the sum of all travel times/distances:
+
+```
+t* = argmin_{t ∈ T} Σ_{i=1}^{k} d(sᵢ, t)
+```
+
+**Objective function**: `f_total(t) = Σ_{i=1}^{k} d(sᵢ, t)`
+
+### Algorithm
+
+The algorithm uses a two-stage optimization approach:
+
+**Stage 1: Candidate Selection**
+- Select top **N_geo** candidates based on geographic distance: `C_geo = top_N_geo(argmin_{t ∈ T} f(d_geo(sᵢ, t)))`
+- Select top **N_time** candidates based on pre-scraped temporal distance: `C_time = top_N_time(argmin_{t ∈ T} f(d_time(sᵢ, t, dt_ref)))`
+- Union: `C = C_geo ∪ C_time`
+
+**Stage 2: Real-Time Refinement**
+- For each candidate **c ∈ C**, query actual travel times for the specified datetime **dt**:
+  - `d_actual(sᵢ, c, dt) = get_total_minutes(sᵢ, c, dt)` ∀ **i ∈ {1..k}**
+- Compute objective values:
+  - `f_worst(c) = max(d_actual(s₁, c, dt), ..., d_actual(sₖ, c, dt))`
+  - `f_total(c) = Σ_{i=1}^{k} d_actual(sᵢ, c, dt)`
+- Sort candidates by selected objective and return top **N_display** results
+
+### Complexity
+
+- **Space**: O(|T|²) for pre-computed distance matrix
+- **Time**: O(k × |C| × API_latency) for real-time queries
+- **API Calls**: k × |C| queries to IDOS/DPP APIs
+
+### Default Parameters
+
+- **N_geo** = 10 (top geographic candidates)
+- **N_time** = 25 (top temporal candidates)  
+- **N_display** = 15 (final results shown)
+                """
+            )
 
         with gr.Row():
             number_of_stops = gr.Number(
@@ -139,6 +211,11 @@ def cerate_app():
         )
 
         gr.Markdown("---")
+        gr.Markdown(
+            """
+        **Feedback**: Help me improve the app by sharing your experience [here](https://docs.google.com/forms/d/e/1FAIpQLSeXq6DXWkjcsgs4XRPN0VnccThMwjDQP2Si25MMB76yW14tZA/viewform?usp=dialog).
+        """
+        )
         gr.Markdown(
             """
         Created by [Daniel Herman](https://www.hermandaniel.com), check out the code [detrin/pub-finder](https://github.com/detrin/pub-finder).
