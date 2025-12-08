@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Development files
+results.json
+*.log
+.env
+.env.local
+
+# Documentation
+README.md
+LICENSE
+
+# Development scripts (not needed in production)
+bandit.py
+manager.py
+scraping.py
+prepare_geo_data.py
+requirements_dev.txt
+
+# Data files that are not needed (the parquet file IS needed)
+data/
+*.json
+Prague_stops_geo.csv
+Prague_stops_geo.parquet
+Prague_stops.txt
+
+# Other
+.DS_Store
+*.md
+!README.md

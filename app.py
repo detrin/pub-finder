@@ -19,26 +19,40 @@ def cerate_app():
         Time table data are being scraped from IDOS API, IDOS uses PID timetable data."""
         )
 
-        number_of_stops = gr.Slider(
-            minimum=2, maximum=12, step=1, value=3, label="Number of People"
-        )
+        with gr.Row():
+            number_of_stops = gr.Number(
+                minimum=2, maximum=12, step=1, value=3, label="Number of People"
+            )
 
-        method = gr.Radio(
-            choices=["Minimize worst case for each", "Minimize total time"],
-            value="Minimize worst case for each",
-            label="Optimization Method",
-        )
+            method = gr.Dropdown(
+                choices=["Minimize worst case for each", "Minimize total time"],
+                value="Minimize worst case for each",
+                label="Optimization Method",
+            )
+
+            show_top_geo = gr.Number(
+                minimum=5, maximum=50, step=1, value=10, label="Geo Results"
+            )
+
+            show_top_time = gr.Number(
+                minimum=5, maximum=50, step=1, value=25, label="Time Results"
+            )
+
+            display_top = gr.Number(
+                minimum=5, maximum=50, step=1, value=15, label="Display Top"
+            )
 
         next_dt = get_next_meetup_time(4, 20)  # Friday 20:00
         next_date = next_dt.strftime("%d/%m/%Y")
         next_time = next_dt.strftime("%H:%M")
-        date_input = gr.Textbox(
-            label="Date (DD/MM/YYYY)", placeholder=f"e.g., {next_date}", value=next_date
-        )
+        with gr.Row():
+            date_input = gr.Textbox(
+                label="Date (DD/MM/YYYY)", placeholder=f"e.g., {next_date}", value=next_date
+            )
 
-        time_input = gr.Textbox(
-            label="Time (HH:MM)", placeholder=f"e.g., {next_time}", value=next_time
-        )
+            time_input = gr.Textbox(
+                label="Time (HH:MM)", placeholder=f"e.g., {next_time}", value=next_time
+            )
 
         dropdowns = []
         for i in range(12):
@@ -63,7 +77,7 @@ def cerate_app():
         search_button = gr.Button("Search")
 
         def search_optimal_stop(
-            num_stops, chosen_method, date_str, time_str, *all_stops
+            num_stops, chosen_method, date_str, time_str, top_geo, top_time, display_top_val, *all_stops
         ):
             is_valid, error_message = validate_date_time(date_str, time_str)
             if not is_valid:
@@ -90,7 +104,7 @@ def cerate_app():
                 raise gr.Error(f"Error parsing date and time: {e}")
 
             target_stops = get_optimal_stop(
-                DISTANCE_TABLE, method, selected_stops, show_top_geo=10, show_top_time=SHOW_TOP+10
+                DISTANCE_TABLE, method, selected_stops, show_top_geo=int(top_geo), show_top_time=int(top_time)
             )
             print(target_stops)
             df_times = get_actual_time_optimal_stop(
@@ -99,7 +113,7 @@ def cerate_app():
                 target_stops, 
                 event_datetime, 
                 get_total_minutes_with_retries,
-                show_top=SHOW_TOP
+                show_top=int(display_top_val)
             )
             df_times = df_times.with_row_index("#", offset=1)
 
@@ -113,7 +127,7 @@ def cerate_app():
 
         search_button.click(
             fn=search_optimal_stop,
-            inputs=[number_of_stops, method, date_input, time_input] + dropdowns,
+            inputs=[number_of_stops, method, date_input, time_input, show_top_geo, show_top_time, display_top] + dropdowns,
             outputs=results_table,
         )
 

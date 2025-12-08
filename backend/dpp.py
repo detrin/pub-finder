@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def get_route_info(start_place: str, end_place: str, date: str, time: str, infinite_time: int = 24 * 60) -> int:
+def get_route_info(start_place: str, end_place: str, date: str, time: str) -> int:
     cookies = {
         'consent_analytics_storage': 'denied',
         'consent_is_set': 'true',
@@ -43,13 +43,9 @@ def get_route_info(start_place: str, end_place: str, date: str, time: str, infin
     response.raise_for_status()
     
     soup = BeautifulSoup(response.content, 'html.parser')
-    # save html
-    with open("dpp.html", "w") as f:
-        f.write(response.content.decode("utf-8"))
     
-    # Check if the response indicates no connection was found
     if "Nepodařilo se vyhledat vhodné spojení" in response.text:
-        return infinite_time
+        raise ValueError(f"No connection found for route from {start_place} to {end_place}")
     
     travel_times = []
     for div in soup.find_all("div"):
