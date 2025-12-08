@@ -1,10 +1,8 @@
 import argparse
 import subprocess
-import time
 import re
 import sys
-import random
-from bandit import EpsilonGreedyBandit, EpsilonDecreasingBandit, deploy_bandit
+from bandit import EpsilonDecreasingBandit, deploy_bandit
 
 
 def parse_arguments():

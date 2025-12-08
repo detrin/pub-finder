@@ -22,7 +22,7 @@ We can now iterate over all stops in Prague and for given list of `k` stops we c
 uv venv --python=3.12
 source .venv/bin/activate
 uv pip install -r requirements.txt
-python app.py
+uv run app.py
 ```
 Now you can visit http://0.0.0.0:3000 and enjoy the app.
 
@@ -35,7 +35,7 @@ Now you can enjoy the app on http://localhost:3000.
 
 To remove the image
 ```
-docker rm pdf-summarizer
+docker rm pub-finder
 ```
 
 
@@ -47,9 +47,10 @@ python3.12 prepare_geo_data.py
 
 For scraping use the following. Repeat until you scrape all the combinations. Internally you can swith between IDOS and DPP providers. DPP has slightly higher error rate
 ```
-python3.12 scraping.py --num-processes 50 --num-tasks 50
-python3.12 manager.py --threshold-error-rate 0.1
+uv run scraping.py --num-processes 50 --num-tasks 50
+uv run manager.py --threshold-error-rate 0.1
 jq '. | (length / 2138906) * 100' results.json
+jq 'map(select(.error != "Failed to retrieve data."))' results.json > results_filtered.json; mv results_filtered.json results.json
 ```
 
 ## Sources

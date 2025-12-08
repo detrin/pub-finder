@@ -6,15 +6,6 @@ import geopy.distance
 
 
 def extract_unique_stops(json_directory: str) -> pl.DataFrame:
-    """
-    Extracts unique stops from multiple JSON files and returns a Polars DataFrame.
-
-    Parameters:
-    - json_directory: Directory path where JSON files are located.
-
-    Returns:
-    - Polars DataFrame with unique stops based on 'fullName' and 'lineType'.
-    """
     json_pattern = f"{json_directory}/Prague_stops_gps_*.json"
     json_files = glob.glob(json_pattern)
 
@@ -61,14 +52,12 @@ def extract_unique_stops(json_directory: str) -> pl.DataFrame:
 if __name__ == "__main__":
     json_dir = "data"
     stops_geo_data = extract_unique_stops(json_dir)
-    # print(stops_geo_data)
     stops_file = "Prague_stops.txt"
     with open(stops_file, "r", encoding="utf-8") as f:
         stops = [line.strip() for line in f if line.strip()]
 
     stops_df = pl.DataFrame(stops, schema=["name"])
-    prague_stops = stops_df.join(stops_geo_data, on="name", how="inner")
-    # print(prague_stops)
+    prague_stops = stops_df.join(stops_geo_data, on="name", how="inner").sort("name")
 
     for stop in stops:
         if stop not in prague_stops["name"]:
