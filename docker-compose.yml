@@ -8,6 +8,14 @@ services:
     container_name: pub-finder
     ports:
       - "3000:3000"
+    environment:
+      - GRADIO_ANALYTICS_ENABLED=False
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - DISABLE_TELEMETRY=1
+      - DO_NOT_TRACK=1
+      - HF_HUB_DISABLE_IMPLICIT_TOKEN=1
+      - HF_HUB_DISABLE_TELEMETRY=1
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/').read()"]
       interval: 30s
