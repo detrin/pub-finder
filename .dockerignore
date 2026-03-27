@@ -31,7 +31,7 @@ LICENSE
 
 # Development scripts (not needed in production)
 data_preparation/
-requirements_dev.txt
+tests/
 
 # Data files — include parquet + stops list, exclude the rest
 data/*.json
