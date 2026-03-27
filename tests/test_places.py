@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 import aiosqlite
-from db import init_db
+from backend.db import init_db
 from backend.places import parse_places_response, get_cached_pubs, cache_pubs
 
 

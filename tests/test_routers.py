@@ -3,8 +3,8 @@ import pytest_asyncio
 import aiosqlite
 from httpx import ASGITransport, AsyncClient
 
-from db import init_db
-from main import app, app_state
+from backend.db import init_db
+from main import app
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -12,8 +12,7 @@ async def setup_test_db():
     db = await aiosqlite.connect(":memory:")
     await init_db(db)
     app.state.db = db
-    app_state["db"] = db
-    app_state.setdefault("all_stops", [])
+    app.state.all_stops = []
     yield
     await db.close()
 

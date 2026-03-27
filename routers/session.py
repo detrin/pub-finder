@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
-from db import create_session, join_session, get_session, get_participants, add_participant_stops
+from backend.db import create_session, join_session, get_session, get_participants, add_participant_stops
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +43,9 @@ async def session_page(request: Request, code: str):
         return RedirectResponse(url="/?error=session_not_found", status_code=303)
     participants = await get_participants(db, code)
 
-    from main import app_state
-    all_stops = app_state.get("all_stops", [])
+    all_stops = getattr(request.app.state, "all_stops", [])
 
     from backend.utils import get_next_meetup_time
-    from datetime import timedelta
     now = datetime.now()
     departure_dt = get_next_meetup_time(4, 20)
     return_dt = departure_dt + timedelta(hours=3)
@@ -88,8 +86,7 @@ async def update_stops(
     if same_start_end:
         end_stop = start_stop
 
-    from main import app_state
-    all_stops = app_state.get("all_stops", [])
+    all_stops = getattr(request.app.state, "all_stops", [])
     errors = []
     if start_stop and start_stop not in all_stops:
         errors.append(f"Unknown stop: '{start_stop}'")

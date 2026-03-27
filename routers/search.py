@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from db import get_participants, get_session, save_search_results, get_search_results
+from backend.db import get_participants, get_session, save_search_results, get_search_results
 from backend.optimization import get_optimal_stop_pairs, get_actual_time_optimal_stop_pairs
 from backend.places import search_pubs_near_stop, get_cached_pubs, cache_pubs
 from backend.utils import validate_date_time, get_total_minutes_with_retries
@@ -91,9 +91,7 @@ async def search(
 
     departure_datetime = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
     return_datetime = datetime.strptime(f"{return_date} {return_time}", "%Y-%m-%d %H:%M")
-    from main import app_state
-
-    distance_table = app_state["distance_table"]
+    distance_table = request.app.state.distance_table
 
     target_stops = get_optimal_stop_pairs(distance_table, method, stop_pairs)
     df_results = get_actual_time_optimal_stop_pairs(
@@ -102,7 +100,7 @@ async def search(
         return_datetime=return_datetime,
     )
 
-    stop_geo = app_state["stop_geo"]
+    stop_geo = request.app.state.stop_geo
     top_stops = df_results["Target Stop"].to_list()
 
     pubs_by_stop_raw = {}

@@ -1,6 +1,6 @@
 import httpx
 import aiosqlite
-from config import GOOGLE_PLACES_API_KEY
+from backend.config import GOOGLE_PLACES_API_KEY
 
 PRICE_LEVEL_MAP = {
     "PRICE_LEVEL_FREE": 0,
