@@ -192,6 +192,35 @@ nav[data-topnav] strong {
     to { transform: rotate(360deg); }
 }
 
+/* Progress bar */
+.progress-bar-container {
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.progress-bar-track {
+    width: 100%;
+    max-width: 500px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    margin: 0 auto 0.75rem;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: #2563eb;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.progress-bar-label {
+    font-size: 0.85rem;
+    opacity: 0.6;
+    margin: 0;
+}
+
 /* ============================================================
    RESULTS CARDS
    ============================================================ */

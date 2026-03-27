@@ -1,6 +1,8 @@
 """Integration tests covering the full search flow, JSON serialization, and caching."""
 
+import asyncio
 import json
+import time
 from datetime import datetime, timedelta
 from unittest.mock import patch, AsyncMock
 
@@ -212,9 +214,29 @@ async def test_search_requires_two_participants():
     assert "At least 2 participants" in resp.text
 
 
+async def _wait_for_search(search_id, timeout=10):
+    """Wait for a background search to complete."""
+    from routers.search import _search_progress, _search_progress_lock
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        with _search_progress_lock:
+            progress = _search_progress.get(search_id)
+        if progress and progress["done"]:
+            return True
+        await asyncio.sleep(0.1)
+    return False
+
+
+def _extract_search_id(html: str) -> str:
+    """Extract search_id from the progress SSE HTML response."""
+    import re
+    match = re.search(r"search-progress/([a-f0-9]+)", html)
+    return match.group(1) if match else ""
+
+
 @pytest.mark.asyncio
-async def test_search_success_returns_results():
-    """Full search with mocked transit times returns results without errors."""
+async def test_search_success_returns_progress():
+    """Search returns a progress bar that connects via SSE."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         code = await _create_session_with_participants(client, [("A", "A"), ("B", "B")])
@@ -232,8 +254,12 @@ async def test_search_success_returns_results():
                         "method": "minimize-worst-case",
                     },
                 )
-    assert resp.status_code == 200
-    assert "error" not in resp.text.lower() or "Error" not in resp.text
+                assert resp.status_code == 200
+                assert "search-progress" in resp.text
+                assert "sse-connect" in resp.text
+
+                search_id = _extract_search_id(resp.text)
+                await _wait_for_search(search_id)
 
 
 @pytest.mark.asyncio
@@ -246,7 +272,7 @@ async def test_search_results_saved_to_db():
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         with patch("routers.search.get_total_minutes_with_retries", return_value=15):
             with patch("routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]):
-                await client.post(
+                resp = await client.post(
                     f"/session/{code}/search",
                     data={
                         "departure_date": tomorrow,
@@ -256,6 +282,8 @@ async def test_search_results_saved_to_db():
                         "method": "minimize-total",
                     },
                 )
+                search_id = _extract_search_id(resp.text)
+                await _wait_for_search(search_id)
 
         # Check results are saved
         saved = await get_search_results(app.state.db, code)

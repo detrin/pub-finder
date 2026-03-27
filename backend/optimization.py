@@ -210,6 +210,7 @@ def get_actual_time_optimal_stop_pairs(
     show_top: int = 20,
     participant_names: Optional[List[str]] = None,
     return_datetime=None,
+    progress_callback=None,
 ) -> pl.DataFrame:
     """Like get_actual_time_optimal_stop but computes round trips (to meeting point + back to end stop)."""
     if return_datetime is None:
@@ -238,6 +239,7 @@ def get_actual_time_optimal_stop_pairs(
         return row
 
     rows = []
+    total = len(target_stops)
     arguments = [
         (target_stop, stop_pairs, event_datetime, return_datetime, get_total_minutes_func)
         for target_stop in target_stops
@@ -246,12 +248,14 @@ def get_actual_time_optimal_stop_pairs(
         futures = {
             executor.submit(process_target_stop, arg): arg[0] for arg in arguments
         }
-        for future in tqdm(as_completed(futures), total=len(arguments)):
+        for i, future in enumerate(tqdm(as_completed(futures), total=total), 1):
             try:
                 result = future.result()
                 rows.append(result)
             except Exception as e:
                 logger.error("An error occurred with target_stop=%s: %s", futures[future], e)
+            if progress_callback:
+                progress_callback("scraping", i, total)
 
     df_times = pl.DataFrame(rows).with_columns(
         pl.max_horizontal(

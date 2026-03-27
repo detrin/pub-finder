@@ -46,7 +46,7 @@
 
 <article class="card">
     <h4>Search for a Meeting Point</h4>
-    <form hx-post="/session/{{ session.code }}/search" hx-target="#results-section" hx-swap="innerHTML" hx-indicator="#search-btn, #results-loading">
+    <form hx-post="/session/{{ session.code }}/search" hx-target="#results-section" hx-swap="innerHTML" hx-indicator="#search-btn">
         <div class="row">
             <div class="col-2">
                 <label data-field>
@@ -98,10 +98,6 @@
     </form>
 </article>
 
-<div id="results-loading" class="search-loading">
-    <div class="spinner"></div>
-    <p>Querying live transit schedules... this may take a moment.</p>
-</div>
 <div id="results-section"></div>
 
 <script>
