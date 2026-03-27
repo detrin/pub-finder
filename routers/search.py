@@ -41,20 +41,11 @@ def _is_rate_limited(session_code: str) -> bool:
     return False
 
 
-_STAGE_ICONS = {
-    "starting": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-    "candidates": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-    "scraping": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
-    "pubs": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
-}
-
 _STAGE_ORDER = ["candidates", "scraping", "pubs"]
 _STAGE_LABELS = {"candidates": "Stops", "scraping": "Transit", "pubs": "Pubs"}
 
 
 def _render_progress_html(pct: int, label: str, stage: str) -> str:
-    icon = _STAGE_ICONS.get(stage, _STAGE_ICONS["starting"])
-
     dots = []
     current_idx = _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else -1
     for i, s in enumerate(_STAGE_ORDER):
@@ -77,7 +68,7 @@ def _render_progress_html(pct: int, label: str, stage: str) -> str:
 
     return f"""<div class="progress-box">
 <div class="progress-info">
-<span class="progress-info-label">{icon} {label}</span>
+<span class="progress-info-label">{label}</span>
 <span class="progress-info-pct">{pct}%</span>
 </div>
 <div class="progress-track">

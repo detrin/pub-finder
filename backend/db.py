@@ -57,6 +57,13 @@ async def init_db(db: aiosqlite.Connection):
         CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at);
     """)
 
+    # Migration: add opening_hours column if missing (for pre-existing databases)
+    try:
+        await db.execute("SELECT opening_hours FROM pub_cache LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE pub_cache ADD COLUMN opening_hours TEXT")
+        await db.commit()
+
 
 async def create_session(db: aiosqlite.Connection, session_name: str, creator_name: str) -> dict:
     code = secrets.token_hex(16)
