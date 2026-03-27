@@ -40,6 +40,7 @@ async def init_db(db: aiosqlite.Connection):
             price_level INTEGER,
             google_maps_url TEXT,
             opening_hours TEXT,
+            primary_type TEXT DEFAULT '',
             cached_at TEXT NOT NULL,
             UNIQUE(stop_name, place_id)
         );
@@ -62,6 +63,13 @@ async def init_db(db: aiosqlite.Connection):
         await db.execute("SELECT opening_hours FROM pub_cache LIMIT 1")
     except Exception:
         await db.execute("ALTER TABLE pub_cache ADD COLUMN opening_hours TEXT")
+        await db.commit()
+
+    # Migration: add primary_type column if missing
+    try:
+        await db.execute("SELECT primary_type FROM pub_cache LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE pub_cache ADD COLUMN primary_type TEXT DEFAULT ''")
         await db.commit()
 
 

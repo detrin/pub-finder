@@ -199,7 +199,7 @@ async def _run_search(
         pubs_by_stop_raw = {}
         places_api_error = False
         for i, stop_name in enumerate(top_stops):
-            cached = await get_cached_pubs(db, stop_name)
+            cached = await get_cached_pubs(db, stop_name, place_types=place_types)
             if cached:
                 pubs_by_stop_raw[stop_name] = cached
             elif places_api_error:
