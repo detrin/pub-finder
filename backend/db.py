@@ -39,6 +39,7 @@ async def init_db(db: aiosqlite.Connection):
             rating_count INTEGER,
             price_level INTEGER,
             google_maps_url TEXT,
+            opening_hours TEXT,
             cached_at TEXT NOT NULL,
             UNIQUE(stop_name, place_id)
         );

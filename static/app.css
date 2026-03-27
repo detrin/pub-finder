@@ -160,6 +160,28 @@ nav[data-topnav] strong {
     display: none;
 }
 
+/* Place type checkboxes */
+.place-type-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.place-type-checks label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.place-type-checks input[type="checkbox"] {
+    margin: 0;
+    width: auto;
+}
+
 /* Search loading overlay */
 .search-loading {
     display: none;

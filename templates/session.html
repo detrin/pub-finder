@@ -76,7 +76,7 @@
             </div>
         </div>
         <div class="row" style="margin-top: 0.5rem;">
-            <div class="col-4">
+            <div class="col-2">
                 <div data-field>
                     <label>Method</label>
                     <select name="method" aria-label="Optimization method">
@@ -85,7 +85,18 @@
                     </select>
                 </div>
             </div>
-            <div class="col-2">
+            <div class="col-3">
+                <div data-field>
+                    <label>Place types</label>
+                    <div class="place-type-checks">
+                        <label><input type="checkbox" name="place_types" value="pub" checked> Pubs</label>
+                        <label><input type="checkbox" name="place_types" value="bar" checked> Bars</label>
+                        <label><input type="checkbox" name="place_types" value="cafe" checked> Cafes</label>
+                        <label><input type="checkbox" name="place_types" value="restaurant"> Restaurants</label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-1">
                 <label data-field>
                     <span style="visibility: hidden;">&nbsp;</span>
                     <button type="submit" id="search-btn" style="width: 100%;">

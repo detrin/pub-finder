@@ -15,7 +15,7 @@ from starlette.responses import StreamingResponse
 
 from backend.db import get_participants, get_session, save_search_results, get_search_results
 from backend.optimization import get_optimal_stop_pairs, get_actual_time_optimal_stop_pairs
-from backend.places import search_pubs_near_stop, get_cached_pubs, cache_pubs
+from backend.places import search_pubs_near_stop, get_cached_pubs, cache_pubs, is_open_during
 from backend.utils import validate_date_time, get_total_minutes_with_retries
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,7 @@ async def search(
     return_date: str = Form(...),
     return_time: str = Form(...),
     method: str = Form("minimize-worst-case"),
+    place_types: list[str] = Form(default=["pub", "bar", "cafe"]),
 ):
     if _is_rate_limited(code):
         return templates.TemplateResponse(
@@ -155,6 +156,7 @@ async def search(
         request, code, search_id,
         departure_date, departure_time, return_date, return_time,
         method, stop_pairs, participant_names, active_participants,
+        place_types,
     ))
 
     # Return a progress bar that connects to SSE
@@ -167,6 +169,7 @@ async def _run_search(
     request, code, search_id,
     departure_date, departure_time, return_date, return_time,
     method, stop_pairs, participant_names, active_participants,
+    place_types,
 ):
     """Run the search in the background, updating progress along the way."""
     try:
@@ -217,7 +220,7 @@ async def _run_search(
                 lat = geo_row["lat"][0]
                 lon = geo_row["lon"][0]
                 try:
-                    pubs = await search_pubs_near_stop(lat, lon)
+                    pubs = await search_pubs_near_stop(lat, lon, place_types=place_types)
                     await cache_pubs(db, stop_name, pubs)
                     pubs_by_stop_raw[stop_name] = pubs
                 except Exception as e:
@@ -227,15 +230,18 @@ async def _run_search(
             with _search_progress_lock:
                 _search_progress[search_id]["current"] = i + 1
 
-        # Deduplicate
+        # Filter by opening hours and deduplicate
         seen_place_ids: set[str] = set()
         pubs_by_stop = {}
         for stop_name in top_stops:
             unique_pubs = []
             for pub in pubs_by_stop_raw.get(stop_name, []):
-                if pub["place_id"] not in seen_place_ids:
-                    seen_place_ids.add(pub["place_id"])
-                    unique_pubs.append(pub)
+                if pub["place_id"] in seen_place_ids:
+                    continue
+                if not is_open_during(pub, departure_datetime, return_datetime):
+                    continue
+                seen_place_ids.add(pub["place_id"])
+                unique_pubs.append(pub)
             pubs_by_stop[stop_name] = unique_pubs
 
         stop_geo_data = []
