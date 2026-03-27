@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pub Finder{% endblock %}</title>
+
+    <!-- oat CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@aspect/oat@0.7.0/dist/oat.min.css">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <!-- App CSS -->
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><strong>Pub Finder</strong></a>
+        </div>
+    </nav>
+
+    <main class="container" style="padding: 2rem 1rem;">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container" style="padding: 1rem; text-align: center; opacity: 0.7; font-size: 0.85rem;">
+        Created by <a href="https://www.hermandaniel.com">Daniel Herman</a> &mdash;
+        <a href="https://github.com/detrin/pub-finder">GitHub</a>
+    </footer>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+
+    <!-- oat JS -->
+    <script src="https://unpkg.com/@aspect/oat@0.7.0/dist/oat.min.js"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- App JS -->
+    <script src="/static/app.js"></script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,21 @@
+#map {
+    height: 500px;
+    border-radius: 8px;
+}
+
+.session-link {
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.participant-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.results-section {
+    margin-top: 2rem;
+}
