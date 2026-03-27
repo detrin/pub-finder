@@ -9,17 +9,17 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GRADIO_ANALYTICS_ENABLED=False
-      - HF_HUB_OFFLINE=1
-      - TRANSFORMERS_OFFLINE=1
-      - DISABLE_TELEMETRY=1
-      - DO_NOT_TRACK=1
-      - HF_HUB_DISABLE_IMPLICIT_TOKEN=1
-      - HF_HUB_DISABLE_TELEMETRY=1
+      - GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY:-}
+      - DATABASE_PATH=/app/data/pub_finder.db
+    volumes:
+      - pub-finder-data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/').read()"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 20s
     restart: unless-stopped
+
+volumes:
+  pub-finder-data:
