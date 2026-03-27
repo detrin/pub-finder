@@ -56,35 +56,36 @@ def _render_progress_html(pct: int, label: str, stage: str) -> str:
     icon = _STAGE_ICONS.get(stage, _STAGE_ICONS["starting"])
 
     dots = []
-    for s in _STAGE_ORDER:
-        if _STAGE_ORDER.index(s) < _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else False:
-            dot_cls = "progress-bar-dot progress-bar-dot--done"
-            lbl_cls = "progress-bar-step-label progress-bar-step-label--done"
+    current_idx = _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else -1
+    for i, s in enumerate(_STAGE_ORDER):
+        if i < current_idx:
+            dot_cls = "progress-dot progress-dot--done"
+            lbl_cls = "progress-step-name progress-step-name--done"
         elif s == stage:
-            dot_cls = "progress-bar-dot progress-bar-dot--active"
-            lbl_cls = "progress-bar-step-label progress-bar-step-label--active"
+            dot_cls = "progress-dot progress-dot--active"
+            lbl_cls = "progress-step-name progress-step-name--active"
         else:
-            dot_cls = "progress-bar-dot"
-            lbl_cls = "progress-bar-step-label"
+            dot_cls = "progress-dot"
+            lbl_cls = "progress-step-name"
         dots.append(
-            f'<div class="progress-bar-step">'
+            f'<div class="progress-step">'
             f'<div class="{dot_cls}"></div>'
             f'<span class="{lbl_cls}">{_STAGE_LABELS[s]}</span>'
             f'</div>'
         )
-    steps_html = "\n".join(dots)
+    steps_html = "".join(dots)
 
-    return f"""<div class="progress-bar-container">
-    <div class="progress-bar-header">
-        <p class="progress-bar-stage">{icon} {label}</p>
-        <p class="progress-bar-pct">{pct}%</p>
-    </div>
-    <div class="progress-bar-track">
-        <div class="progress-bar-fill" style="width: {pct}%"></div>
-    </div>
-    <div class="progress-bar-steps">
-        {steps_html}
-    </div>
+    return f"""<div class="progress-box">
+<div class="progress-info">
+<span class="progress-info-label">{icon} {label}</span>
+<span class="progress-info-pct">{pct}%</span>
+</div>
+<div class="progress-track">
+<div class="progress-fill" style="width:{pct}%"></div>
+</div>
+<div class="progress-steps">
+{steps_html}
+</div>
 </div>"""
 
 

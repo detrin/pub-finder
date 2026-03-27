@@ -194,148 +194,132 @@ nav[data-topnav] strong {
 
 /* Progress bar */
 @keyframes progress-shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
 }
 
-@keyframes progress-pulse {
+@keyframes progress-dot-pulse {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
 }
 
-@keyframes progress-glow-pulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(37, 99, 235, 0.25), 0 0 2px rgba(37, 99, 235, 0.15); }
-    50% { box-shadow: 0 0 16px rgba(37, 99, 235, 0.4), 0 0 4px rgba(37, 99, 235, 0.25); }
+.progress-box {
+    box-sizing: border-box !important;
+    padding: 2rem 1.5rem !important;
+    max-width: 480px !important;
+    margin: 1rem auto !important;
+    background: #fff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
 }
 
-.progress-bar-container {
-    padding: 2.5rem 1rem;
-    text-align: center;
-    max-width: 520px;
-    margin: 0 auto;
+.progress-box * {
+    box-sizing: border-box !important;
 }
 
-.progress-bar-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 0.6rem;
+.progress-info {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin: 0 0 0.75rem 0 !important;
 }
 
-.progress-bar-stage {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: #374151;
-    margin: 0;
+.progress-info-label {
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    color: #374151 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
 }
 
-.progress-bar-stage svg {
+.progress-info-label svg {
     flex-shrink: 0;
-    opacity: 0.7;
+    opacity: 0.65;
 }
 
-.progress-bar-pct {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #2563eb;
-    font-variant-numeric: tabular-nums;
-    margin: 0;
+.progress-info-pct {
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    color: #2563eb !important;
+    font-variant-numeric: tabular-nums !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-.progress-bar-track {
-    width: 100%;
-    height: 10px;
-    background: rgba(0, 0, 0, 0.06);
-    border-radius: 999px;
-    overflow: hidden;
-    position: relative;
+.progress-track {
+    width: 100% !important;
+    height: 18px !important;
+    background: #e5e7eb !important;
+    border-radius: 9px !important;
+    overflow: hidden !important;
+    position: relative !important;
+    border: 1px solid #d1d5db !important;
 }
 
-.progress-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
-    border-radius: 999px;
-    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-    animation: progress-glow-pulse 2s ease-in-out infinite;
+.progress-fill {
+    height: 100% !important;
+    min-width: 0 !important;
+    background: linear-gradient(90deg, #2563eb, #3b82f6, #60a5fa, #3b82f6, #2563eb) !important;
+    background-size: 200% 100% !important;
+    border-radius: 8px !important;
+    transition: width 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+    animation: progress-shimmer 2.5s linear infinite !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 6px rgba(37,99,235,0.3) !important;
 }
 
-.progress-bar-fill::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.35) 50%,
-        transparent 100%
-    );
-    animation: progress-shimmer 1.8s ease-in-out infinite;
+.progress-steps {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 1rem !important;
+    padding: 0 0.5rem !important;
 }
 
-.progress-bar-label {
-    font-size: 0.78rem;
-    color: #6b7280;
-    margin: 0.6rem 0 0;
-    letter-spacing: 0.01em;
+.progress-step {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
 }
 
-.progress-bar-steps {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 1rem;
-    gap: 0.25rem;
+.progress-dot {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    background: #d1d5db !important;
+    border: 2px solid #e5e7eb !important;
+    transition: all 0.3s ease !important;
 }
 
-.progress-bar-step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.3rem;
-    flex: 1;
-    min-width: 0;
+.progress-dot--done {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important;
 }
 
-.progress-bar-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.12);
-    transition: background 0.3s ease, box-shadow 0.3s ease;
-    flex-shrink: 0;
+.progress-dot--active {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important;
+    animation: progress-dot-pulse 1.5s ease-in-out infinite !important;
 }
 
-.progress-bar-dot--done {
-    background: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+.progress-step-name {
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    font-weight: 600 !important;
+    color: #9ca3af !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-.progress-bar-dot--active {
-    background: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-    animation: progress-pulse 1.5s ease-in-out infinite;
-}
-
-.progress-bar-step-label {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 600;
-    color: rgba(0, 0, 0, 0.3);
-    transition: color 0.3s ease;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-}
-
-.progress-bar-step-label--done,
-.progress-bar-step-label--active {
-    color: #2563eb;
+.progress-step-name--done,
+.progress-step-name--active {
+    color: #2563eb !important;
 }
 
 /* ============================================================
