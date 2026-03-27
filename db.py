@@ -27,7 +27,7 @@ async def init_db(db: aiosqlite.Connection):
         CREATE TABLE IF NOT EXISTS pub_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             stop_name TEXT NOT NULL,
-            place_id TEXT UNIQUE NOT NULL,
+            place_id TEXT NOT NULL,
             name TEXT NOT NULL,
             lat REAL NOT NULL,
             lon REAL NOT NULL,
@@ -35,7 +35,8 @@ async def init_db(db: aiosqlite.Connection):
             rating_count INTEGER,
             price_level INTEGER,
             google_maps_url TEXT,
-            cached_at TEXT NOT NULL
+            cached_at TEXT NOT NULL,
+            UNIQUE(stop_name, place_id)
         );
     """)
 

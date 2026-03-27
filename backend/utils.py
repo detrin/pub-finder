@@ -81,7 +81,6 @@ def get_total_minutes(from_stop: str, to_stop: str, dt: datetime) -> int:
     year = dt.year
     date_str = f"{day}.{month}.{year}"
     time_str = dt.strftime("%H:%M")
-    total_minutes = get_route_info(from_stop, to_stop, date_str, time_str)
 
     try:
         total_minutes = get_route_info(from_stop, to_stop, date_str, time_str)
@@ -99,7 +98,6 @@ def get_total_minutes_with_retries(
     retry_delay: int = 2,
 ) -> int:
     attempt = 0
-    total_minutes = get_total_minutes(from_stop, to_stop, dt)
 
     while attempt < max_retries:
         try:

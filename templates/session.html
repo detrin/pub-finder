@@ -38,17 +38,17 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
                 <div class="form-group">
                     <label for="search-date">Date</label>
-                    <input type="date" id="search-date" name="date" class="form-control" value="{{ default_date }}">
+                    <input type="text" id="search-date" name="date" class="form-control" value="{{ default_date }}" placeholder="DD/MM/YYYY">
                 </div>
                 <div class="form-group">
                     <label for="search-time">Time</label>
-                    <input type="time" id="search-time" name="time" class="form-control" value="{{ default_time }}">
+                    <input type="text" id="search-time" name="time" class="form-control" value="{{ default_time }}" placeholder="HH:MM">
                 </div>
                 <div class="form-group">
                     <label for="search-method">Method</label>
                     <select id="search-method" name="method" class="form-control">
-                        <option value="minimize_total">Minimize total travel</option>
-                        <option value="minimize_max">Minimize longest travel</option>
+                        <option value="minimize-worst-case">Minimize longest travel</option>
+                        <option value="minimize-total">Minimize total travel</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary">Search</button>

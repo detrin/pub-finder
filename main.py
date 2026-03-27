@@ -23,8 +23,11 @@ async def lifespan(app: FastAPI):
     to_stops = distance_table["to"].unique().sort().to_list()
     all_stops = sorted(list(set(from_stops) & set(to_stops)))
 
+    stop_geo = pl.read_parquet("Prague_stops_geo.parquet")
+
     app_state["distance_table"] = distance_table
     app_state["all_stops"] = all_stops
+    app_state["stop_geo"] = stop_geo
 
     db = await aiosqlite.connect(DATABASE_PATH)
     await init_db(db)

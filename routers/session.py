@@ -37,9 +37,10 @@ async def session_page(request: Request, code: str):
     from main import app_state
     all_stops = app_state.get("all_stops", [])
 
-    now = datetime.now()
-    default_date = (now + timedelta(days=(4 - now.weekday()) % 7 or 7)).strftime("%Y-%m-%d")
-    default_time = "18:00"
+    from backend.utils import get_next_meetup_time
+    next_dt = get_next_meetup_time(4, 20)
+    default_date = next_dt.strftime("%d/%m/%Y")
+    default_time = next_dt.strftime("%H:%M")
 
     return templates.TemplateResponse(request, "session.html", {
         "session": session,

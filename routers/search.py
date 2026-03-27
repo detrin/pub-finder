@@ -58,7 +58,7 @@ async def search(
         method, stop_pairs, target_stops, event_datetime, get_total_minutes_with_retries
     )
 
-    stop_geo = pl.read_parquet("Prague_stops_geo.parquet")
+    stop_geo = app_state["stop_geo"]
     top_stops = df_results["Target Stop"].to_list()[:5]
 
     pubs_by_stop = {}
