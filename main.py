@@ -25,12 +25,12 @@ app_state: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    distance_table = pl.read_parquet("Prague_stops_combinations.parquet")
+    distance_table = pl.read_parquet("data/Prague_stops_combinations.parquet")
     from_stops = distance_table["from"].unique().sort().to_list()
     to_stops = distance_table["to"].unique().sort().to_list()
     all_stops = sorted(list(set(from_stops) & set(to_stops)))
 
-    stop_geo = pl.read_parquet("Prague_stops_geo.parquet")
+    stop_geo = pl.read_parquet("data/Prague_stops_geo.parquet")
 
     app_state["distance_table"] = distance_table
     app_state["all_stops"] = all_stops

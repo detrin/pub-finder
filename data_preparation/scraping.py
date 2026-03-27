@@ -25,7 +25,7 @@ def process_pair(args):
         return {"from": from_stop, "to": to_stop, "error": "Failed to retrieve data."}
 
 
-def run(stops_file="Prague_stops.txt", results_file="results.json",
+def run(stops_file="data/Prague_stops.txt", results_file="results.json",
         num_processes=5, num_tasks=None):
     """Core scraping logic — callable from CLI or from manager."""
     raw_results = []

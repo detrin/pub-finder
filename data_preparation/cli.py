@@ -74,7 +74,7 @@ def main():
 
     # --- scrape ---
     sp_scrape = subparsers.add_parser("scrape", help="Scrape transit times for stop pairs")
-    sp_scrape.add_argument("--stops-file", default="Prague_stops.txt", help="Path to stops file")
+    sp_scrape.add_argument("--stops-file", default="data/Prague_stops.txt", help="Path to stops file")
     sp_scrape.add_argument("--results", default="results.json", help="Path to results JSON")
     sp_scrape.add_argument("--num-processes", type=int, default=5, help="Number of parallel processes")
     sp_scrape.add_argument("--num-tasks", type=int, default=None, help="Limit number of tasks")
@@ -92,8 +92,8 @@ def main():
     # --- prepare ---
     sp_prepare = subparsers.add_parser("prepare", help="Prepare geographic stop data from GPS JSON files")
     sp_prepare.add_argument("--json-dir", default="data", help="Directory with GPS JSON files")
-    sp_prepare.add_argument("--stops-file", default="Prague_stops.txt", help="Path to stops list")
-    sp_prepare.add_argument("--output", default="Prague_stops_geo.csv", help="Output CSV path")
+    sp_prepare.add_argument("--stops-file", default="data/Prague_stops.txt", help="Path to stops list")
+    sp_prepare.add_argument("--output", default="data/Prague_stops_geo.csv", help="Output CSV path")
     sp_prepare.set_defaults(func=cmd_prepare)
 
     # --- bandit-sim ---

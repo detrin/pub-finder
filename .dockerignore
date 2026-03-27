@@ -33,11 +33,10 @@ LICENSE
 data_preparation/
 requirements_dev.txt
 
-# Data files that are not needed (parquet files ARE needed)
-data/
+# Data files — include parquet + stops list, exclude the rest
+data/*.json
+data/Prague_stops_geo.csv
 *.json
-Prague_stops_geo.csv
-Prague_stops.txt
 
 # Other
 .DS_Store
