@@ -40,6 +40,54 @@ def _is_rate_limited(session_code: str) -> bool:
     _search_timestamps[session_code].append(now)
     return False
 
+
+_STAGE_ICONS = {
+    "starting": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    "candidates": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    "scraping": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    "pubs": '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+}
+
+_STAGE_ORDER = ["candidates", "scraping", "pubs"]
+_STAGE_LABELS = {"candidates": "Stops", "scraping": "Transit", "pubs": "Pubs"}
+
+
+def _render_progress_html(pct: int, label: str, stage: str) -> str:
+    icon = _STAGE_ICONS.get(stage, _STAGE_ICONS["starting"])
+
+    dots = []
+    for s in _STAGE_ORDER:
+        if _STAGE_ORDER.index(s) < _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else False:
+            dot_cls = "progress-bar-dot progress-bar-dot--done"
+            lbl_cls = "progress-bar-step-label progress-bar-step-label--done"
+        elif s == stage:
+            dot_cls = "progress-bar-dot progress-bar-dot--active"
+            lbl_cls = "progress-bar-step-label progress-bar-step-label--active"
+        else:
+            dot_cls = "progress-bar-dot"
+            lbl_cls = "progress-bar-step-label"
+        dots.append(
+            f'<div class="progress-bar-step">'
+            f'<div class="{dot_cls}"></div>'
+            f'<span class="{lbl_cls}">{_STAGE_LABELS[s]}</span>'
+            f'</div>'
+        )
+    steps_html = "\n".join(dots)
+
+    return f"""<div class="progress-bar-container">
+    <div class="progress-bar-header">
+        <p class="progress-bar-stage">{icon} {label}</p>
+        <p class="progress-bar-pct">{pct}%</p>
+    </div>
+    <div class="progress-bar-track">
+        <div class="progress-bar-fill" style="width: {pct}%"></div>
+    </div>
+    <div class="progress-bar-steps">
+        {steps_html}
+    </div>
+</div>"""
+
+
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
@@ -110,12 +158,7 @@ async def search(
 
     # Return a progress bar that connects to SSE
     return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" hx-swap="innerHTML">
-    <div class="progress-bar-container">
-        <div class="progress-bar-track">
-            <div class="progress-bar-fill" style="width: 0%"></div>
-        </div>
-        <p class="progress-bar-label">Preparing search...</p>
-    </div>
+    {_render_progress_html(0, "Preparing search...", "starting")}
 </div>"""
 
 
@@ -296,14 +339,9 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
                 pct = 0
                 label = "Working..."
 
-            yield f"""event: progress
-data: <div class="progress-bar-container">
-data:     <div class="progress-bar-track">
-data:         <div class="progress-bar-fill" style="width: {pct}%"></div>
-data:     </div>
-data:     <p class="progress-bar-label">{label}</p>
-data: </div>
-\n"""
+            progress_html = _render_progress_html(pct, label, stage)
+            escaped_html = progress_html.replace("\n", "\ndata: ")
+            yield f"event: progress\ndata: {escaped_html}\n\n"
             await asyncio.sleep(0.5)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
