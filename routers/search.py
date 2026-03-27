@@ -310,7 +310,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
                 progress = _search_progress.get(search_id)
 
             if progress is None:
-                yield 'event: progress\ndata: <p>Search not found.</p>\n\n'
+                # Search already completed and results were delivered — close silently
                 break
 
             if progress["done"]:
