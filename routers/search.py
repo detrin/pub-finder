@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time as _time
@@ -93,8 +94,9 @@ async def search(
     return_datetime = datetime.strptime(f"{return_date} {return_time}", "%Y-%m-%d %H:%M")
     distance_table = request.app.state.distance_table
 
-    target_stops = get_optimal_stop_pairs(distance_table, method, stop_pairs)
-    df_results = get_actual_time_optimal_stop_pairs(
+    target_stops = await asyncio.to_thread(get_optimal_stop_pairs, distance_table, method, stop_pairs)
+    df_results = await asyncio.to_thread(
+        get_actual_time_optimal_stop_pairs,
         method, stop_pairs, target_stops, departure_datetime, get_total_minutes_with_retries,
         participant_names=participant_names,
         return_datetime=return_datetime,
