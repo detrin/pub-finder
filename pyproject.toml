@@ -23,6 +23,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "httpx>=0.28",
     "tqdm>=4.67",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
