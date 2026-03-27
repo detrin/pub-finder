@@ -162,24 +162,35 @@ nav[data-topnav] strong {
 
 /* Place type checkboxes */
 .place-type-checks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.1rem 0.75rem;
-    margin-top: 0.25rem;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.15rem 0.75rem !important;
+    margin-top: 0.25rem !important;
 }
 
-.place-type-checks label {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    font-size: 0.85rem;
-    cursor: pointer;
-    white-space: nowrap;
+.place-type-check {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    font-size: 0.85rem !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-.place-type-checks input[type="checkbox"] {
-    margin: 0;
-    width: auto;
+.place-type-check input[type="checkbox"] {
+    -webkit-appearance: checkbox !important;
+    appearance: checkbox !important;
+    width: 14px !important;
+    height: 14px !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+}
+
+/* Align search options row */
+.search-options-row {
+    align-items: flex-end !important;
 }
 
 /* Search loading overlay */
