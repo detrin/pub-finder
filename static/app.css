@@ -1,21 +1,635 @@
-#map {
-    height: 500px;
-    border-radius: 8px;
-}
-
-.session-link {
-    font-family: monospace;
-    background: rgba(0, 0, 0, 0.05);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-}
-
-.participant-row {
+/* Nav links horizontal + uniform font size */
+nav[data-topnav] > .row > div {
     display: flex;
     gap: 1rem;
     align-items: center;
+    white-space: nowrap;
 }
 
-.results-section {
+nav[data-topnav] a,
+nav[data-topnav] strong {
+    font-size: 0.9rem;
+}
+
+/* Hero section */
+.hero {
+    text-align: center;
+    padding: 2.5rem 0 1.5rem;
+}
+
+.hero h1 {
+    margin-bottom: 0.5rem;
+}
+
+.hero p {
+    opacity: 0.6;
+    font-size: 1.1rem;
+}
+
+/* Equal-height cards in grid rows */
+.row {
+    align-items: stretch;
+}
+
+[class*="col-"] {
+    display: flex;
+    flex-direction: column;
+}
+
+[class*="col-"] > .card {
+    flex: 1;
+}
+
+/* Session page heading */
+.session-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 2rem 0 1.25rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.session-heading__title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.session-heading__eyebrow {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.4;
+    line-height: 1;
+}
+
+.session-heading__name {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-heading__share {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem 0.3rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: inherit;
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.session-heading__share:hover {
+    opacity: 1;
+    border-color: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.session-heading__share-copied {
+    display: none;
+}
+
+.session-heading__share[data-copied] {
+    opacity: 1;
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgba(22, 163, 74, 0.08);
+    color: #16a34a;
+}
+
+.session-heading__share[data-copied] svg {
+    display: none;
+}
+
+.session-heading__share[data-copied] .session-heading__share-label {
+    display: none;
+}
+
+.session-heading__share[data-copied] .session-heading__share-copied {
+    display: inline;
+}
+
+/* Participant badges */
+.badge-ready {
+    display: inline-block;
+    background: #16a34a;
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.badge-waiting {
+    display: inline-block;
+    background: #f59e0b;
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+/* HTMX loading indicator */
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+
+.htmx-request .search-label {
+    display: none;
+}
+
+/* Search loading overlay */
+.search-loading {
+    display: none;
+    text-align: center;
+    padding: 3rem 1rem;
+    opacity: 0.6;
+}
+
+.search-loading.htmx-request {
+    display: block;
+}
+
+.search-loading .spinner {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 0.75rem;
+}
+
+.search-loading p {
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   RESULTS CARDS
+   ============================================================ */
+.result-card {
+    margin-bottom: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.15s ease;
+}
+
+.result-card:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.result-card--top {
+    border-left: 4px solid #16a34a;
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.04), transparent);
+}
+
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.rank-badge {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.06);
+    color: #555;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.rank-badge--gold {
+    background: #16a34a;
+    color: white;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.8rem;
+}
+
+.result-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.result-title h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.result-card--top .result-title h3 {
+    font-size: 1.3rem;
+}
+
+.result-metrics {
+    display: flex;
+    gap: 1.25rem;
+    flex-shrink: 0;
+}
+
+.metric {
+    text-align: center;
+    line-height: 1.2;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.result-card--top .metric-value {
+    color: #16a34a;
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    margin-top: 0.1rem;
+}
+
+/* Collapsible travel details */
+.travel-details {
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding-top: 0.5rem;
+}
+
+.travel-details summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    opacity: 0.65;
+    user-select: none;
+    padding: 0.25rem 0;
+}
+
+.travel-details summary:hover {
+    opacity: 1;
+}
+
+.travel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.travel-person-name {
+    display: block;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+}
+
+.travel-times {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.travel-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.travel-chip small {
+    opacity: 0.5;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.travel-chip--total {
+    background: rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+}
+
+/* Pubs section */
+.pubs-section {
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding-top: 0.6rem;
+}
+
+.pubs-heading {
+    font-size: 0.85rem;
+    margin: 0 0 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pubs-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 0.7rem;
+    font-weight: 700;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+}
+
+.pub-pills {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.pub-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+}
+
+.pub-pill:hover {
+    background: rgba(22, 163, 74, 0.08);
+    border-color: rgba(22, 163, 74, 0.25);
+    text-decoration: none;
+    color: inherit;
+}
+
+.pub-pill-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pub-pill-rating {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #b45309;
+    flex-shrink: 0;
+}
+
+.pub-pill-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.pub-walk-link {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #2563eb;
+    text-decoration: none;
+    opacity: 0.5;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.pub-walk-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+.pubs-more {
+    margin-top: 0.3rem;
+}
+
+.pubs-more summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    opacity: 0.6;
+    user-select: none;
+}
+
+.pubs-more summary:hover {
+    opacity: 1;
+}
+
+.pubs-more .pub-pills {
+    margin-top: 0.4rem;
+}
+
+.pubs-none {
+    font-size: 0.85rem;
+    opacity: 0.5;
+    margin: 0;
+}
+
+/* Stop form compact row */
+.stop-form {
+    margin: 0;
+    padding: 0;
+}
+
+.stop-form-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.stop-form:last-child .stop-form-row {
+    border-bottom: none;
+}
+
+.stop-form-name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    width: 7rem;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.stop-form-name strong {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.stop-form-return {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.stop-form-return input[type="checkbox"] {
+    margin: 0;
+    width: 0.75rem;
+    height: 0.75rem;
+}
+
+.stop-form-row label[data-field] {
+    flex: 1;
+    margin-bottom: 0;
+    min-width: 0;
+    font-size: 0.78rem;
+}
+
+.stop-form-row label[data-field] input {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+    font-size: 0.875rem;
+}
+
+.stop-form-row button.small {
+    flex-shrink: 0;
+    align-self: flex-end;
+    margin-bottom: 0;
+}
+
+/* Map */
+#map {
+    height: 500px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.map-card {
+    margin-top: 1.5rem;
+}
+
+/* Results */
+#results-section {
     margin-top: 2rem;
+}
+
+/* Session history */
+#session-history {
+    margin-top: 2rem;
+}
+
+#session-history h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.session-history-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.session-history-list li a {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.session-history-list li a:hover {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    opacity: 0.6;
+    font-size: 0.85rem;
+    padding: 2rem 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin-top: 3rem;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .result-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .result-metrics {
+        width: 100%;
+        justify-content: space-around;
+        padding: 0.5rem 0;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .result-title h3 {
+        white-space: normal;
+    }
+
+    .travel-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pub-pill-name {
+        max-width: 150px;
+    }
+
+    .session-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-bottom: 1rem;
+    }
+
+    .session-heading__name {
+        white-space: normal;
+        font-size: 1.4rem;
+    }
 }

@@ -30,17 +30,13 @@ README.md
 LICENSE
 
 # Development scripts (not needed in production)
-bandit.py
-manager.py
-scraping.py
-prepare_geo_data.py
+data_preparation/
 requirements_dev.txt
 
-# Data files that are not needed (the parquet file IS needed)
+# Data files that are not needed (parquet files ARE needed)
 data/
 *.json
 Prague_stops_geo.csv
-Prague_stops_geo.parquet
 Prague_stops.txt
 
 # Other

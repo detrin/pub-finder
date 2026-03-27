@@ -1,8 +1,9 @@
+import argparse
 import json
 import glob
 from typing import List, Dict
+
 import polars as pl
-import geopy.distance
 
 
 def extract_unique_stops(json_directory: str) -> pl.DataFrame:
@@ -49,10 +50,8 @@ def extract_unique_stops(json_directory: str) -> pl.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    json_dir = "data"
+def main(json_dir="data", stops_file="Prague_stops.txt", output_file="Prague_stops_geo.csv"):
     stops_geo_data = extract_unique_stops(json_dir)
-    stops_file = "Prague_stops.txt"
     with open(stops_file, "r", encoding="utf-8") as f:
         stops = [line.strip() for line in f if line.strip()]
 
@@ -66,11 +65,22 @@ if __name__ == "__main__":
     missings = []
     for stop_name in ["Praha hl", "Praha Masarykovo n"]:
         missing = stops_geo_data.filter(pl.col("name").str.contains(stop_name))
-        print(missing)
+        if len(missing) > 0:
+            missings.append(missing)
+            print(missing)
 
-    if len(missing) > 0:
+    if missings:
         prague_stops = pl.concat([prague_stops, *missings])
 
     print(prague_stops)
+    prague_stops.write_csv(output_file)
+    print(f"Written to {output_file}")
 
-    prague_stops.write_csv("Prague_stops_geo.csv")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Prepare geographic stop data")
+    parser.add_argument("--json-dir", default="data", help="Directory with GPS JSON files")
+    parser.add_argument("--stops-file", default="Prague_stops.txt", help="Path to stops list")
+    parser.add_argument("--output", default="Prague_stops_geo.csv", help="Output CSV path")
+    args = parser.parse_args()
+    main(json_dir=args.json_dir, stops_file=args.stops_file, output_file=args.output)

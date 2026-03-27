@@ -1,9 +1,8 @@
-import random
-from tqdm import tqdm
-import time
 import math
-import scipy.stats as stats
-from scipy.stats import beta
+import random
+import time
+
+from tqdm import tqdm
 
 
 class EpsilonGreedyBandit:
@@ -60,7 +59,7 @@ class EpsilonFirstBandit:
         self.q_values[arm_index] = ((n - 1) * old_q + reward) / n
 
     def __repr__(self):
-        return f"EpsilonFirstBandit(arms={self.arms}, exploration_fraction={self.exploration_fraction})"
+        return f"EpsilonFirstBandit(arms={self.arms}, exploration_steps={self.exploration_steps})"
 
     def report(self):
         print("Q-values per arm:")
@@ -292,13 +291,12 @@ def deploy_bandit(
 ):
     if waiting_args is None:
         raise ValueError("waiting_args must be provided")
-    else:
-        if not (isinstance(waiting_args, tuple) or isinstance(waiting_args, list)):
-            waiting_args = (waiting_args,)
+    if not isinstance(waiting_args, (tuple, list)):
+        waiting_args = (waiting_args,)
+
     state = "ALIVE"
     last_alive_successes = 0.0
     last_arm_index = None
-    waiting_steps = 0
     waiting_time = 0.0
 
     iterator = range(max_steps)
@@ -313,7 +311,7 @@ def deploy_bandit(
             current_arm_index = bandit.select_arm()
 
             fun_args = bandit.arms[current_arm_index]
-            if not (isinstance(fun_args, tuple) or isinstance(fun_args, list)):
+            if not isinstance(fun_args, (tuple, list)):
                 fun_args = (fun_args,)
             successful_tasks, failed_tasks = fun(*fun_args)
             fail_fraction = failed_tasks / (successful_tasks + failed_tasks)
@@ -334,7 +332,6 @@ def deploy_bandit(
         else:
             successful_tasks, failed_tasks = fun(*waiting_args)
             fail_fraction = failed_tasks / (successful_tasks + failed_tasks)
-            waiting_steps += 1
 
             time.sleep(default_wait_time + extra_wait_time)
             waiting_time += default_wait_time + extra_wait_time
@@ -349,24 +346,3 @@ def deploy_bandit(
         bandit.report()
 
 
-if __name__ == "__main__":
-    arms = list(range(10, 210, 10))
-    print(arms)
-    # bandit = EpsilonDecreasingBandit(arms=arms, initial_epsilon=1.0, limit_epsilon=0.05, half_decay_steps=200)
-    # bandit = UCB1Bandit(arms=arms)
-    # bandit = WilsonSamplingBandit(arms=arms, z_score=1.96)
-    bandit = ThompsonSamplingBandit(arms=arms)
-
-    base_time = 0.1
-    multiplier = 0.05
-    deploy_bandit(
-        bandit,
-        testing_simulation_function,
-        failure_threshold=0.1,
-        default_wait_time=base_time * multiplier,
-        extra_wait_time=multiplier * base_time * 2,
-        waiting_args=10,
-        max_steps=10000,
-        verbose=True,
-        reward_factor=1.0,
-    )

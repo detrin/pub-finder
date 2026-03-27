@@ -38,7 +38,7 @@ async def search_pubs_near_stop(lat: float, lon: float, radius: int = 500) -> li
     }
     body = {
         "includedTypes": ["bar", "pub", "restaurant"],
-        "maxResultCount": 10,
+        "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lon},
@@ -53,10 +53,10 @@ async def search_pubs_near_stop(lat: float, lon: float, radius: int = 500) -> li
 
 
 async def get_cached_pubs(db: aiosqlite.Connection, stop_name: str) -> list[dict]:
-    """Get cached pubs for a stop (within 24h TTL)."""
+    """Get cached pubs for a stop (within 90 day TTL)."""
     cursor = await db.execute(
         "SELECT place_id, name, lat, lon, rating, rating_count, price_level, google_maps_url "
-        "FROM pub_cache WHERE stop_name = ? AND cached_at > datetime('now', '-24 hours')",
+        "FROM pub_cache WHERE stop_name = ? AND cached_at > datetime('now', '-90 days')",
         (stop_name,),
     )
     rows = await cursor.fetchall()

@@ -1,37 +1,55 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+<div class="hero">
+    <h1>Find the best pub to meet</h1>
+    <p>No more arguing about where to meet. We crunch Prague's entire transit network to find the fairest pub.</p>
+</div>
 
-    <div class="card">
-        <div class="card-body">
-            <h3>Create a Session</h3>
+<div class="row">
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h3>Create a Session</h3>
+            </header>
+            <p>Start a new session and invite your friends.</p>
             <form hx-post="/session/create" hx-target="body">
-                <div class="form-group">
-                    <label for="create-name">Your Name</label>
-                    <input type="text" id="create-name" name="creator_name" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Create</button>
+                <label data-field>
+                    Session Name
+                    <input type="text" name="session_name" required placeholder="e.g. Friday drinks">
+                </label>
+                <label data-field>
+                    Your Name
+                    <input type="text" name="creator_name" required placeholder="Enter your name">
+                </label>
+                <button type="submit">Create</button>
             </form>
-        </div>
+        </article>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <h3>Join a Session</h3>
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h3>Join a Session</h3>
+            </header>
+            <p>Enter a session code to join your friends.</p>
             <form action="/session/join" method="get">
-                <div class="form-group">
-                    <label for="join-code">Session Code</label>
-                    <input type="text" id="join-code" name="code" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label for="join-name">Your Name</label>
-                    <input type="text" id="join-name" name="name" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Join</button>
+                <label data-field>
+                    Session Code
+                    <input type="text" name="code" required placeholder="e.g. a1b2c3d4">
+                </label>
+                <label data-field>
+                    Your Name
+                    <input type="text" name="name" required placeholder="Enter your name">
+                </label>
+                <button type="submit" class="outline">Join</button>
             </form>
-        </div>
+        </article>
     </div>
+</div>
 
+<div id="session-history" style="display: none;">
+    <h3>Recent Sessions</h3>
+    <ul class="session-history-list"></ul>
 </div>
 {% endblock %}

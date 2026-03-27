@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Pub Finder{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 
     <!-- oat CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/@knadh/oat@0.7.0/dist/oat.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/knadh/oat@gh-pages/oat.min.css">
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -15,32 +16,41 @@
     <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="navbar-brand"><strong>Pub Finder</strong></a>
+    <nav data-topnav>
+        <div class="row">
+            <a href="/"><strong>Pub Finder</strong></a>
+            <div>
+                <a href="/">Home</a>
+                <a href="/how-it-works">How it works</a>
+                <a href="/feedback">Feedback</a>
+                <a href="https://github.com/detrin/pub-finder">GitHub</a>
+            </div>
         </div>
     </nav>
 
-    <main class="container" style="padding: 2rem 1rem;">
-        {% block content %}{% endblock %}
-    </main>
+    <div class="container">
+        <main>
+            {% block content %}{% endblock %}
+        </main>
 
-    <footer class="container" style="padding: 1rem; text-align: center; opacity: 0.7; font-size: 0.85rem;">
-        Created by <a href="https://www.hermandaniel.com">Daniel Herman</a> &mdash;
-        <a href="https://github.com/detrin/pub-finder">GitHub</a>
-    </footer>
+        <footer>
+            <p>Created by <a href="https://www.hermandaniel.com">Daniel Herman</a> &mdash;
+            <a href="https://github.com/detrin/pub-finder">GitHub</a></p>
+        </footer>
+    </div>
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
 
     <!-- oat JS -->
-    <script src="https://unpkg.com/@knadh/oat@0.7.0/dist/oat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/knadh/oat@gh-pages/oat.min.js" defer></script>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- App JS -->
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=4"></script>
 
     {% block scripts %}{% endblock %}
 </body>

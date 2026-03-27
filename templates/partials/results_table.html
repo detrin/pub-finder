@@ -1,51 +1,146 @@
 {% if error %}
-<div role="alert">{{ error }}</div>
-{% elif results %}
-<table>
-    <thead>
-        <tr>
-            <th>#</th>
-            {% for col in results.columns %}
-            <th>{{ col }}</th>
-            {% endfor %}
-            <th>Nearby Pubs</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in results.rows() %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            {% for val in row %}
-            <td>{{ val }}</td>
-            {% endfor %}
-            <td>
-                {% set stop_name = row[0] %}
-                {% if pubs_by_stop and stop_name in pubs_by_stop %}
-                    {% for pub in pubs_by_stop[stop_name][:3] %}
-                    <div>
-                        <a href="{{ pub.google_maps_url }}" target="_blank">{{ pub.name }}</a>
-                        {% if pub.rating %}
-                            <small>{{ pub.rating }}/5 ({{ pub.rating_count }})</small>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <em>-</em>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<article class="card" style="border-left: 4px solid #dc2626; padding: 1rem;" role="alert">
+    <strong>Error:</strong> {{ error }}
+</article>
+{% elif results is not none %}
+
+{% if warning %}
+<article class="card" style="border-left: 4px solid #f59e0b; padding: 1rem; margin-bottom: 1rem;" role="status">
+    <strong>Note:</strong> {{ warning }}
+</article>
+{% endif %}
+
+{% set ns = namespace(participants=[]) %}
+{% for col in results.columns %}
+    {% if col.startswith("Round trip (") %}
+        {% set name = col[12:-1] %}
+        {% set ns.participants = ns.participants + [name] %}
+    {% endif %}
+{% endfor %}
 
 <div id="map-data" style="display:none;"
      data-stops='{{ stops_json | default("[]") }}'
-     data-pubs='{{ pubs_json | default("[]") }}'>
+     data-pubs='{{ pubs_json | default("[]") }}'
+     data-participants='{{ participants_json | default("[]") }}'>
 </div>
-<div id="map"></div>
+<article class="card map-card">
+    <h4>Map</h4>
+    <div id="map"></div>
+</article>
 <script>
     if (typeof initMap === 'function') initMap();
 </script>
+
+{% for row in results.rows(named=true) %}
+{% set rank = loop.index %}
+{% set stop_name = row["Target Stop"] %}
+{% set worst = row["Worst Case Minutes"] %}
+{% set total = row["Total Minutes"] %}
+{% set pubs = pubs_by_stop.get(stop_name, []) if pubs_by_stop else [] %}
+
+<article class="card result-card {% if rank == 1 %}result-card--top{% endif %}">
+    <div class="result-header">
+        <div class="result-rank">
+            {% if rank == 1 %}
+                <span class="rank-badge rank-badge--gold">Best Match</span>
+            {% else %}
+                <span class="rank-badge">#{{ rank }}</span>
+            {% endif %}
+        </div>
+        <div class="result-title">
+            <h3>{{ stop_name }}</h3>
+        </div>
+        <div class="result-metrics">
+            <div class="metric">
+                <span class="metric-value">{{ worst }}</span>
+                <span class="metric-label">worst case min</span>
+            </div>
+            <div class="metric">
+                <span class="metric-value">{{ total }}</span>
+                <span class="metric-label">total min</span>
+            </div>
+        </div>
+    </div>
+
+    <details class="travel-details">
+        <summary>Travel times per participant</summary>
+        <div class="travel-grid">
+            {% for p in ns.participants %}
+            <div class="travel-person">
+                <strong class="travel-person-name">{{ p }}</strong>
+                <div class="travel-times">
+                    <span class="travel-chip">
+                        <small>to</small> {{ row["To (" ~ p ~ ")"] }} min
+                    </span>
+                    <span class="travel-chip">
+                        <small>from</small> {{ row["From (" ~ p ~ ")"] }} min
+                    </span>
+                    <span class="travel-chip travel-chip--total">
+                        <small>round</small> {{ row["Round trip (" ~ p ~ ")"] }} min
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+
+    {% if pubs %}
+    <div class="pubs-section">
+        <h4 class="pubs-heading">Nearby Pubs
+            <span class="pubs-count">{{ pubs | length }}</span>
+        </h4>
+        <div class="pub-pills">
+            {% for pub in pubs[:3] %}
+            <div class="pub-pill-row">
+                <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
+                   class="pub-pill">
+                    <span class="pub-pill-name">{{ pub.name }}</span>
+                    {% if pub.rating %}
+                    <span class="pub-pill-rating" title="{{ pub.rating }}/5 from {{ pub.rating_count }} reviews">
+                        {{ pub.rating }}&#9733; ({{ pub.rating_count }})
+                    </span>
+                    {% endif %}
+                </a>
+                <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
+                   target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
+                    walk
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% if pubs | length > 3 %}
+        <details class="pubs-more">
+            <summary>Show {{ pubs | length - 3 }} more</summary>
+            <div class="pub-pills">
+                {% for pub in pubs[3:] %}
+                <div class="pub-pill-row">
+                    <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
+                       class="pub-pill">
+                        <span class="pub-pill-name">{{ pub.name }}</span>
+                        {% if pub.rating %}
+                        <span class="pub-pill-rating" title="{{ pub.rating }}/5 from {{ pub.rating_count }} reviews">
+                            {{ pub.rating }}&#9733;
+                        </span>
+                        {% endif %}
+                    </a>
+                    <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
+                       target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
+                        walk
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="pubs-section">
+        <p class="pubs-none"><em>No pubs found nearby</em></p>
+    </div>
+    {% endif %}
+</article>
+{% endfor %}
+
 {% else %}
 <p><em>No results yet. Make sure all participants have selected their stops.</em></p>
 {% endif %}

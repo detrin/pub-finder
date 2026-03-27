@@ -1,13 +1,3 @@
-<div id="participant-list" hx-get="/session/{{ session.code }}/participants" hx-trigger="every 5s" hx-swap="outerHTML">
-    <h4>Participants ({{ participants | length }})</h4>
-    {% for p in participants %}
-    <div style="margin-bottom: 0.5rem;">
-        <strong>{{ p.name }}</strong> &mdash;
-        {% if p.start_stop %}
-            {{ p.start_stop }} &rarr; {{ p.end_stop }}
-        {% else %}
-            No stop selected yet
-        {% endif %}
-    </div>
-    {% endfor %}
+<div id="participant-list" hx-ext="sse" sse-connect="/session/{{ session.code }}/events" sse-swap="participants">
+    {% include "partials/participant_list_inner.html" %}
 </div>

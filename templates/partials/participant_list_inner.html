@@ -1,0 +1,15 @@
+<h4>Participants ({{ participants | length }})</h4>
+{% if stop_error %}
+<p style="color: #dc2626; font-size: 0.85rem; margin: 0 0 0.5rem;"><strong>Error:</strong> {{ stop_error }}</p>
+{% endif %}
+{% for p in participants %}
+<p>
+    <strong>{{ p.name }}</strong>
+    {% if p.start_stop %}
+        <span class="badge-ready">Stops set</span>
+        {{ p.start_stop }} &rarr; pub &rarr; {{ p.end_stop }}
+    {% else %}
+        <span class="badge-waiting">No stops yet</span>
+    {% endif %}
+</p>
+{% endfor %}

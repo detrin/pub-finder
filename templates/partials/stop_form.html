@@ -1,35 +1,26 @@
-<form hx-post="/session/{{ session_code }}/stops" hx-target="#participant-list" hx-swap="outerHTML" style="margin-bottom: 1.5rem;">
+<form hx-post="/session/{{ session_code }}/stops" hx-target="#participant-list" hx-swap="innerHTML" class="stop-form">
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
-    <p><strong>{{ participant.name }}</strong></p>
-
-    <div class="form-group">
-        <label>From</label>
-        <select name="start_stop" class="form-control">
-            <option value="">-- Select stop --</option>
-            {% for stop in all_stops %}
-            <option value="{{ stop }}" {% if participant.start_stop == stop %}selected{% endif %}>{{ stop }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label>
-            <input type="checkbox" name="same_start_end" value="true"
-                {% if participant.same_start_end %}checked{% endif %}
-                onchange="this.closest('form').querySelector('[name=end_stop]').disabled = this.checked;">
-            Return to start
+    <div class="stop-form-row">
+        <div class="stop-form-name">
+            <strong>{{ participant.name }}</strong>
+            <label class="stop-form-return">
+                <input type="checkbox" name="same_start_end" value="true"
+                    {% if participant.same_start_end %}checked{% endif %}
+                    onchange="this.closest('form').querySelector('[name=end_stop]').disabled = this.checked;">
+                return
+            </label>
+        </div>
+        <label data-field>
+            From
+            <input type="text" name="start_stop" list="stops-list" placeholder="Search..."
+                value="{{ participant.start_stop }}" autocomplete="off">
         </label>
+        <label data-field>
+            To
+            <input type="text" name="end_stop" list="stops-list" placeholder="Search..."
+                value="{{ participant.end_stop }}" autocomplete="off"
+                {% if participant.same_start_end %}disabled{% endif %}>
+        </label>
+        <button type="submit" class="small">Save</button>
     </div>
-
-    <div class="form-group">
-        <label>To</label>
-        <select name="end_stop" class="form-control" {% if participant.same_start_end %}disabled{% endif %}>
-            <option value="">-- Select stop --</option>
-            {% for stop in all_stops %}
-            <option value="{{ stop }}" {% if participant.end_stop == stop %}selected{% endif %}>{{ stop }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Save</button>
 </form>

@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import aiosqlite
@@ -8,10 +9,16 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 from config import DATABASE_PATH
-from db import init_db
+from db import init_db, cleanup_old_sessions
 from routers.home import router as home_router
 from routers.search import router as search_router
 from routers.session import router as session_router
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app_state: dict = {}
 
@@ -31,6 +38,7 @@ async def lifespan(app: FastAPI):
 
     db = await aiosqlite.connect(DATABASE_PATH)
     await init_db(db)
+    await cleanup_old_sessions(db)
     app.state.db = db
     app_state["db"] = db
 

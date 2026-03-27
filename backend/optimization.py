@@ -1,8 +1,12 @@
-from typing import List
-import polars as pl
+import logging
 import traceback
-from tqdm import tqdm
+from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import polars as pl
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def get_geo_optimal_stop(
@@ -28,12 +32,12 @@ def get_geo_optimal_stop(
         )
         dfs.append(df)
 
-    print("Joining dataframes ...")
+    logger.debug("Joining dataframes ...")
     df = dfs[0]
     for i in range(1, len(dfs)):
         df = df.join(dfs[i], on="target_stop")
 
-    print("Finidng optimal stops ...")
+    logger.debug("Finding optimal stops ...")
     df = df.with_columns(
         pl.max_horizontal(
             *[f"distance_in_km_{si}" for si in range(len(selected_stops))]
@@ -74,12 +78,12 @@ def get_time_optimal_stop(
         )
         dfs.append(df)
 
-    print("Joining dataframes ...")
+    logger.debug("Joining dataframes ...")
     df = dfs[0]
     for i in range(1, len(dfs)):
         df = df.join(dfs[i], on="target_stop")
 
-    print("Finding optimal stops ...")
+    logger.debug("Finding optimal stops ...")
     df = df.with_columns(
         pl.max_horizontal(
             *[f"total_minutes_{si}" for si in range(len(selected_stops))]
@@ -130,7 +134,7 @@ def get_actual_time_optimal_stop(
                 )
                 row[f"total_minutes_{si}"] = total_minutes
             except Exception as e:
-                print(f"Error processing pair ({from_stop}, {target_stop}): {e}")
+                logger.warning("Error processing pair (%s, %s): %s", from_stop, target_stop, e)
                 traceback.print_exc()
                 row[f"total_minutes_{si}"] = None
         return row
@@ -149,7 +153,7 @@ def get_actual_time_optimal_stop(
                 result = future.result()
                 rows.append(result)
             except Exception as e:
-                print(f"An error occurred with target_stop={futures[future]}: {e}")
+                logger.error("An error occurred with target_stop=%s: %s", futures[future], e)
 
     df_times = pl.DataFrame(rows).with_columns(
         pl.max_horizontal(
@@ -204,24 +208,29 @@ def get_actual_time_optimal_stop_pairs(
     event_datetime,
     get_total_minutes_func,
     show_top: int = 20,
+    participant_names: Optional[List[str]] = None,
+    return_datetime=None,
 ) -> pl.DataFrame:
     """Like get_actual_time_optimal_stop but computes round trips (to meeting point + back to end stop)."""
+    if return_datetime is None:
+        return_datetime = event_datetime
+
     def process_target_stop(args):
-        target_stop, stop_pairs, event_datetime, get_total_minutes_func = args
+        target_stop, stop_pairs, departure_dt, return_dt, get_total_minutes_func = args
         row = {"target_stop": target_stop}
         for si, (start, end) in enumerate(stop_pairs):
             try:
-                to_minutes = get_total_minutes_func(start, target_stop, event_datetime)
+                to_minutes = get_total_minutes_func(start, target_stop, departure_dt)
                 if start == end:
-                    from_minutes = to_minutes
+                    from_minutes = get_total_minutes_func(target_stop, start, return_dt)
                 else:
-                    from_minutes = get_total_minutes_func(target_stop, end, event_datetime)
+                    from_minutes = get_total_minutes_func(target_stop, end, return_dt)
                 round_trip = (to_minutes or 0) + (from_minutes or 0)
                 row[f"to_minutes_{si}"] = to_minutes
                 row[f"from_minutes_{si}"] = from_minutes
                 row[f"round_trip_{si}"] = round_trip
             except Exception as e:
-                print(f"Error processing pair ({start}, {target_stop}, {end}): {e}")
+                logger.warning("Error processing pair (%s, %s, %s): %s", start, target_stop, end, e)
                 traceback.print_exc()
                 row[f"to_minutes_{si}"] = None
                 row[f"from_minutes_{si}"] = None
@@ -230,7 +239,7 @@ def get_actual_time_optimal_stop_pairs(
 
     rows = []
     arguments = [
-        (target_stop, stop_pairs, event_datetime, get_total_minutes_func)
+        (target_stop, stop_pairs, event_datetime, return_datetime, get_total_minutes_func)
         for target_stop in target_stops
     ]
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -242,7 +251,7 @@ def get_actual_time_optimal_stop_pairs(
                 result = future.result()
                 rows.append(result)
             except Exception as e:
-                print(f"An error occurred with target_stop={futures[future]}: {e}")
+                logger.error("An error occurred with target_stop=%s: %s", futures[future], e)
 
     df_times = pl.DataFrame(rows).with_columns(
         pl.max_horizontal(
@@ -264,9 +273,10 @@ def get_actual_time_optimal_stop_pairs(
         "total_minutes": "Total Minutes",
     }
     for si in range(len(stop_pairs)):
-        rename_map[f"to_minutes_{si}"] = f"To (p{si+1})"
-        rename_map[f"from_minutes_{si}"] = f"From (p{si+1})"
-        rename_map[f"round_trip_{si}"] = f"Round trip (p{si+1})"
+        name = participant_names[si] if participant_names and si < len(participant_names) else f"p{si+1}"
+        rename_map[f"to_minutes_{si}"] = f"To ({name})"
+        rename_map[f"from_minutes_{si}"] = f"From ({name})"
+        rename_map[f"round_trip_{si}"] = f"Round trip ({name})"
 
     df_times = df_times.rename(rename_map)
     df_times = df_times.drop_nulls()

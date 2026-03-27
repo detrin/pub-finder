@@ -34,7 +34,7 @@ async def test_create_session():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/session/create",
-            data={"creator_name": "Daniel"},
+            data={"session_name": "Test Session", "creator_name": "Daniel"},
             follow_redirects=False,
         )
     assert response.status_code == 303
@@ -47,7 +47,7 @@ async def test_join_session():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/session/create",
-            data={"creator_name": "Daniel"},
+            data={"session_name": "Test Session", "creator_name": "Daniel"},
             follow_redirects=False,
         )
         location = create_resp.headers["location"]
@@ -65,10 +65,10 @@ async def test_session_page():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_resp = await client.post(
             "/session/create",
-            data={"creator_name": "Daniel"},
+            data={"session_name": "Test Session", "creator_name": "Daniel"},
             follow_redirects=False,
         )
         location = create_resp.headers["location"]
-        page = await client.get(location)
+        page = await client.get(location, follow_redirects=True)
     assert page.status_code == 200
     assert "Daniel" in page.text

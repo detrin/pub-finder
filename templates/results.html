@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Results — {{ session.name }} — Pub Finder{% endblock %}
+
+{% block content %}
+<div class="session-heading" data-session-code="{{ session.code }}" data-session-name="{{ session.name }}">
+    <div class="session-heading__title">
+        <span class="session-heading__eyebrow">Results for</span>
+        <h1 class="session-heading__name">{{ session.name }}</h1>
+    </div>
+    <a href="/session/{{ session.code }}" class="session-heading__share" style="text-decoration: none;">
+        <span>Open Session</span>
+    </a>
+</div>
+
+{% if has_results %}
+<div id="results-section">
+    {% include "partials/results_table.html" %}
+</div>
+{% else %}
+<article class="card" style="text-align: center; padding: 3rem 1rem;">
+    <p>No search results yet. Run a search from the <a href="/session/{{ session.code }}">session page</a>.</p>
+</article>
+{% endif %}
+{% endblock %}

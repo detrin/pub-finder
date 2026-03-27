@@ -1,10 +1,15 @@
-from typing import Tuple
-from datetime import datetime, timedelta
-from datetime import time as dt_time
+import logging
 import re
 import time
+from datetime import datetime, timedelta
+from datetime import time as dt_time
+from typing import Tuple
+
 from cachetools import cached, TTLCache
+
 from backend.dpp import get_route_info
+
+logger = logging.getLogger(__name__)
 
 
 def get_next_meetup_time(target_weekday: int, target_hour: int) -> datetime:
@@ -28,22 +33,22 @@ def get_next_meetup_time(target_weekday: int, target_hour: int) -> datetime:
 
 def validate_date_time(date_str: str, time_str: str) -> Tuple[bool, str]:
     try:
-        event_datetime = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+        event_datetime = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
     except ValueError:
         return (
             False,
-            "Invalid date or time format. Please ensure date is DD/MM/YYYY and time is HH:MM.",
+            "Invalid date or time format. Please ensure date is YYYY-MM-DD and time is HH:MM.",
         )
 
     now = datetime.now()
-    three_months_later = now + timedelta(days=90)  # Approximation of 3 months
+    one_month_later = now + timedelta(days=31)
 
     if event_datetime <= now:
         return False, "The selected date and time must be in the future."
-    if event_datetime > three_months_later:
+    if event_datetime > one_month_later:
         return (
             False,
-            "The selected date and time must not be more than 3 months in the future.",
+            "The selected date and time must not be more than 1 month in the future.",
         )
 
     return True, ""
@@ -106,13 +111,15 @@ def get_total_minutes_with_retries(
         except Exception as e:
             attempt += 1
             if attempt < max_retries:
-                print(
-                    f"Error processing pair ({from_stop}, {to_stop}): {e}. Retrying in {retry_delay} seconds... (Attempt {attempt}/{max_retries})"
+                logger.warning(
+                    "Error processing pair (%s, %s): %s. Retrying in %ds... (Attempt %d/%d)",
+                    from_stop, to_stop, e, retry_delay, attempt, max_retries,
                 )
                 time.sleep(retry_delay)
             else:
-                print(
-                    f"Failed to process pair ({from_stop}, {to_stop}) after {max_retries} attempts."
+                logger.error(
+                    "Failed to process pair (%s, %s) after %d attempts.",
+                    from_stop, to_stop, max_retries,
                 )
                 return None
     return None

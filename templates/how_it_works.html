@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}How It Works — Pub Finder{% endblock %}
+
+{% block content %}
+<h1>How Does It Work?</h1>
+<p>Finding the optimal meeting point in Prague's public transport network.</p>
+
+<article class="card">
+    <p>Consider you are in Prague and you want to meet with your friends at a pub. What is the optimal stop to meet? This app finds that for you!</p>
+    <p>Timetable data are scraped from the IDOS API, which uses PID (Prague Integrated Transport) schedule data.</p>
+</article>
+
+<h2>Problem Formulation</h2>
+<p>Given a set of <strong>k</strong> starting stops <strong>S = {s&#8321;, s&#8322;, ..., s&#8342;}</strong>, we find an optimal target stop <strong>t*</strong> from all 1463 stops in Prague that minimizes travel time for all participants.</p>
+
+<h2>Optimization Methods</h2>
+
+<div class="row">
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h4>Minimize Worst Case (Min-Max)</h4>
+            </header>
+            <p>Finds the stop where the person with the longest journey has the shortest possible travel time.</p>
+            <p><code>t* = argmin max(travel_time(s&#7522;, t))</code></p>
+        </article>
+    </div>
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h4>Minimize Total Time (Sum)</h4>
+            </header>
+            <p>Finds the stop that minimizes the total travel time across all participants.</p>
+            <p><code>t* = argmin &Sigma; travel_time(s&#7522;, t)</code></p>
+        </article>
+    </div>
+</div>
+
+<h2>Two-Stage Algorithm</h2>
+
+<div class="row">
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h4>Stage 1 &mdash; Candidate Selection</h4>
+            </header>
+            <p>Pre-computed geographic distances and scraped travel times (~2.1M stop combinations) are used to quickly filter the top candidate stops.</p>
+        </article>
+    </div>
+    <div class="col-6">
+        <article class="card">
+            <header>
+                <h4>Stage 2 &mdash; Real-Time Refinement</h4>
+            </header>
+            <p>For each candidate, actual travel times are queried from the IDOS/DPP API for the specific date and time you chose. Results are sorted by the selected optimization method.</p>
+        </article>
+    </div>
+</div>
+
+<h2>Round-Trip Support</h2>
+<p>Each participant can set a different start and end stop. The optimization considers the full round trip: <code>travel(start &rarr; target) + travel(target &rarr; end)</code>.</p>
+
+<h2>Pub Discovery</h2>
+<p>For the top 5 meeting points, the app searches for nearby pubs using the Google Places API (within 500m radius) and shows ratings, review counts, and Google Maps links.</p>
+{% endblock %}

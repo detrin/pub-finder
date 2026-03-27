@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Join Session — Pub Finder{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Join Session</h1>
+    <p>Enter your name to join session <strong>{{ code }}</strong></p>
+</div>
+
+<div class="row">
+    <div class="col-4 offset-4">
+        <article class="card">
+            <form action="/session/join" method="get">
+                <input type="hidden" name="code" value="{{ code }}">
+                <label data-field>
+                    Your Name
+                    <input type="text" name="name" required placeholder="Enter your name" autofocus>
+                </label>
+                <button type="submit">Join Session</button>
+            </form>
+        </article>
+    </div>
+</div>
+{% endblock %}
