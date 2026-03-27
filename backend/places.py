@@ -37,7 +37,7 @@ async def search_pubs_near_stop(lat: float, lon: float, radius: int = 500) -> li
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.googleMapsUri",
     }
     body = {
-        "includedTypes": ["bar", "pub", "restaurant"],
+        "includedTypes": ["bar", "pub", "cafe"],
         "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
