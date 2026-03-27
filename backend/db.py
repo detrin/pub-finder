@@ -140,7 +140,7 @@ async def save_search_results(db: aiosqlite.Connection, session_code: str, resul
     now = datetime.now(timezone.utc).isoformat()
     await db.execute(
         "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) VALUES (?, ?, ?)",
-        (session_code, json.dumps(results_data), now),
+        (session_code, json.dumps(results_data, default=str), now),
     )
     await db.commit()
 

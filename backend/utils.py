@@ -94,7 +94,11 @@ def get_total_minutes(from_stop: str, to_stop: str, dt: datetime) -> int:
         raise ValueError(f"Failed to get travel time: {e}") from e
 
 
-@cached(cache=TTLCache(maxsize=10**6, ttl=24 * 60 * 60))
+def _cache_key(from_stop, to_stop, dt, max_retries=3, retry_delay=2):
+    return (from_stop, to_stop, str(dt))
+
+
+@cached(cache=TTLCache(maxsize=10**6, ttl=24 * 60 * 60), key=_cache_key)
 def get_total_minutes_with_retries(
     from_stop: str,
     to_stop: str,
