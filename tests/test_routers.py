@@ -4,7 +4,7 @@ import aiosqlite
 from httpx import ASGITransport, AsyncClient
 
 from backend.db import init_db
-from main import app
+from backend.app import app
 
 
 @pytest_asyncio.fixture(autouse=True)

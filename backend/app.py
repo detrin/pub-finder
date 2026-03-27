@@ -7,8 +7,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import DATABASE_PATH, HOST, PORT
-from backend.db import init_db, cleanup_old_sessions
+from .config import DATABASE_PATH, HOST, PORT
+from .db import init_db, cleanup_old_sessions
 from routers.home import router as home_router
 from routers.search import router as search_router
 from routers.session import router as session_router
@@ -50,4 +50,4 @@ app.include_router(search_router)
 app.include_router(session_router)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)
+    uvicorn.run("backend.app:app", host=HOST, port=PORT, reload=True)

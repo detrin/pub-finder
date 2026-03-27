@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "backend"]
