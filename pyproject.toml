@@ -9,7 +9,7 @@ py-modules = []
 name = "pub-finder"
 version = "0.1.0"
 description = "Find the best pub to meet — optimized for Prague's transit network"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.12",
     "polars>=1.20",

@@ -1,57 +1,104 @@
-# Pub finder
-Find the optimal place where to meet with your friends in Prague.
+# Pub Finder
 
-Try out the Web demo https://pub-finder.hermandaniel.com.
+Find the optimal pub to meet with your friends in Prague, using public transit optimization.
+
+Try the live demo at https://pub-finder.hermandaniel.com.
 
 ## How does it work?
 
-We have 1400+ stops in Prague. Given the set of `k` stops (e.g. Krymská, Anděl, Muzeum) we would like to find a stop (`target_stop`) that is closest to each of the stops. What is definition of "closest"? Let's define for now the distance function between stop `A` and stop `B` as `dist(A, B)`. We can consider case 
-1) where we minimize the maximum distance from `k` stops (e.g. `worst_case_dist = max(dist(target_stop, Krymská), dist(target_stop, Anděl), dist(target_stop, Muzeum))`)
-2) or the case where we minimize the total distance from `k` stops to `target_stop` (e.g. `total_dist = dist(target_stop, Krymská) + dist(target_stop, Anděl) + dist(target_stop, Muzeum)`).
+We have 1,400+ transit stops in Prague. Given a set of `k` stops where friends are starting from (e.g. Krymska, Andel, Muzeum), we find the target stop that is closest to everyone. "Closest" can mean:
 
-Now the simplest solution would be to use `dist()` function as true distance of the stops considering their GPS coordinates, but we can do better. Since the public transport has different speed of transport depending on the stops themselves I scraped almost all the combinations of the stops in both ways (around 2.1M). I scraped all with arrival date Friday 28.2.2025, 20:00. Now, the distance can be also in minutes that it takes to get from stop A to stop B.
+1. **Minimize worst-case** -- minimize the maximum travel time from any friend's starting stop.
+2. **Minimize total** -- minimize the sum of all travel times.
 
-We can now iterate over all stops in Prague and for given list of `k` stops we can calculate `worst_case_dist` or `total_dist` and we can take the best cases. What I am actually doing is that I select top `10` target stops based on geo distance and top `25` target stops based on time distance. Then for all of them I scrape the actual time it takes given the date and time and update the table based on that. I select top `15` target stops and that is the end result.
+The naive approach uses geographic (Haversine) distance between stops. But public transit speeds vary by route, so we scraped ~2.1M stop-pair travel times from DPP to use actual transit minutes as the distance metric.
 
-## Usage
+The search works in stages: first, we select the top 10 stops by geographic distance and top 25 by pre-computed transit time. Then we scrape real-time travel times for the selected date/time and re-rank. The top 15 target stops are returned, each with nearby pubs discovered via the Google Places API (cached for 90 days).
 
-### Local
+## Features
+
+- **Session-based** -- create a session, share the code, friends join and pick their stops
+- **Real-time updates** -- participant list updates live via Server-Sent Events
+- **Interactive map** -- Leaflet.js map showing stops and recommended pubs
+- **Pub discovery** -- Google Places API integration with rating, price level, and walking directions
+- **Shareable results** -- permanent link to search results for each session
+- **Round-trip support** -- optionally set a different return stop
+
+## Quick start
+
+### Local development
+
+Requires Python 3.12+.
+
+```bash
+pip install -e ".[dev]"
+cp .env.example .env
+# Edit .env and add your GOOGLE_PLACES_API_KEY
+python -m backend
 ```
-uv venv --python=3.12
-source .venv/bin/activate
-uv pip install -r requirements.txt
-uv run app.py
-```
-Now you can visit http://0.0.0.0:3000 and enjoy the app.
+
+Visit http://localhost:3000.
 
 ### Docker
-```
-docker build -t pub-finder-app .
-docker run -p 3000:3000 --name pub-finder pub-finder-app
-```
-Now you can enjoy the app on http://localhost:3000. 
 
-To remove the image
-```
-docker rm pub-finder
+```bash
+cp .env.example .env
+# Edit .env and add your GOOGLE_PLACES_API_KEY
+docker compose up --build
 ```
 
+Visit http://localhost:3000.
 
-## Development
-Prepare the geo data of stops scraped from PID.
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GOOGLE_PLACES_API_KEY` | _(empty)_ | Required for pub search |
+| `DATABASE_PATH` | `pub_finder.db` | SQLite database path |
+| `HOST` | `0.0.0.0` | Server bind address |
+| `PORT` | `3000` | Server port |
+
+## Project structure
+
 ```
-python3.12 prepare_geo_data.py 
+backend/          FastAPI app, config, DB, optimization, Places API client
+routers/          Route handlers (home, session, search)
+templates/        Jinja2 templates with HTMX partials
+static/           CSS, JS, favicon
+data/             Pre-computed transit data (parquet) and stop lists
+data_preparation/ CLI tools for scraping and preparing transit data
+tests/            Pytest test suite
 ```
 
-For scraping use the following. Repeat until you scrape all the combinations. Internally you can swith between IDOS and DPP providers. DPP has slightly higher error rate
+## Testing
+
+```bash
+pip install -e ".[dev]"
+pytest
 ```
-uv run scraping.py --num-processes 50 --num-tasks 50
-uv run manager.py --threshold-error-rate 0.1
-jq '. | (length / 2138906) * 100' results.json
-jq 'map(select(.error != "Failed to retrieve data."))' results.json > results_filtered.json; mv results_filtered.json results.json
+
+## Data preparation
+
+The `data_preparation` module provides a CLI for scraping transit times and preparing stop data.
+
+```bash
+pip install -e ".[data-prep]"
+python -m data_preparation --help
 ```
+
+Subcommands:
+
+- `scrape` -- scrape travel times between stop pairs from DPP
+- `manage` -- filter errors and manage scrape results
+- `prepare` -- generate geo data from raw GPS JSON files
+- `bandit-sim` -- run multi-armed bandit simulation for adaptive scraping
 
 ## Sources
-- https://idos.cz/vlakyautobusymhdvse/spojeni/
-- https://pid.cz/zastavky-pid/zastavky-v-praze
-- https://mapa.pid.cz/?filter=&zoom=12.0&lon=14.4269&lat=50.0874
+
+- https://spojeni.dpp.cz/ -- DPP transit journey planner
+- https://pid.cz/zastavky-pid/zastavky-v-praze -- PID stop listings
+- https://mapa.pid.cz/ -- PID transit map
+
+## License
+
+MIT
