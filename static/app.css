@@ -9,6 +9,7 @@ nav[data-topnav] > .row > div {
 nav[data-topnav] a,
 nav[data-topnav] strong {
     font-size: 0.9rem;
+    white-space: nowrap;
 }
 
 /* Hero section */
@@ -779,6 +780,118 @@ footer {
 
 /* Responsive */
 @media (max-width: 600px) {
+    /* Nav */
+    nav[data-topnav] > .row {
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    nav[data-topnav] > .row > div {
+        gap: 0.4rem;
+    }
+
+    nav[data-topnav] a,
+    nav[data-topnav] strong {
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    /* Session heading */
+    .session-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1.5rem 0 1rem;
+    }
+
+    .session-heading__name {
+        white-space: normal;
+        font-size: 1.4rem;
+    }
+
+    /* Stop form — stack vertically */
+    .stop-form-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.35rem;
+    }
+
+    .stop-form-name {
+        width: 100%;
+        flex-direction: row;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .stop-form-row label[data-field] {
+        flex: none;
+        width: 100%;
+    }
+
+    .stop-form-row button.small {
+        align-self: stretch;
+    }
+
+    /* Search form — tighter spacing */
+    .search-options-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .search-options-row > [class*="col-"] {
+        width: 100% !important;
+        flex: none !important;
+    }
+
+    article.card label[data-field],
+    article.card div[data-field] {
+        margin-bottom: 0.25rem;
+    }
+
+    /* Date/time row: 2 columns on mobile */
+    article.card > form > .row:first-child {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.35rem 0.5rem !important;
+    }
+
+    article.card > form > .row:first-child > [class*="col-"] {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        flex: none !important;
+        grid-column: span 1 !important;
+    }
+
+    /* Method/types/search row: stack full-width */
+    .search-options-row > [class*="col-"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+    }
+
+    /* Reduce oat form field margins on mobile */
+    article.card label,
+    article.card [data-field] {
+        margin-bottom: 0.1rem !important;
+    }
+
+    article.card input,
+    article.card select {
+        margin-bottom: 0 !important;
+    }
+
+    /* Map */
+    #map {
+        height: 300px;
+    }
+
+    .map-card {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Results */
     .result-header {
         flex-direction: column;
         align-items: flex-start;
@@ -801,29 +914,41 @@ footer {
     }
 
     .pub-pill-name {
-        max-width: 150px;
+        max-width: none;
     }
 
-    .session-heading {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding-bottom: 1rem;
+    .pub-pill {
+        max-width: 100%;
     }
 
-    .session-heading__name {
-        white-space: normal;
-        font-size: 1.4rem;
+    /* Metric values slightly smaller */
+    .metric-value {
+        font-size: 1.25rem;
     }
 
-    .stop-form-row {
-        flex-wrap: wrap;
+    /* Container padding */
+    .container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 
-    .stop-form-name {
-        width: 100%;
-        flex-direction: row;
-        gap: 0.5rem;
-        align-items: center;
+    /* Hero */
+    .hero {
+        padding: 1.5rem 0 1rem;
+    }
+
+    .hero h1 {
+        font-size: 1.5rem;
+    }
+
+    /* Cards reduce padding */
+    .card {
+        padding: 0.75rem !important;
+    }
+
+    /* Footer */
+    footer {
+        margin-top: 2rem;
+        padding: 1.5rem 0;
     }
 }
