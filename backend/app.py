@@ -6,6 +6,9 @@ import polars as pl
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from .config import DATABASE_PATH, HOST, PORT
 from .db import init_db, cleanup_old_sessions
@@ -43,7 +46,26 @@ async def lifespan(app: FastAPI):
     await db.close()
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.google.com; "
+            "connect-src 'self'; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "frame-ancestors 'none'"
+        )
+        return response
+
+
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(home_router)
 app.include_router(search_router)

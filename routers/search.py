@@ -85,14 +85,24 @@ templates = Jinja2Templates(directory="templates")
 async def search(
     request: Request,
     code: str,
-    departure_date: str = Form(...),
-    departure_time: str = Form(...),
-    return_date: str = Form(...),
-    return_time: str = Form(...),
-    method: str = Form("minimize-worst-case"),
-    direction: str = Form("round-trip"),
+    departure_date: str = Form(..., max_length=10),
+    departure_time: str = Form(..., max_length=5),
+    return_date: str = Form(..., max_length=10),
+    return_time: str = Form(..., max_length=5),
+    method: str = Form("minimize-worst-case", max_length=30),
+    direction: str = Form("round-trip", max_length=20),
     place_types: list[str] = Form(default=["pub", "bar", "cafe"]),
 ):
+    # Validate enum inputs
+    valid_methods = {"minimize-worst-case", "minimize-total"}
+    valid_directions = {"round-trip", "there-only", "back-only"}
+    valid_place_types = {"pub", "bar", "cafe", "restaurant"}
+    if method not in valid_methods:
+        method = "minimize-worst-case"
+    if direction not in valid_directions:
+        direction = "round-trip"
+    place_types = [pt for pt in place_types if pt in valid_place_types] or ["pub", "bar", "cafe"]
+
     if _is_rate_limited(code):
         return templates.TemplateResponse(
             "partials/results_table.html",
@@ -298,6 +308,10 @@ async def _run_search(
 
 @router.get("/session/{code}/search-progress/{search_id}")
 async def search_progress_stream(request: Request, code: str, search_id: str):
+    # Validate search_id format (hex only) to prevent injection
+    if not search_id.isalnum() or len(search_id) > 32:
+        return StreamingResponse(iter([]), media_type="text/event-stream", status_code=400)
+
     async def event_stream():
         while True:
             if await request.is_disconnected():

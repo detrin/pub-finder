@@ -41,6 +41,10 @@ nav[data-topnav] > .row > div {
 }
 
 /* Push nav right section to fill remaining space so toggle goes far right */
+nav[data-topnav] {
+    z-index: 1100;
+}
+
 nav[data-topnav] > .row {
     display: flex !important;
     justify-content: space-between !important;
