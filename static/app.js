@@ -1,6 +1,6 @@
-let map = null;
-let markersLayer = null;
-let currentMapHash = null;
+var map = null;
+var markersLayer = null;
+var currentMapHash = null;
 
 function initMap() {
     const dataEl = document.getElementById("map-data");
@@ -101,6 +101,150 @@ document.addEventListener("htmx:afterSwap", function (event) {
         initMap();
     }
 });
+
+// ── Stop autocomplete ──────────────────────────────────────
+
+(function () {
+    var stops = window.__ALL_STOPS || [];
+    if (!stops.length) return;
+
+    // Build ASCII-normalized lookup: [{name: "Anděl", norm: "andel"}, ...]
+    var stopData = stops.map(function (s) {
+        return { name: s, norm: toAscii(s).toLowerCase() };
+    });
+
+    function toAscii(str) {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function matchStops(query) {
+        if (!query || query.length < 1) return [];
+        var q = toAscii(query).toLowerCase();
+        var starts = [];
+        var contains = [];
+        for (var i = 0; i < stopData.length; i++) {
+            var idx = stopData[i].norm.indexOf(q);
+            if (idx === 0) starts.push(stopData[i]);
+            else if (idx > 0) contains.push(stopData[i]);
+            if (starts.length + contains.length >= 30) break;
+        }
+        return starts.concat(contains);
+    }
+
+    function highlightMatch(name, query) {
+        var q = toAscii(query).toLowerCase();
+        var norm = toAscii(name).toLowerCase();
+        var idx = norm.indexOf(q);
+        if (idx < 0) return document.createTextNode(name);
+        var frag = document.createDocumentFragment();
+        if (idx > 0) frag.appendChild(document.createTextNode(name.slice(0, idx)));
+        var mark = document.createElement("mark");
+        mark.textContent = name.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        if (idx + query.length < name.length)
+            frag.appendChild(document.createTextNode(name.slice(idx + query.length)));
+        return frag;
+    }
+
+    function initAutocomplete(input) {
+        var list = input.nextElementSibling;
+        if (!list || !list.classList.contains("stop-ac-list")) return;
+        var activeIdx = -1;
+        var items = [];
+
+        function show(matches, query) {
+            list.innerHTML = "";
+            items = [];
+            activeIdx = -1;
+            if (!matches.length) { list.hidden = true; return; }
+            matches.forEach(function (m, i) {
+                var li = document.createElement("li");
+                li.className = "stop-ac-item";
+                li.appendChild(highlightMatch(m.name, query));
+                li.addEventListener("mousedown", function (e) {
+                    e.preventDefault();
+                    select(m.name);
+                });
+                list.appendChild(li);
+                items.push(li);
+            });
+            list.hidden = false;
+        }
+
+        function hide() {
+            list.hidden = true;
+            items = [];
+            activeIdx = -1;
+        }
+
+        function select(name) {
+            input.value = name;
+            hide();
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        function setActive(idx) {
+            if (items[activeIdx]) items[activeIdx].removeAttribute("data-active");
+            activeIdx = idx;
+            if (items[activeIdx]) {
+                items[activeIdx].setAttribute("data-active", "");
+                items[activeIdx].scrollIntoView({ block: "nearest" });
+            }
+        }
+
+        input.addEventListener("input", function () {
+            var val = input.value.trim();
+            if (val.length < 1) { hide(); return; }
+            show(matchStops(val), val);
+        });
+
+        input.addEventListener("focus", function () {
+            var val = input.value.trim();
+            if (val.length >= 1) show(matchStops(val), val);
+        });
+
+        input.addEventListener("blur", function () {
+            // Delay to allow mousedown on list items
+            setTimeout(hide, 150);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            if (list.hidden) return;
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive(Math.min(activeIdx + 1, items.length - 1));
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive(Math.max(activeIdx - 1, 0));
+            } else if (e.key === "Enter" && activeIdx >= 0) {
+                e.preventDefault();
+                var name = items[activeIdx].textContent;
+                select(name);
+            } else if (e.key === "Escape") {
+                hide();
+            }
+        });
+    }
+
+    // Init all existing stop inputs
+    document.querySelectorAll("[data-stop-input]").forEach(initAutocomplete);
+
+    // Re-init after HTMX swaps (participant list gets re-rendered)
+    document.addEventListener("htmx:afterSwap", function () {
+        document.querySelectorAll("[data-stop-input]").forEach(function (input) {
+            // Only init if not already initialized
+            if (!input._acInit) {
+                initAutocomplete(input);
+                input._acInit = true;
+            }
+        });
+    });
+
+    // Mark initially bound inputs
+    document.querySelectorAll("[data-stop-input]").forEach(function (input) {
+        input._acInit = true;
+    });
+})();
 
 // ── Session history (localStorage) ──────────────────────────
 

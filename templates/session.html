@@ -19,11 +19,7 @@
     </button>
 </div>
 
-<datalist id="stops-list">
-    {% for stop in all_stops %}
-    <option value="{{ stop }}">
-    {% endfor %}
-</datalist>
+<script>window.__ALL_STOPS = {{ all_stops | tojson }};</script>
 
 <div class="row">
     <div class="col-6">

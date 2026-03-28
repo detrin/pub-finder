@@ -12,14 +12,20 @@
         </div>
         <label data-field>
             From
-            <input type="text" name="start_stop" list="stops-list" placeholder="Search..."
-                value="{{ participant.start_stop }}" autocomplete="off">
+            <div class="stop-ac-wrap">
+                <input type="text" name="start_stop" placeholder="Type stop name..."
+                    value="{{ participant.start_stop }}" autocomplete="off" data-stop-input>
+                <ul class="stop-ac-list" hidden></ul>
+            </div>
         </label>
         <label data-field>
             To
-            <input type="text" name="end_stop" list="stops-list" placeholder="Search..."
-                value="{{ participant.end_stop }}" autocomplete="off"
-                {% if participant.same_start_end %}disabled{% endif %}>
+            <div class="stop-ac-wrap">
+                <input type="text" name="end_stop" placeholder="Type stop name..."
+                    value="{{ participant.end_stop }}" autocomplete="off" data-stop-input
+                    {% if participant.same_start_end %}disabled{% endif %}>
+                <ul class="stop-ac-list" hidden></ul>
+            </div>
         </label>
         <button type="submit" class="small">Save</button>
     </div>
