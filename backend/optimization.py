@@ -279,7 +279,18 @@ def get_actual_time_optimal_stop_pairs(
     else:
         rank_cols = [f"round_trip_{si}" for si in range(len(stop_pairs))]
 
-    df_times = pl.DataFrame(rows).with_columns(
+    # Fill null transit times with 999 so stops with partial failures still rank (just low)
+    all_time_cols = []
+    for si in range(len(stop_pairs)):
+        all_time_cols.extend([f"to_minutes_{si}", f"from_minutes_{si}", f"round_trip_{si}"])
+
+    df_times = pl.DataFrame(rows)
+    existing_cols = set(df_times.columns)
+    fill_exprs = [pl.col(c).fill_null(999) for c in all_time_cols if c in existing_cols]
+    if fill_exprs:
+        df_times = df_times.with_columns(fill_exprs)
+
+    df_times = df_times.with_columns(
         pl.max_horizontal(*rank_cols).alias("worst_case_minutes"),
         pl.sum_horizontal(*rank_cols).alias("total_minutes"),
     )
@@ -301,6 +312,9 @@ def get_actual_time_optimal_stop_pairs(
         rename_map[f"round_trip_{si}"] = f"Round trip ({name})"
 
     df_times = df_times.rename(rename_map)
-    df_times = df_times.drop_nulls()
+    # Only drop rows where the ranking metric is null (not all columns)
+    df_times = df_times.filter(
+        pl.col("Worst Case Minutes").is_not_null() & pl.col("Total Minutes").is_not_null()
+    )
 
     return df_times.head(show_top)
