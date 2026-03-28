@@ -1,3 +1,47 @@
+// ── Theme toggle ───────────────────────────────────────────
+
+(function () {
+    var saved = localStorage.getItem("pubfinder_theme");
+    if (saved === "dark" || saved === "light") {
+        document.documentElement.style.colorScheme = saved;
+        document.documentElement.setAttribute("data-theme", saved);
+    }
+
+    function updateIcons(isDark) {
+        document.querySelectorAll(".theme-icon-light").forEach(function (el) {
+            el.style.display = isDark ? "none" : "block";
+        });
+        document.querySelectorAll(".theme-icon-dark").forEach(function (el) {
+            el.style.display = isDark ? "block" : "none";
+        });
+    }
+
+    // Set initial icon state
+    var isDark = saved === "dark" ||
+        (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    updateIcons(isDark);
+
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest("#theme-toggle");
+        if (!btn) return;
+
+        var current = document.documentElement.style.colorScheme;
+        var nowDark;
+        if (current === "dark") {
+            document.documentElement.style.colorScheme = "light";
+            document.documentElement.setAttribute("data-theme", "light");
+            localStorage.setItem("pubfinder_theme", "light");
+            nowDark = false;
+        } else {
+            document.documentElement.style.colorScheme = "dark";
+            document.documentElement.setAttribute("data-theme", "dark");
+            localStorage.setItem("pubfinder_theme", "dark");
+            nowDark = true;
+        }
+        updateIcons(nowDark);
+    });
+})();
+
 var map = null;
 var markersLayer = null;
 var currentMapHash = null;
