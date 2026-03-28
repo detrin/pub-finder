@@ -1,0 +1,47 @@
+<div class="row">
+    <div class="col-6">
+        <article class="card">
+            <h4>Participants ({{ participants | length }})</h4>
+            {% if participant_error %}
+            <p style="color: #dc2626; font-size: 0.85rem; margin: 0 0 0.5rem;"><strong>Error:</strong> {{ participant_error }}</p>
+            {% endif %}
+            {% if stop_error %}
+            <p style="color: #dc2626; font-size: 0.85rem; margin: 0 0 0.5rem;"><strong>Error:</strong> {{ stop_error }}</p>
+            {% endif %}
+            {% for p in participants %}
+            <div class="participant-row">
+                <div class="participant-info">
+                    <strong>{{ p.name }}</strong>
+                    {% if p.start_stop %}
+                        <span class="badge-ready">Stops set</span>
+                        <span class="participant-route">{{ p.start_stop }} &rarr; pub &rarr; {{ p.end_stop }}</span>
+                    {% else %}
+                        <span class="badge-waiting">No stops yet</span>
+                    {% endif %}
+                </div>
+                {% if participants | length > 1 %}
+                <form hx-post="/session/{{ session.code }}/remove-participant" hx-target="#session-participants-inner" hx-swap="innerHTML" style="margin:0;">
+                    <input type="hidden" name="participant_id" value="{{ p.id }}">
+                    <button type="submit" class="participant-remove" aria-label="Remove {{ p.name }}" title="Remove {{ p.name }}">&times;</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <form class="add-participant-form" hx-post="/session/{{ session.code }}/add-participant" hx-target="#session-participants-inner" hx-swap="innerHTML">
+                <input type="text" name="participant_name" placeholder="Name" required>
+                <button type="submit" class="small">Add</button>
+            </form>
+        </article>
+    </div>
+
+    <div class="col-6">
+        <article class="card">
+            <h4>Set Your Stops</h4>
+            {% for p in participants %}
+                {% with participant=p, session_code=session.code %}
+                    {% include "partials/stop_form.html" %}
+                {% endwith %}
+            {% endfor %}
+        </article>
+    </div>
+</div>

@@ -190,14 +190,19 @@ def get_optimal_stop_pairs(
     stop_pairs: List[tuple[str, str]],
     show_top_geo: int = 20,
     show_top_time: int = 20,
+    direction: str = "round-trip",
 ) -> List[str]:
-    """Get candidate stops considering both start and end stops.
-    Combines all unique start+end stops for candidate selection."""
+    """Get candidate stops considering start and/or end stops based on direction."""
     start_stops = [pair[0] for pair in stop_pairs]
     end_stops = [pair[1] for pair in stop_pairs]
-    all_unique = list(set(start_stops + end_stops))
-    geo_candidates = get_geo_optimal_stop(distance_table, method, all_unique, show_top_geo)
-    time_candidates = get_time_optimal_stop(distance_table, method, all_unique, show_top_time)
+    if direction == "there-only":
+        relevant = list(set(start_stops))
+    elif direction == "back-only":
+        relevant = list(set(end_stops))
+    else:
+        relevant = list(set(start_stops + end_stops))
+    geo_candidates = get_geo_optimal_stop(distance_table, method, relevant, show_top_geo)
+    time_candidates = get_time_optimal_stop(distance_table, method, relevant, show_top_time)
     return list(set(geo_candidates) | set(time_candidates))
 
 
@@ -211,21 +216,30 @@ def get_actual_time_optimal_stop_pairs(
     participant_names: Optional[List[str]] = None,
     return_datetime=None,
     progress_callback=None,
+    direction: str = "round-trip",
 ) -> pl.DataFrame:
-    """Like get_actual_time_optimal_stop but computes round trips (to meeting point + back to end stop)."""
+    """Like get_actual_time_optimal_stop but computes round trips (to meeting point + back to end stop).
+    direction controls which leg(s) to optimize: 'round-trip', 'there-only', 'back-only'."""
     if return_datetime is None:
         return_datetime = event_datetime
+
+    skip_to = direction == "back-only"
+    skip_from = direction == "there-only"
 
     def process_target_stop(args):
         target_stop, stop_pairs, departure_dt, return_dt, get_total_minutes_func = args
         row = {"target_stop": target_stop}
         for si, (start, end) in enumerate(stop_pairs):
             try:
-                to_minutes = get_total_minutes_func(start, target_stop, departure_dt)
-                if start == end:
-                    from_minutes = get_total_minutes_func(target_stop, start, return_dt)
-                else:
-                    from_minutes = get_total_minutes_func(target_stop, end, return_dt)
+                to_minutes = None
+                from_minutes = None
+                if not skip_to:
+                    to_minutes = get_total_minutes_func(start, target_stop, departure_dt)
+                if not skip_from:
+                    if start == end:
+                        from_minutes = get_total_minutes_func(target_stop, start, return_dt)
+                    else:
+                        from_minutes = get_total_minutes_func(target_stop, end, return_dt)
                 round_trip = (to_minutes or 0) + (from_minutes or 0)
                 row[f"to_minutes_{si}"] = to_minutes
                 row[f"from_minutes_{si}"] = from_minutes
@@ -257,13 +271,17 @@ def get_actual_time_optimal_stop_pairs(
             if progress_callback:
                 progress_callback("scraping", i, total)
 
+    # Choose which columns to use for ranking based on direction
+    if direction == "there-only":
+        rank_cols = [f"to_minutes_{si}" for si in range(len(stop_pairs))]
+    elif direction == "back-only":
+        rank_cols = [f"from_minutes_{si}" for si in range(len(stop_pairs))]
+    else:
+        rank_cols = [f"round_trip_{si}" for si in range(len(stop_pairs))]
+
     df_times = pl.DataFrame(rows).with_columns(
-        pl.max_horizontal(
-            *[f"round_trip_{si}" for si in range(len(stop_pairs))]
-        ).alias("worst_case_minutes"),
-        pl.sum_horizontal(
-            *[f"round_trip_{si}" for si in range(len(stop_pairs))]
-        ).alias("total_minutes"),
+        pl.max_horizontal(*rank_cols).alias("worst_case_minutes"),
+        pl.sum_horizontal(*rank_cols).alias("total_minutes"),
     )
 
     if method == "minimize-worst-case":

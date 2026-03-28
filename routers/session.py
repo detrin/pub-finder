@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
-from backend.db import create_session, join_session, get_session, get_participants, add_participant_stops
+from backend.db import create_session, join_session, get_session, get_participants, add_participant_stops, add_participant, remove_participant
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ async def update_stops(
 
     if errors:
         participants = await get_participants(db, code)
-        return templates.TemplateResponse(request, "partials/participant_list_inner.html", {
+        return templates.TemplateResponse(request, "partials/session_participants_inner.html", {
             "session": {"code": code},
             "participants": participants,
             "stop_error": "; ".join(errors),
@@ -103,9 +103,54 @@ async def update_stops(
 
     await add_participant_stops(db, participant_id, start_stop, end_stop)
     participants = await get_participants(db, code)
-    return templates.TemplateResponse(request, "partials/participant_list_inner.html", {
+    return templates.TemplateResponse(request, "partials/session_participants_inner.html", {
         "session": {"code": code},
         "participants": participants,
+    })
+
+
+@router.post("/{code}/add-participant", response_class=HTMLResponse)
+async def add_participant_route(
+    request: Request,
+    code: str,
+    participant_name: str = Form(...),
+):
+    db = request.app.state.db
+    name = participant_name.strip()
+    error = None
+    if not name:
+        error = "Name cannot be empty."
+    else:
+        result = await add_participant(db, code, name)
+        if result is None:
+            error = f"'{name}' is already in this session."
+
+    participants = await get_participants(db, code)
+    return templates.TemplateResponse(request, "partials/session_participants_inner.html", {
+        "session": {"code": code},
+        "participants": participants,
+        "participant_error": error,
+    })
+
+
+@router.post("/{code}/remove-participant", response_class=HTMLResponse)
+async def remove_participant_route(
+    request: Request,
+    code: str,
+    participant_id: int = Form(...),
+):
+    db = request.app.state.db
+    participants = await get_participants(db, code)
+    error = None
+    if len(participants) <= 1:
+        error = "Cannot remove the last participant."
+    else:
+        await remove_participant(db, participant_id, code)
+        participants = await get_participants(db, code)
+    return templates.TemplateResponse(request, "partials/session_participants_inner.html", {
+        "session": {"code": code},
+        "participants": participants,
+        "participant_error": error,
     })
 
 
@@ -127,7 +172,7 @@ async def participant_events(request: Request, code: str):
             current_hash = _hash_participants(participants)
             if current_hash != last_hash:
                 last_hash = current_hash
-                html = templates.get_template("partials/participant_list_inner.html").render({
+                html = templates.get_template("partials/session_participants_inner.html").render({
                     "session": {"code": code},
                     "participants": participants,
                 })

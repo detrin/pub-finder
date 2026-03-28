@@ -1,0 +1,5 @@
+<div id="session-participants" hx-ext="sse" sse-connect="/session/{{ session.code }}/events" sse-swap="participants" hx-swap="innerHTML" hx-target="#session-participants-inner">
+    <div id="session-participants-inner">
+        {% include "partials/session_participants_inner.html" %}
+    </div>
+</div>

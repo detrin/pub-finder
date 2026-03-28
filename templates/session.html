@@ -21,24 +21,18 @@
 
 <script>window.__ALL_STOPS = {{ all_stops | tojson }};</script>
 
-<div class="row">
-    <div class="col-6">
-        <article class="card">
-            {% include "partials/participant_list.html" %}
-        </article>
-    </div>
+<dialog id="stop-picker-dialog" class="stop-picker">
+    <form method="dialog" class="stop-picker__form">
+        <header class="stop-picker__header">
+            <h4 class="stop-picker__title">Select a stop</h4>
+            <button type="submit" class="stop-picker__close" aria-label="Close" value="cancel">&times;</button>
+        </header>
+        <input type="search" class="stop-picker__search" placeholder="Type to filter stops..." autocomplete="off" autofocus>
+        <ul class="stop-picker__list"></ul>
+    </form>
+</dialog>
 
-    <div class="col-6">
-        <article class="card">
-            <h4>Set Your Stops</h4>
-            {% for p in participants %}
-                {% with participant=p, session_code=session.code %}
-                    {% include "partials/stop_form.html" %}
-                {% endwith %}
-            {% endfor %}
-        </article>
-    </div>
-</div>
+{% include "partials/session_participants.html" %}
 
 <article class="card">
     <h4>Search for a Meeting Point</h4>
@@ -78,6 +72,16 @@
                     <select name="method" aria-label="Optimization method">
                         <option value="minimize-worst-case">Minimize longest travel</option>
                         <option value="minimize-total">Minimize total travel</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-2">
+                <div data-field>
+                    <label>Optimize</label>
+                    <select name="direction" aria-label="Optimization direction">
+                        <option value="round-trip">Round trip</option>
+                        <option value="there-only">There only</option>
+                        <option value="back-only">Back only</option>
                     </select>
                 </div>
             </div>

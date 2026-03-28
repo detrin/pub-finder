@@ -1,4 +1,4 @@
-<form hx-post="/session/{{ session_code }}/stops" hx-target="#participant-list" hx-swap="innerHTML" class="stop-form">
+<form hx-post="/session/{{ session_code }}/stops" hx-target="#session-participants-inner" hx-swap="innerHTML" class="stop-form">
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
     <div class="stop-form-row">
         <div class="stop-form-name">
@@ -12,20 +12,14 @@
         </div>
         <label data-field>
             From
-            <div class="stop-ac-wrap">
-                <input type="text" name="start_stop" placeholder="Type stop name..."
-                    value="{{ participant.start_stop }}" autocomplete="off" data-stop-input>
-                <ul class="stop-ac-list" hidden></ul>
-            </div>
+            <input type="text" name="start_stop" placeholder="Tap to select stop..."
+                value="{{ participant.start_stop }}" readonly data-stop-input>
         </label>
         <label data-field>
             To
-            <div class="stop-ac-wrap">
-                <input type="text" name="end_stop" placeholder="Type stop name..."
-                    value="{{ participant.end_stop }}" autocomplete="off" data-stop-input
-                    {% if participant.same_start_end %}disabled{% endif %}>
-                <ul class="stop-ac-list" hidden></ul>
-            </div>
+            <input type="text" name="end_stop" placeholder="Tap to select stop..."
+                value="{{ participant.end_stop }}" readonly data-stop-input
+                {% if participant.same_start_end %}disabled{% endif %}>
         </label>
         <button type="submit" class="small">Save</button>
     </div>

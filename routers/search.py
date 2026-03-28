@@ -74,9 +74,6 @@ def _render_progress_html(pct: int, label: str, stage: str) -> str:
 <div class="progress-track">
 <div class="progress-fill" style="width:{pct}%"></div>
 </div>
-<div class="progress-steps">
-{steps_html}
-</div>
 </div>"""
 
 
@@ -93,6 +90,7 @@ async def search(
     return_date: str = Form(...),
     return_time: str = Form(...),
     method: str = Form("minimize-worst-case"),
+    direction: str = Form("round-trip"),
     place_types: list[str] = Form(default=["pub", "bar", "cafe"]),
 ):
     if _is_rate_limited(code):
@@ -146,7 +144,7 @@ async def search(
     asyncio.create_task(_run_search(
         request, code, search_id,
         departure_date, departure_time, return_date, return_time,
-        method, stop_pairs, participant_names, active_participants,
+        method, direction, stop_pairs, participant_names, active_participants,
         place_types,
     ))
 
@@ -159,7 +157,7 @@ async def search(
 async def _run_search(
     request, code, search_id,
     departure_date, departure_time, return_date, return_time,
-    method, stop_pairs, participant_names, active_participants,
+    method, direction, stop_pairs, participant_names, active_participants,
     place_types,
 ):
     """Run the search in the background, updating progress along the way."""
@@ -176,7 +174,7 @@ async def _run_search(
         with _search_progress_lock:
             _search_progress[search_id]["stage"] = "candidates"
 
-        target_stops = await asyncio.to_thread(get_optimal_stop_pairs, distance_table, method, stop_pairs)
+        target_stops = await asyncio.to_thread(get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction)
 
         with _search_progress_lock:
             _search_progress[search_id].update({"stage": "scraping", "current": 0, "total": len(target_stops)})
@@ -187,6 +185,7 @@ async def _run_search(
             participant_names=participant_names,
             return_datetime=return_datetime,
             progress_callback=progress_callback,
+            direction=direction,
         )
 
         db = request.app.state.db

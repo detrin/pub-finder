@@ -146,23 +146,60 @@ document.addEventListener("htmx:afterSwap", function (event) {
     }
 });
 
-// ── Stop autocomplete ──────────────────────────────────────
+// ── Block SSE swap during HTMX requests & typing ──────────
+
+(function () {
+    var htmxInFlight = false;
+
+    document.body.addEventListener("htmx:beforeRequest", function (e) {
+        var container = document.getElementById("session-participants");
+        if (container && container.contains(e.detail.elt)) {
+            htmxInFlight = true;
+        }
+    });
+
+    document.body.addEventListener("htmx:afterSwap", function () {
+        htmxInFlight = false;
+    });
+
+    document.body.addEventListener("htmx:responseError", function () {
+        htmxInFlight = false;
+    });
+
+    document.body.addEventListener("htmx:sendError", function () {
+        htmxInFlight = false;
+    });
+
+    document.body.addEventListener("htmx:sseBeforeMessage", function (e) {
+        if (htmxInFlight) {
+            e.preventDefault();
+            return;
+        }
+        var container = document.getElementById("session-participants");
+        if (container && container.contains(document.activeElement) &&
+            document.activeElement.tagName === "INPUT") {
+            e.preventDefault();
+        }
+    });
+})();
+
+// ── Stop picker dialog ─────────────────────────────────────
 
 (function () {
     var stops = window.__ALL_STOPS || [];
     if (!stops.length) return;
 
-    // Build ASCII-normalized lookup: [{name: "Anděl", norm: "andel"}, ...]
-    var stopData = stops.map(function (s) {
-        return { name: s, norm: toAscii(s).toLowerCase() };
-    });
-
     function toAscii(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
+    // Pre-compute normalized stop data
+    var stopData = stops.map(function (s) {
+        return { name: s, norm: toAscii(s).toLowerCase() };
+    });
+
     function matchStops(query) {
-        if (!query || query.length < 1) return [];
+        if (!query || query.length < 1) return stopData.slice(0, 50);
         var q = toAscii(query).toLowerCase();
         var starts = [];
         var contains = [];
@@ -170,124 +207,102 @@ document.addEventListener("htmx:afterSwap", function (event) {
             var idx = stopData[i].norm.indexOf(q);
             if (idx === 0) starts.push(stopData[i]);
             else if (idx > 0) contains.push(stopData[i]);
-            if (starts.length + contains.length >= 30) break;
+            if (starts.length + contains.length >= 50) break;
         }
         return starts.concat(contains);
     }
 
-    function highlightMatch(name, query) {
+    function escapeHTML(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function highlightHTML(name, query) {
+        if (!query) return escapeHTML(name);
         var q = toAscii(query).toLowerCase();
         var norm = toAscii(name).toLowerCase();
         var idx = norm.indexOf(q);
-        if (idx < 0) return document.createTextNode(name);
-        var frag = document.createDocumentFragment();
-        if (idx > 0) frag.appendChild(document.createTextNode(name.slice(0, idx)));
-        var mark = document.createElement("mark");
-        mark.textContent = name.slice(idx, idx + query.length);
-        frag.appendChild(mark);
-        if (idx + query.length < name.length)
-            frag.appendChild(document.createTextNode(name.slice(idx + query.length)));
-        return frag;
+        if (idx < 0) return escapeHTML(name);
+        return escapeHTML(name.slice(0, idx)) +
+            "<b>" + escapeHTML(name.slice(idx, idx + query.length)) + "</b>" +
+            escapeHTML(name.slice(idx + query.length));
     }
 
-    function initAutocomplete(input) {
-        var list = input.nextElementSibling;
-        if (!list || !list.classList.contains("stop-ac-list")) return;
-        var activeIdx = -1;
-        var items = [];
+    var dialog = document.getElementById("stop-picker-dialog");
+    if (!dialog) return;
 
-        function show(matches, query) {
-            list.innerHTML = "";
-            items = [];
-            activeIdx = -1;
-            if (!matches.length) { list.hidden = true; return; }
-            matches.forEach(function (m, i) {
-                var li = document.createElement("li");
-                li.className = "stop-ac-item";
-                li.appendChild(highlightMatch(m.name, query));
-                li.addEventListener("mousedown", function (e) {
-                    e.preventDefault();
-                    select(m.name);
-                });
-                list.appendChild(li);
-                items.push(li);
+    var searchInput = dialog.querySelector(".stop-picker__search");
+    var listEl = dialog.querySelector(".stop-picker__list");
+    var activeInput = null;
+
+    function renderList(query) {
+        var matches = matchStops(query);
+        listEl.innerHTML = "";
+        if (matches.length === 0) {
+            var empty = document.createElement("li");
+            empty.className = "stop-picker__empty";
+            empty.textContent = "No stops found";
+            listEl.appendChild(empty);
+            return;
+        }
+        matches.forEach(function (m) {
+            var li = document.createElement("li");
+            li.className = "stop-picker__item";
+            li.innerHTML = highlightHTML(m.name, query);
+            li.addEventListener("click", function () {
+                selectStop(m.name);
             });
-            list.hidden = false;
-        }
-
-        function hide() {
-            list.hidden = true;
-            items = [];
-            activeIdx = -1;
-        }
-
-        function select(name) {
-            input.value = name;
-            hide();
-            input.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-
-        function setActive(idx) {
-            if (items[activeIdx]) items[activeIdx].removeAttribute("data-active");
-            activeIdx = idx;
-            if (items[activeIdx]) {
-                items[activeIdx].setAttribute("data-active", "");
-                items[activeIdx].scrollIntoView({ block: "nearest" });
-            }
-        }
-
-        input.addEventListener("input", function () {
-            var val = input.value.trim();
-            if (val.length < 1) { hide(); return; }
-            show(matchStops(val), val);
-        });
-
-        input.addEventListener("focus", function () {
-            var val = input.value.trim();
-            if (val.length >= 1) show(matchStops(val), val);
-        });
-
-        input.addEventListener("blur", function () {
-            // Delay to allow mousedown on list items
-            setTimeout(hide, 150);
-        });
-
-        input.addEventListener("keydown", function (e) {
-            if (list.hidden) return;
-            if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActive(Math.min(activeIdx + 1, items.length - 1));
-            } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActive(Math.max(activeIdx - 1, 0));
-            } else if (e.key === "Enter" && activeIdx >= 0) {
-                e.preventDefault();
-                var name = items[activeIdx].textContent;
-                select(name);
-            } else if (e.key === "Escape") {
-                hide();
-            }
+            listEl.appendChild(li);
         });
     }
 
-    // Init all existing stop inputs
-    document.querySelectorAll("[data-stop-input]").forEach(initAutocomplete);
+    function selectStop(name) {
+        if (activeInput) {
+            activeInput.value = name;
+            activeInput.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        dialog.close();
+    }
 
-    // Re-init after HTMX swaps (participant list gets re-rendered)
-    document.addEventListener("htmx:afterSwap", function () {
-        document.querySelectorAll("[data-stop-input]").forEach(function (input) {
-            // Only init if not already initialized
-            if (!input._acInit) {
-                initAutocomplete(input);
-                input._acInit = true;
-            }
-        });
+    searchInput.addEventListener("input", function () {
+        renderList(searchInput.value.trim());
     });
 
-    // Mark initially bound inputs
-    document.querySelectorAll("[data-stop-input]").forEach(function (input) {
-        input._acInit = true;
+    // Keyboard nav inside dialog
+    searchInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            var first = listEl.querySelector(".stop-picker__item");
+            if (first) selectStop(first.textContent);
+        }
     });
+
+    // Close on backdrop click
+    dialog.addEventListener("click", function (e) {
+        if (e.target === dialog) dialog.close();
+    });
+
+    // Reset search when dialog closes
+    dialog.addEventListener("close", function () {
+        searchInput.value = "";
+        activeInput = null;
+        document.body.style.overflow = "";
+    });
+
+    // Open dialog when a stop input is clicked/focused
+    function onStopInputClick(e) {
+        var input = e.target.closest("[data-stop-input]");
+        if (!input || input.disabled) return;
+        e.preventDefault();
+        activeInput = input;
+        searchInput.value = "";
+        renderList("");
+        dialog.showModal();
+        document.body.style.overflow = "hidden";
+        // Focus the search input after the dialog animation
+        setTimeout(function () { searchInput.focus(); }, 50);
+    }
+
+    document.addEventListener("click", onStopInputClick);
 })();
 
 // ── Session history (localStorage) ──────────────────────────

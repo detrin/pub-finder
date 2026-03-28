@@ -40,6 +40,22 @@ nav[data-topnav] > .row > div {
     white-space: nowrap;
 }
 
+/* Push nav right section to fill remaining space so toggle goes far right */
+nav[data-topnav] > .row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+
+nav[data-topnav] > .row > div {
+    flex: 1;
+    justify-content: flex-start;
+}
+
+nav[data-topnav] .theme-toggle {
+    margin-left: auto;
+}
+
 nav[data-topnav] a,
 nav[data-topnav] strong {
     font-size: 0.9rem;
@@ -83,7 +99,7 @@ nav[data-topnav] strong {
     gap: 1rem;
     padding: 2rem 0 1.25rem;
     margin-bottom: 0.25rem;
-    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.1));
+    border-bottom: none;
 }
 
 .session-heading__title {
@@ -614,69 +630,213 @@ nav[data-topnav] strong {
     margin: 0;
 }
 
-/* Stop autocomplete */
-.stop-ac-wrap {
-    position: relative;
+/* Stop picker dialog */
+.stop-picker {
+    width: min(480px, calc(100vw - 2rem));
+    max-height: min(600px, calc(100vh - 4rem));
+    padding: 0;
+    border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.2));
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 3rem;
+    margin-bottom: auto;
 }
 
-.stop-ac-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 100;
-    max-height: 220px;
-    overflow-y: auto;
-    margin: 2px 0 0 0;
-    padding: 0;
+.stop-picker::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.stop-picker__form {
+    display: flex;
+    flex-direction: column;
+    max-height: min(600px, calc(100vh - 4rem));
+    margin: 0;
+}
+
+.stop-picker__header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1)) !important;
+    margin: 0 !important;
+}
+
+.stop-picker__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.stop-picker__close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.5;
+    padding: 0 0.25rem;
+    line-height: 1;
+}
+
+.stop-picker__close:hover {
+    opacity: 1;
+}
+
+.stop-picker__search {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1));
+    font-size: 1rem;
+    outline: none;
+    background: light-dark(rgba(0, 0, 0, 0.02), rgba(255, 255, 255, 0.04));
+}
+
+.stop-picker__search:focus {
+    background: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.06));
+}
+
+.stop-picker__list {
     list-style: none;
-    background: light-dark(#fff, #1e1e1e);
-    color: light-dark(#1a1a1a, #e5e5e5);
-    border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.2));
-    border-radius: 4px;
-    box-shadow: 0 4px 12px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.4));
+    margin: 0;
+    padding: 0;
+    overflow-y: scroll;
+    flex: 1;
+    min-height: 0;
     -webkit-overflow-scrolling: touch;
 }
 
-.stop-ac-list[hidden] {
-    display: none;
-}
-
-.stop-ac-item {
-    padding: 0.5rem 0.65rem;
-    font-size: 0.875rem;
+.stop-picker__item {
+    padding: 0.65rem 1rem;
     cursor: pointer;
-    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.05));
+    font-size: 0.925rem;
 }
 
-.stop-ac-item:last-child {
+.stop-picker__item:last-child {
     border-bottom: none;
 }
 
-.stop-ac-item:hover,
-.stop-ac-item[data-active] {
-    background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1));
+.stop-picker__item:hover,
+.stop-picker__item:active {
+    background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
 }
 
-.stop-ac-item mark {
+.stop-picker__item mark {
     background: transparent;
     font-weight: 700;
     color: inherit;
 }
 
+.stop-picker__empty {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    opacity: 0.5;
+    font-size: 0.9rem;
+}
+
+/* Make stop inputs look tappable */
+input[data-stop-input] {
+    cursor: pointer;
+}
+
+input[data-stop-input]:not(:disabled) {
+    caret-color: transparent;
+}
+
 @media (max-width: 600px) {
-    .stop-ac-list {
-        position: fixed;
-        left: 0.75rem;
-        right: 0.75rem;
-        top: auto;
-        max-height: 50vh;
+    .stop-picker {
+        width: calc(100vw - 1.5rem);
+        max-height: calc(100vh - 3rem);
+        margin-top: 1.5rem;
     }
 
-    .stop-ac-item {
-        padding: 0.75rem 0.85rem;
+    .stop-picker__item {
+        padding: 0.85rem 1rem;
         font-size: 1rem;
     }
+
+    .stop-picker__search {
+        font-size: 1.05rem;
+        padding: 0.85rem 1rem;
+    }
+}
+
+/* Participant row with remove button */
+.participant-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+}
+
+.participant-row:last-of-type {
+    border-bottom: none;
+}
+
+.participant-info {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.participant-route {
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+.participant-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.3;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    transition: opacity 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.participant-remove:hover {
+    opacity: 0.8;
+    background: light-dark(rgba(220, 38, 38, 0.08), rgba(220, 38, 38, 0.15));
+    color: #dc2626;
+}
+
+/* Add participant form */
+.add-participant-form {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08));
+}
+
+.add-participant-form input[type="text"] {
+    width: 8rem;
+    min-width: 0;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.add-participant-form button {
+    flex-shrink: 0;
+}
+
+#session-participants {
+    margin-bottom: 1.5rem;
 }
 
 /* Stop form compact row */

@@ -141,6 +141,35 @@ async def get_participants(db: aiosqlite.Connection, code: str) -> list[dict]:
     ]
 
 
+async def add_participant(db: aiosqlite.Connection, session_code: str, name: str) -> Optional[dict]:
+    """Add a participant to a session. Returns None if name is duplicate."""
+    async with db.execute(
+        "SELECT id FROM participants WHERE session_code = ? AND name = ?",
+        (session_code, name),
+    ) as cursor:
+        existing = await cursor.fetchone()
+    if existing:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    async with db.execute(
+        "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?) RETURNING id",
+        (session_code, name, now),
+    ) as cursor:
+        row = await cursor.fetchone()
+    await db.commit()
+    return {"id": row[0], "name": name, "session_code": session_code}
+
+
+async def remove_participant(db: aiosqlite.Connection, participant_id: int, session_code: str) -> bool:
+    """Remove a participant. Returns True if deleted."""
+    result = await db.execute(
+        "DELETE FROM participants WHERE id = ? AND session_code = ?",
+        (participant_id, session_code),
+    )
+    await db.commit()
+    return result.rowcount > 0
+
+
 async def add_participant_stops(db: aiosqlite.Connection, participant_id: int, start_stop: str, end_stop: str):
     same = 1 if start_stop == end_stop else 0
     await db.execute(
