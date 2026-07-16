@@ -240,7 +240,20 @@ def get_actual_time_optimal_stop_pairs(
                         from_minutes = get_total_minutes_func(target_stop, start, return_dt)
                     else:
                         from_minutes = get_total_minutes_func(target_stop, end, return_dt)
-                round_trip = (to_minutes or 0) + (from_minutes or 0)
+
+                if skip_to:
+                    round_trip = from_minutes
+                elif skip_from:
+                    round_trip = to_minutes
+                elif to_minutes is None or from_minutes is None:
+                    # A required leg genuinely failed (no route found) -> unreachable.
+                    # Leave as None so the fill_null(999) step below applies the same
+                    # sentinel used for the To/From columns, instead of silently
+                    # treating the missing leg as free.
+                    round_trip = None
+                else:
+                    round_trip = to_minutes + from_minutes
+
                 row[f"to_minutes_{si}"] = to_minutes
                 row[f"from_minutes_{si}"] = from_minutes
                 row[f"round_trip_{si}"] = round_trip
