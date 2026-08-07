@@ -105,9 +105,9 @@ async def search(
 
     if _is_rate_limited(code):
         return templates.TemplateResponse(
+            request,
             "partials/results_table.html",
             {
-                "request": request,
                 "error": "Too many searches. Please wait a minute before trying again.",
                 "results": None,
             },
@@ -124,9 +124,9 @@ async def search(
 
     if len(stop_pairs) < 2:
         return templates.TemplateResponse(
+            request,
             "partials/results_table.html",
             {
-                "request": request,
                 "error": "At least 2 participants must have selected their stops.",
                 "results": None,
             },
@@ -135,15 +135,17 @@ async def search(
     is_valid, error_msg = validate_date_time(departure_date, departure_time)
     if not is_valid:
         return templates.TemplateResponse(
+            request,
             "partials/results_table.html",
-            {"request": request, "error": f"Departure: {error_msg}", "results": None},
+            {"error": f"Departure: {error_msg}", "results": None},
         )
 
     is_valid, error_msg = validate_date_time(return_date, return_time)
     if not is_valid:
         return templates.TemplateResponse(
+            request,
             "partials/results_table.html",
-            {"request": request, "error": f"Return: {error_msg}", "results": None},
+            {"error": f"Return: {error_msg}", "results": None},
         )
 
     # Create a search task ID and start search in background
@@ -368,24 +370,30 @@ async def results_page(request: Request, code: str):
 
     saved = await get_search_results(db, code)
     if saved is None:
-        return templates.TemplateResponse("results.html", {
-            "request": request,
-            "session": session,
-            "has_results": False,
-        })
+        return templates.TemplateResponse(
+            request,
+            "results.html",
+            {
+                "session": session,
+                "has_results": False,
+            },
+        )
 
     data = saved["data"]
     df_results = pl.DataFrame(data["rows"])
 
-    return templates.TemplateResponse("results.html", {
-        "request": request,
-        "session": session,
-        "has_results": True,
-        "results": df_results,
-        "pubs_by_stop": data["pubs_by_stop"],
-        "stops_json": json.dumps(data["stops_geo"]),
-        "pubs_json": json.dumps(data["pubs_flat"]),
-        "participants_json": json.dumps(data["participants_geo"]),
-        "warning": data.get("warning"),
-        "created_at": saved["created_at"],
-    })
+    return templates.TemplateResponse(
+        request,
+        "results.html",
+        {
+            "session": session,
+            "has_results": True,
+            "results": df_results,
+            "pubs_by_stop": data["pubs_by_stop"],
+            "stops_json": json.dumps(data["stops_geo"]),
+            "pubs_json": json.dumps(data["pubs_flat"]),
+            "participants_json": json.dumps(data["participants_geo"]),
+            "warning": data.get("warning"),
+            "created_at": saved["created_at"],
+        },
+    )
