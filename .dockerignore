@@ -24,6 +24,9 @@ results.json
 *.log
 .env
 .env.local
+pub_finder.db
+.playwright-mcp/
+/*.png
 
 # Documentation
 README.md

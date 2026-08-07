@@ -13,14 +13,15 @@ def run_scraping(num_processes, num_tasks):
     """
     cmd = [
         sys.executable,
-        "-m", "data_preparation.scraping",
-        "--num-processes", str(num_processes),
-        "--num-tasks", str(num_tasks),
+        "-m",
+        "data_preparation.scraping",
+        "--num-processes",
+        str(num_processes),
+        "--num-tasks",
+        str(num_tasks),
     ]
     try:
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         failed = 0
         while True:
@@ -47,8 +48,13 @@ def run_scraping(num_processes, num_tasks):
         return 0, num_tasks
 
 
-def run(threshold_error_rate=0.10, default_wait_time=5, extra_wait_time=0,
-        waiting_num_tasks=10, num_processes=30):
+def run(
+    threshold_error_rate=0.10,
+    default_wait_time=5,
+    extra_wait_time=0,
+    waiting_num_tasks=10,
+    num_processes=30,
+):
     """Core manager logic — callable from CLI."""
     num_tasks_options = [5000, 10000, 25000, 50000]
     bandit = EpsilonDecreasingBandit(

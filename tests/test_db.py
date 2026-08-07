@@ -1,7 +1,15 @@
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
-from backend.db import init_db, create_session, join_session, get_session, add_participant_stops, get_participants
+
+from backend.db import (
+    add_participant_stops,
+    create_session,
+    get_participants,
+    get_session,
+    init_db,
+    join_session,
+)
 
 
 @pytest_asyncio.fixture

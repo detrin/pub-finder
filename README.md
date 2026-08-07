@@ -28,13 +28,13 @@ The search works in stages: first, we select the top 10 stops by geographic dist
 
 ### Local development
 
-Requires Python 3.12+.
+Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-pip install -e ".[dev]"
+uv sync --locked --extra dev
 cp .env.example .env
 # Edit .env and add your GOOGLE_PLACES_API_KEY
-python -m backend
+uv run python -m backend
 ```
 
 Visit http://localhost:3000.
@@ -73,8 +73,8 @@ tests/            Pytest test suite
 ## Testing
 
 ```bash
-pip install -e ".[dev]"
-pytest
+uv sync --locked --extra dev
+uv run pytest
 ```
 
 ## Data preparation
@@ -82,8 +82,8 @@ pytest
 The `data_preparation` module provides a CLI for scraping transit times and preparing stop data.
 
 ```bash
-pip install -e ".[data-prep]"
-python -m data_preparation --help
+uv sync --locked --extra data-prep
+uv run python -m data_preparation --help
 ```
 
 Subcommands:

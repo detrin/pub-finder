@@ -97,7 +97,13 @@ async def get_session(db: aiosqlite.Connection, code: str) -> Optional[dict]:
         row = await cursor.fetchone()
     if row is None:
         return None
-    return {"id": row["id"], "code": row["code"], "name": row["name"], "creator_name": row["creator_name"], "created_at": row["created_at"]}
+    return {
+        "id": row["id"],
+        "code": row["code"],
+        "name": row["name"],
+        "creator_name": row["creator_name"],
+        "created_at": row["created_at"],
+    }
 
 
 async def join_session(db: aiosqlite.Connection, code: str, name: str) -> Optional[dict]:
@@ -160,7 +166,9 @@ async def add_participant(db: aiosqlite.Connection, session_code: str, name: str
     return {"id": row[0], "name": name, "session_code": session_code}
 
 
-async def remove_participant(db: aiosqlite.Connection, participant_id: int, session_code: str) -> bool:
+async def remove_participant(
+    db: aiosqlite.Connection, participant_id: int, session_code: str
+) -> bool:
     """Remove a participant. Returns True if deleted."""
     result = await db.execute(
         "DELETE FROM participants WHERE id = ? AND session_code = ?",
@@ -190,6 +198,7 @@ async def add_participant_stops(
 async def save_search_results(db: aiosqlite.Connection, session_code: str, results_data: dict):
     """Save search results for sharing."""
     import json
+
     now = datetime.now(timezone.utc).isoformat()
     await db.execute(
         "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) VALUES (?, ?, ?)",
@@ -201,6 +210,7 @@ async def save_search_results(db: aiosqlite.Connection, session_code: str, resul
 async def get_search_results(db: aiosqlite.Connection, session_code: str) -> Optional[dict]:
     """Get saved search results."""
     import json
+
     async with db.execute(
         "SELECT results_json, created_at FROM search_results WHERE session_code = ?",
         (session_code,),

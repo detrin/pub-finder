@@ -10,12 +10,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .config import DATABASE_PATH, HOST, PORT
-from .db import init_db, cleanup_old_sessions
-from .search_registry import SearchRegistry
 from routers.home import router as home_router
 from routers.search import router as search_router
 from routers.session import router as session_router
+
+from .config import DATABASE_PATH, HOST, PORT
+from .db import cleanup_old_sessions, init_db
+from .search_registry import SearchRegistry
 
 logging.basicConfig(
     level=logging.INFO,

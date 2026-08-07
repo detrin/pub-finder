@@ -1,27 +1,26 @@
 """Integration tests covering the full search flow, JSON serialization, and caching."""
 
 import asyncio
-import json
 import time
 from datetime import datetime, timedelta
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
-import pytest
-import pytest_asyncio
 import aiosqlite
 import polars as pl
+import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from backend.db import (
-    init_db,
-    create_session,
-    join_session,
-    add_participant_stops,
-    get_participants,
-    save_search_results,
-    get_search_results,
-)
 from backend.app import app
+from backend.db import (
+    add_participant_stops,
+    create_session,
+    get_participants,
+    get_search_results,
+    init_db,
+    join_session,
+    save_search_results,
+)
 from backend.search_registry import SearchRegistry
 from routers.search import _search_timestamps
 
@@ -40,17 +39,21 @@ async def setup_app():
     db = await aiosqlite.connect(":memory:")
     await init_db(db)
 
-    distance_table = pl.DataFrame({
-        "from": ["A", "A", "B", "B"],
-        "to": ["B", "A", "A", "B"],
-        "distance_in_km": [1.0, 1.0, 1.0, 0.0],
-        "total_minutes": [10, 10, 10, 0],
-    })
-    stop_geo = pl.DataFrame({
-        "name": ["A", "B"],
-        "lat": [50.08, 50.09],
-        "lon": [14.42, 14.43],
-    })
+    distance_table = pl.DataFrame(
+        {
+            "from": ["A", "A", "B", "B"],
+            "to": ["B", "A", "A", "B"],
+            "distance_in_km": [1.0, 1.0, 1.0, 0.0],
+            "total_minutes": [10, 10, 10, 0],
+        }
+    )
+    stop_geo = pl.DataFrame(
+        {
+            "name": ["A", "B"],
+            "lat": [50.08, 50.09],
+            "lon": [14.42, 14.43],
+        }
+    )
 
     app.state.db = db
     app.state.distance_table = distance_table
@@ -92,11 +95,13 @@ async def _create_session_with_participants(client, stops):
 async def test_save_results_with_polars_types(db):
     """Polars row dicts (may contain non-native types) serialize without error."""
     session = await create_session(db, "Test", "Dan")
-    df = pl.DataFrame({
-        "Target Stop": ["A", "B"],
-        "Worst Case Minutes": [10, 20],
-        "Total Minutes": [15, 30],
-    })
+    df = pl.DataFrame(
+        {
+            "Target Stop": ["A", "B"],
+            "Worst Case Minutes": [10, 20],
+            "Total Minutes": [15, 30],
+        }
+    )
     results_data = {
         "rows": df.rows(named=True),
         "columns": df.columns,
@@ -117,17 +122,30 @@ async def test_save_results_with_polars_types(db):
 async def test_save_results_with_none_values(db):
     """Results containing None values serialize correctly."""
     session = await create_session(db, "Test", "Dan")
-    df = pl.DataFrame({
-        "Target Stop": ["A"],
-        "Worst Case Minutes": [None],
-        "Total Minutes": [None],
-    })
+    df = pl.DataFrame(
+        {
+            "Target Stop": ["A"],
+            "Worst Case Minutes": [None],
+            "Total Minutes": [None],
+        }
+    )
     results_data = {
         "rows": df.rows(named=True),
         "columns": df.columns,
-        "pubs_by_stop": {"A": [{"place_id": "x", "name": "Pub", "lat": 50.0, "lon": 14.0,
-                                 "rating": None, "rating_count": None, "price_level": None,
-                                 "google_maps_url": ""}]},
+        "pubs_by_stop": {
+            "A": [
+                {
+                    "place_id": "x",
+                    "name": "Pub",
+                    "lat": 50.0,
+                    "lon": 14.0,
+                    "rating": None,
+                    "rating_count": None,
+                    "price_level": None,
+                    "google_maps_url": "",
+                }
+            ]
+        },
         "stops_geo": [{"name": "A", "lat": 50.0, "lon": 14.0}],
         "pubs_flat": [],
         "participants_geo": [],
@@ -144,9 +162,16 @@ async def test_save_results_with_nested_pub_dicts(db):
     """Pub dicts (containing dicts as values) serialize and deserialize correctly."""
     session = await create_session(db, "Test", "Dan")
     pubs = [
-        {"place_id": f"id{i}", "name": f"Pub {i}", "lat": 50.0 + i * 0.01,
-         "lon": 14.0 + i * 0.01, "rating": 4.5, "rating_count": 100,
-         "price_level": 2, "google_maps_url": f"https://maps.google.com/{i}"}
+        {
+            "place_id": f"id{i}",
+            "name": f"Pub {i}",
+            "lat": 50.0 + i * 0.01,
+            "lon": 14.0 + i * 0.01,
+            "rating": 4.5,
+            "rating_count": 100,
+            "price_level": 2,
+            "google_maps_url": f"https://maps.google.com/{i}",
+        }
         for i in range(5)
     ]
     results_data = {
@@ -154,10 +179,21 @@ async def test_save_results_with_nested_pub_dicts(db):
         "columns": ["Target Stop", "Worst Case Minutes", "Total Minutes"],
         "pubs_by_stop": {"A": pubs},
         "stops_geo": [{"name": "A", "lat": 50.0, "lon": 14.0}],
-        "pubs_flat": [{"stop": "A", "name": p["name"], "lat": p["lat"], "lon": p["lon"],
-                        "rating": p["rating"], "rating_count": p["rating_count"],
-                        "url": p["google_maps_url"]} for p in pubs],
-        "participants_geo": [{"name": "Dan", "stop": "B", "type": "from", "lat": 50.08, "lon": 14.42}],
+        "pubs_flat": [
+            {
+                "stop": "A",
+                "name": p["name"],
+                "lat": p["lat"],
+                "lon": p["lon"],
+                "rating": p["rating"],
+                "rating_count": p["rating_count"],
+                "url": p["google_maps_url"],
+            }
+            for p in pubs
+        ],
+        "participants_geo": [
+            {"name": "Dan", "stop": "B", "type": "from", "lat": 50.08, "lon": 14.42}
+        ],
         "warning": None,
     }
     await save_search_results(db, session["code"], results_data)
@@ -233,6 +269,7 @@ async def _wait_for_search(search_id, session_code, timeout=10):
 def _extract_search_id(html: str) -> str:
     """Extract search_id from the progress SSE HTML response."""
     import re
+
     match = re.search(r"search-progress/([a-f0-9]+)", html)
     return match.group(1) if match else ""
 
@@ -246,7 +283,9 @@ async def test_search_success_returns_progress():
 
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         with patch("routers.search.get_total_minutes_with_retries", return_value=15):
-            with patch("routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]):
+            with patch(
+                "routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]
+            ):
                 resp = await client.post(
                     f"/session/{code}/search",
                     data={
@@ -274,7 +313,9 @@ async def test_search_results_saved_to_db():
 
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         with patch("routers.search.get_total_minutes_with_retries", return_value=15):
-            with patch("routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]):
+            with patch(
+                "routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]
+            ):
                 resp = await client.post(
                     f"/session/{code}/search",
                     data={
@@ -314,7 +355,9 @@ async def test_search_rate_limiting():
         }
 
         with patch("routers.search.get_total_minutes_with_retries", return_value=15):
-            with patch("routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]):
+            with patch(
+                "routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]
+            ):
                 search_ids = []
                 for _ in range(3):
                     search_response = await client.post(
@@ -325,9 +368,7 @@ async def test_search_rate_limiting():
 
                 # 4th search should be rate limited
                 resp = await client.post(f"/session/{code}/search", data=search_data)
-                assert all(
-                    [await _wait_for_search(search_id, code) for search_id in search_ids]
-                )
+                assert all([await _wait_for_search(search_id, code) for search_id in search_ids])
 
     assert resp.status_code == 200
     assert "Too many searches" in resp.text

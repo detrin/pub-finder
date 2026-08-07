@@ -1,9 +1,9 @@
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
-from backend.db import init_db
-from backend.places import parse_places_response, get_cached_pubs, cache_pubs
 
+from backend.db import init_db
+from backend.places import cache_pubs, get_cached_pubs, parse_places_response
 
 MOCK_PLACES_RESPONSE = {
     "places": [
@@ -50,8 +50,16 @@ def test_parse_places_response():
 @pytest.mark.asyncio
 async def test_cache_and_retrieve_pubs(db):
     pubs = [
-        {"place_id": "ChIJ_test1", "name": "U Fleku", "lat": 50.0789, "lon": 14.4186,
-         "rating": 4.3, "rating_count": 5421, "price_level": 2, "google_maps_url": "https://maps.google.com/?cid=123"},
+        {
+            "place_id": "ChIJ_test1",
+            "name": "U Fleku",
+            "lat": 50.0789,
+            "lon": 14.4186,
+            "rating": 4.3,
+            "rating_count": 5421,
+            "price_level": 2,
+            "google_maps_url": "https://maps.google.com/?cid=123",
+        },
     ]
     await cache_pubs(db, "Národní třída", pubs)
     cached = await get_cached_pubs(db, "Národní třída")
@@ -65,7 +73,15 @@ def test_parse_empty_response():
 
 
 def test_parse_missing_fields():
-    data = {"places": [{"id": "test", "displayName": {"text": "Bar"}, "location": {"latitude": 50.0, "longitude": 14.0}}]}
+    data = {
+        "places": [
+            {
+                "id": "test",
+                "displayName": {"text": "Bar"},
+                "location": {"latitude": 50.0, "longitude": 14.0},
+            }
+        ]
+    }
     pubs = parse_places_response(data)
     assert pubs[0]["rating"] is None
     assert pubs[0]["price_level"] is None

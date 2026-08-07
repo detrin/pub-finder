@@ -5,10 +5,11 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --upgrade pip && pip install .
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv \
+    && uv sync --locked --no-dev --no-install-project
 COPY . .
 
 EXPOSE 3000
 
-CMD ["python", "-m", "backend"]
+CMD ["/app/.venv/bin/python", "-m", "backend"]

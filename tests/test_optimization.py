@@ -1,31 +1,38 @@
 from datetime import datetime
 
 import polars as pl
-from backend.optimization import get_optimal_stop_pairs, get_actual_time_optimal_stop_pairs
+
+from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 
 
 def make_distance_table():
-    return pl.DataFrame({
-        "from": ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
-        "to": ["A", "B", "C", "A", "B", "C", "A", "B", "C"],
-        "distance_in_km": [0, 5, 10, 5, 0, 7, 10, 7, 0],
-        "total_minutes": [0, 15, 30, 15, 0, 20, 30, 20, 0],
-    })
+    return pl.DataFrame(
+        {
+            "from": ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
+            "to": ["A", "B", "C", "A", "B", "C", "A", "B", "C"],
+            "distance_in_km": [0, 5, 10, 5, 0, 7, 10, 7, 0],
+            "total_minutes": [0, 15, 30, 15, 0, 20, 30, 20, 0],
+        }
+    )
 
 
 def make_asymmetric_distance_table():
-    return pl.DataFrame({
-        "from": ["A", "A", "B", "B", "X", "Y"],
-        "to": ["X", "Y", "X", "Y", "B", "B"],
-        "distance_in_km": [1, 1, 1, 1, 1, 1],
-        "total_minutes": [1, 100, 1, 100, 100, 1],
-    })
+    return pl.DataFrame(
+        {
+            "from": ["A", "A", "B", "B", "X", "Y"],
+            "to": ["X", "Y", "X", "Y", "B", "B"],
+            "distance_in_km": [1, 1, 1, 1, 1, 1],
+            "total_minutes": [1, 100, 1, 100, 100, 1],
+        }
+    )
 
 
 def test_get_optimal_stop_pairs_symmetric():
     dt = make_distance_table()
     pairs = [("A", "A"), ("B", "B")]
-    result = get_optimal_stop_pairs(dt, "minimize-worst-case", pairs, show_top_geo=3, show_top_time=3)
+    result = get_optimal_stop_pairs(
+        dt, "minimize-worst-case", pairs, show_top_geo=3, show_top_time=3
+    )
     assert isinstance(result, list)
     assert len(result) > 0
     assert all(isinstance(s, str) for s in result)
@@ -88,11 +95,11 @@ def test_unreachable_stop_does_not_rank_above_reachable_ones():
     )
 
     unreachable = df.filter(pl.col("Target Stop") == "Unreachable")
-    reachable = df.filter(pl.col("Target Stop") == "Reachable")
-
     assert unreachable["Round trip (p1)"][0] == 999
     assert unreachable["Worst Case Minutes"][0] == 999
     assert unreachable["Total Minutes"][0] == 999 * 2
 
     # Reachable (20 min round trip per participant) must be ranked first.
-    assert df["Target Stop"].to_list().index("Reachable") < df["Target Stop"].to_list().index("Unreachable")
+    assert df["Target Stop"].to_list().index("Reachable") < df["Target Stop"].to_list().index(
+        "Unreachable"
+    )

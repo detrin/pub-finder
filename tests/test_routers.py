@@ -1,10 +1,10 @@
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
 from httpx import ASGITransport, AsyncClient
 
-from backend.db import create_session, get_participants, init_db
 from backend.app import app
+from backend.db import create_session, get_participants, init_db
 
 
 @pytest_asyncio.fixture(autouse=True)

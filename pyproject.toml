@@ -9,7 +9,7 @@ py-modules = []
 name = "pub-finder"
 version = "0.1.0"
 description = "Find the best pub to meet — optimized for Prague's transit network"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "beautifulsoup4>=4.12",
     "polars>=1.20",
@@ -28,10 +28,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pip-audit>=2.9",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "ruff>=0.12",
 ]
 data-prep = [
     "tqdm>=4.67",
     "scipy>=1.11",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "S324"]

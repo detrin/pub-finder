@@ -7,15 +7,15 @@ from collections import defaultdict
 from datetime import datetime
 
 import polars as pl
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
-from backend.db import get_participants, get_session, save_search_results, get_search_results
-from backend.optimization import get_optimal_stop_pairs, get_actual_time_optimal_stop_pairs
-from backend.places import search_pubs_near_stop, get_cached_pubs, cache_pubs, is_open_during
-from backend.utils import validate_date_time, get_total_minutes_with_retries
+from backend.db import get_participants, get_search_results, get_session, save_search_results
+from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
+from backend.places import cache_pubs, get_cached_pubs, is_open_during, search_pubs_near_stop
+from backend.utils import get_total_minutes_with_retries, validate_date_time
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 _search_timestamps: dict[str, list[float]] = defaultdict(list)
 SEARCH_RATE_LIMIT = 3
 SEARCH_RATE_WINDOW = 60  # seconds
+
 
 def _is_rate_limited(session_code: str) -> bool:
     now = _time.monotonic()
@@ -35,31 +36,7 @@ def _is_rate_limited(session_code: str) -> bool:
     return False
 
 
-_STAGE_ORDER = ["candidates", "scraping", "pubs"]
-_STAGE_LABELS = {"candidates": "Stops", "scraping": "Transit", "pubs": "Pubs"}
-
-
-def _render_progress_html(pct: int, label: str, stage: str) -> str:
-    dots = []
-    current_idx = _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else -1
-    for i, s in enumerate(_STAGE_ORDER):
-        if i < current_idx:
-            dot_cls = "progress-dot progress-dot--done"
-            lbl_cls = "progress-step-name progress-step-name--done"
-        elif s == stage:
-            dot_cls = "progress-dot progress-dot--active"
-            lbl_cls = "progress-step-name progress-step-name--active"
-        else:
-            dot_cls = "progress-dot"
-            lbl_cls = "progress-step-name"
-        dots.append(
-            f'<div class="progress-step">'
-            f'<div class="{dot_cls}"></div>'
-            f'<span class="{lbl_cls}">{_STAGE_LABELS[s]}</span>'
-            f'</div>'
-        )
-    steps_html = "".join(dots)
-
+def _render_progress_html(pct: int, label: str) -> str:
     return f"""<div class="progress-box">
 <div class="progress-info">
 <span class="progress-info-label">{label}</span>
@@ -110,10 +87,7 @@ async def search(
     db = request.app.state.db
     participants = await get_participants(db, code)
     active_participants = [p for p in participants if p["start_stop"]]
-    stop_pairs = [
-        (p["start_stop"], p["end_stop"] or p["start_stop"])
-        for p in active_participants
-    ]
+    stop_pairs = [(p["start_stop"], p["end_stop"] or p["start_stop"]) for p in active_participants]
     participant_names = [p["name"] for p in active_participants]
 
     if len(stop_pairs) < 2:
@@ -168,29 +142,43 @@ async def search(
 
     # Return a progress bar that connects to SSE
     return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" hx-swap="innerHTML">
-    {_render_progress_html(0, "Preparing search...", "starting")}
+    {_render_progress_html(0, "Preparing search...")}
 </div>"""
 
 
 async def _run_search(
-    request, code, search_id,
-    departure_date, departure_time, return_date, return_time,
-    method, direction, stop_pairs, participant_names, active_participants,
+    request,
+    code,
+    search_id,
+    departure_date,
+    departure_time,
+    return_date,
+    return_time,
+    method,
+    direction,
+    stop_pairs,
+    participant_names,
+    active_participants,
     place_types,
 ):
     """Run the search in the background, updating progress along the way."""
     registry = request.app.state.search_registry
     try:
+
         def progress_callback(stage, current, total):
             registry.update(search_id, stage=stage, current=current, total=total)
 
-        departure_datetime = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
+        departure_datetime = datetime.strptime(
+            f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M"
+        )
         return_datetime = datetime.strptime(f"{return_date} {return_time}", "%Y-%m-%d %H:%M")
         distance_table = request.app.state.distance_table
 
         registry.update(search_id, stage="candidates")
 
-        target_stops = await asyncio.to_thread(get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction)
+        target_stops = await asyncio.to_thread(
+            get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction
+        )
 
         registry.update(
             search_id,
@@ -201,7 +189,11 @@ async def _run_search(
 
         df_results = await asyncio.to_thread(
             get_actual_time_optimal_stop_pairs,
-            method, stop_pairs, target_stops, departure_datetime, get_total_minutes_with_retries,
+            method,
+            stop_pairs,
+            target_stops,
+            departure_datetime,
+            get_total_minutes_with_retries,
             participant_names=participant_names,
             return_datetime=return_datetime,
             progress_callback=progress_callback,
@@ -261,27 +253,43 @@ async def _run_search(
         for stop_name in top_stops:
             geo_row = stop_geo.filter(pl.col("name") == stop_name)
             if len(geo_row) > 0:
-                stop_geo_data.append({
-                    "name": stop_name, "lat": float(geo_row["lat"][0]), "lon": float(geo_row["lon"][0]),
-                })
+                stop_geo_data.append(
+                    {
+                        "name": stop_name,
+                        "lat": float(geo_row["lat"][0]),
+                        "lon": float(geo_row["lon"][0]),
+                    }
+                )
 
         pubs_flat = []
         for stop_name, pubs in pubs_by_stop.items():
             for pub in pubs:
-                pubs_flat.append({
-                    "stop": stop_name, "name": pub["name"], "lat": pub["lat"], "lon": pub["lon"],
-                    "rating": pub["rating"], "rating_count": pub["rating_count"], "url": pub["google_maps_url"],
-                })
+                pubs_flat.append(
+                    {
+                        "stop": stop_name,
+                        "name": pub["name"],
+                        "lat": pub["lat"],
+                        "lon": pub["lon"],
+                        "rating": pub["rating"],
+                        "rating_count": pub["rating_count"],
+                        "url": pub["google_maps_url"],
+                    }
+                )
 
         participants_geo = []
         for p, (start, end) in zip(active_participants, stop_pairs):
             for stop_name, label in [(start, "from"), (end, "to")]:
                 geo_row = stop_geo.filter(pl.col("name") == stop_name)
                 if len(geo_row) > 0:
-                    participants_geo.append({
-                        "name": p["name"], "stop": stop_name, "type": label,
-                        "lat": float(geo_row["lat"][0]), "lon": float(geo_row["lon"][0]),
-                    })
+                    participants_geo.append(
+                        {
+                            "name": p["name"],
+                            "stop": stop_name,
+                            "type": label,
+                            "lat": float(geo_row["lat"][0]),
+                            "lon": float(geo_row["lon"][0]),
+                        }
+                    )
 
         warning = None
         if places_api_error:
@@ -290,20 +298,28 @@ async def _run_search(
         # Save results
         results_rows = df_results.rows(named=True)
         results_columns = df_results.columns
-        await save_search_results(db, code, {
-            "rows": results_rows,
-            "columns": results_columns,
-            "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
-            "stops_geo": stop_geo_data,
-            "pubs_flat": pubs_flat,
-            "participants_geo": participants_geo,
-            "warning": warning,
-        })
+        await save_search_results(
+            db,
+            code,
+            {
+                "rows": results_rows,
+                "columns": results_columns,
+                "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
+                "stops_geo": stop_geo_data,
+                "pubs_flat": pubs_flat,
+                "participants_geo": participants_geo,
+                "warning": warning,
+            },
+        )
 
         result_html = templates.get_template("partials/results_table.html").render(
-            request=request, error=None, results=df_results,
-            pubs_by_stop=pubs_by_stop, stops_json=json.dumps(stop_geo_data),
-            pubs_json=json.dumps(pubs_flat), participants_json=json.dumps(participants_geo),
+            request=request,
+            error=None,
+            results=df_results,
+            pubs_by_stop=pubs_by_stop,
+            stops_json=json.dumps(stop_geo_data),
+            pubs_json=json.dumps(pubs_flat),
+            participants_json=json.dumps(participants_geo),
             warning=warning,
         )
 
@@ -312,7 +328,9 @@ async def _run_search(
     except Exception as e:
         logger.error("Search failed: %s", e, exc_info=True)
         error_html = templates.get_template("partials/results_table.html").render(
-            request=request, error=f"Search failed: {e}", results=None,
+            request=request,
+            error=f"Search failed: {e}",
+            results=None,
         )
         registry.update(search_id, done=True, result_html=error_html)
 
@@ -340,7 +358,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
             if progress.done:
                 html = progress.result_html or ""
                 escaped = html.replace("\n", "\ndata: ")
-                yield f'event: progress\ndata: {escaped}\n\n'
+                yield f"event: progress\ndata: {escaped}\n\n"
                 registry.pop(search_id, code)
                 break
 
@@ -361,7 +379,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
                 pct = 0
                 label = "Working..."
 
-            progress_html = _render_progress_html(pct, label, stage)
+            progress_html = _render_progress_html(pct, label)
             escaped_html = progress_html.replace("\n", "\ndata: ")
             yield f"event: progress\ndata: {escaped_html}\n\n"
             await asyncio.sleep(0.5)

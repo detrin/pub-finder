@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from datetime import time as dt_time
 from typing import Tuple
 
-from cachetools import cached, TTLCache
+from cachetools import TTLCache, cached
 
 from backend.dpp import get_route_info
 
@@ -117,13 +117,20 @@ def get_total_minutes_with_retries(
             if attempt < max_retries:
                 logger.warning(
                     "Error processing pair (%s, %s): %s. Retrying in %ds... (Attempt %d/%d)",
-                    from_stop, to_stop, e, retry_delay, attempt, max_retries,
+                    from_stop,
+                    to_stop,
+                    e,
+                    retry_delay,
+                    attempt,
+                    max_retries,
                 )
                 time.sleep(retry_delay)
             else:
                 logger.error(
                     "Failed to process pair (%s, %s) after %d attempts.",
-                    from_stop, to_stop, max_retries,
+                    from_stop,
+                    to_stop,
+                    max_retries,
                 )
                 return None
     return None

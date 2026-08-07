@@ -4,8 +4,9 @@ import json
 from datetime import datetime
 from typing import Optional
 
-import httpx
 import aiosqlite
+import httpx
+
 from backend.config import GOOGLE_PLACES_API_KEY
 
 PRICE_LEVEL_MAP = {
@@ -28,18 +29,20 @@ def parse_places_response(data: dict) -> list[dict]:
         hours = place.get("regularOpeningHours", {})
         periods = hours.get("periods", [])
 
-        pubs.append({
-            "place_id": place.get("id", ""),
-            "name": place.get("displayName", {}).get("text", ""),
-            "lat": place.get("location", {}).get("latitude", 0),
-            "lon": place.get("location", {}).get("longitude", 0),
-            "rating": place.get("rating"),
-            "rating_count": place.get("userRatingCount"),
-            "price_level": PRICE_LEVEL_MAP.get(place.get("priceLevel"), None),
-            "google_maps_url": place.get("googleMapsUri", ""),
-            "opening_hours": periods if periods else None,
-            "primary_type": place.get("primaryType", ""),
-        })
+        pubs.append(
+            {
+                "place_id": place.get("id", ""),
+                "name": place.get("displayName", {}).get("text", ""),
+                "lat": place.get("location", {}).get("latitude", 0),
+                "lon": place.get("location", {}).get("longitude", 0),
+                "rating": place.get("rating"),
+                "rating_count": place.get("userRatingCount"),
+                "price_level": PRICE_LEVEL_MAP.get(place.get("priceLevel"), None),
+                "google_maps_url": place.get("googleMapsUri", ""),
+                "opening_hours": periods if periods else None,
+                "primary_type": place.get("primaryType", ""),
+            }
+        )
     return pubs
 
 
@@ -74,10 +77,12 @@ def is_open_during(pub: dict, arrival: datetime, departure: datetime) -> bool:
         # Check if arrival falls within this period
         if open_day == close_day:
             # Same day period
-            if (arrival_day == open_day and
-                    arrival_minutes >= open_minutes and
-                    departure_day == close_day and
-                    departure_minutes <= close_minutes):
+            if (
+                arrival_day == open_day
+                and arrival_minutes >= open_minutes
+                and departure_day == close_day
+                and departure_minutes <= close_minutes
+            ):
                 return True
         else:
             # Overnight period (e.g. open Friday 18:00, close Saturday 02:00)
@@ -94,7 +99,9 @@ def is_open_during(pub: dict, arrival: datetime, departure: datetime) -> bool:
 
 
 async def search_pubs_near_stop(
-    lat: float, lon: float, radius: int = 500,
+    lat: float,
+    lon: float,
+    radius: int = 500,
     place_types: Optional[list[str]] = None,
 ) -> list[dict]:
     """Search Google Places API for bars/pubs/cafes near coordinates."""
@@ -127,7 +134,8 @@ async def search_pubs_near_stop(
 
 
 async def get_cached_pubs(
-    db: aiosqlite.Connection, stop_name: str,
+    db: aiosqlite.Connection,
+    stop_name: str,
     place_types: Optional[list[str]] = None,
 ) -> list[dict]:
     """Get cached pubs for a stop (within 90 day TTL), filtered by place types."""
@@ -139,9 +147,18 @@ async def get_cached_pubs(
     )
     rows = await cursor.fetchall()
     pubs = [
-        {"place_id": r[0], "name": r[1], "lat": r[2], "lon": r[3],
-         "rating": r[4], "rating_count": r[5], "price_level": r[6], "google_maps_url": r[7],
-         "opening_hours": json.loads(r[8]) if r[8] else None, "primary_type": r[9] or ""}
+        {
+            "place_id": r[0],
+            "name": r[1],
+            "lat": r[2],
+            "lon": r[3],
+            "rating": r[4],
+            "rating_count": r[5],
+            "price_level": r[6],
+            "google_maps_url": r[7],
+            "opening_hours": json.loads(r[8]) if r[8] else None,
+            "primary_type": r[9] or "",
+        }
         for r in rows
     ]
     if place_types:
@@ -158,8 +175,18 @@ async def cache_pubs(db: aiosqlite.Connection, stop_name: str, pubs: list[dict])
             "(stop_name, place_id, name, lat, lon, rating, rating_count, price_level, "
             "google_maps_url, opening_hours, primary_type, cached_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-            (stop_name, pub["place_id"], pub["name"], pub["lat"], pub["lon"],
-             pub["rating"], pub["rating_count"], pub.get("price_level"), pub["google_maps_url"],
-             hours_json, pub.get("primary_type", "")),
+            (
+                stop_name,
+                pub["place_id"],
+                pub["name"],
+                pub["lat"],
+                pub["lon"],
+                pub["rating"],
+                pub["rating_count"],
+                pub.get("price_level"),
+                pub["google_maps_url"],
+                hours_json,
+                pub.get("primary_type", ""),
+            ),
         )
     await db.commit()

@@ -172,3 +172,8 @@ cython_debug/
 Prague_stops_geo_dist.csv
 results.json
 dpp.html
+
+# Local application and browser-test artifacts
+pub_finder.db
+.playwright-mcp/
+/*.png

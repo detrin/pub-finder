@@ -7,7 +7,7 @@ from multiprocessing import Pool
 
 from tqdm import tqdm
 
-from backend.utils import get_total_minutes_with_retries, get_next_meetup_time
+from backend.utils import get_next_meetup_time, get_total_minutes_with_retries
 
 
 def process_pair(args):
@@ -15,9 +15,7 @@ def process_pair(args):
     if from_stop == to_stop:
         return None
 
-    total_minutes = get_total_minutes_with_retries(
-        from_stop, to_stop, meetup_dt, max_retries=1
-    )
+    total_minutes = get_total_minutes_with_retries(from_stop, to_stop, meetup_dt, max_retries=1)
 
     if total_minutes is not None:
         return {"from": from_stop, "to": to_stop, "total_minutes": total_minutes}
@@ -25,8 +23,9 @@ def process_pair(args):
         return {"from": from_stop, "to": to_stop, "error": "Failed to retrieve data."}
 
 
-def run(stops_file="data/Prague_stops.txt", results_file="results.json",
-        num_processes=5, num_tasks=None):
+def run(
+    stops_file="data/Prague_stops.txt", results_file="results.json", num_processes=5, num_tasks=None
+):
     """Core scraping logic — callable from CLI or from manager."""
     raw_results = []
     if os.path.exists(results_file):
@@ -99,8 +98,12 @@ def main():
     parser.add_argument("--num-processes", type=int, default=5, help="Number of parallel processes")
     parser.add_argument("--num-tasks", type=int, default=None, help="Limit number of tasks")
     args = parser.parse_args()
-    run(stops_file=args.stops_file, results_file=args.results,
-        num_processes=args.num_processes, num_tasks=args.num_tasks)
+    run(
+        stops_file=args.stops_file,
+        results_file=args.results,
+        num_processes=args.num_processes,
+        num_tasks=args.num_tasks,
+    )
 
 
 if __name__ == "__main__":

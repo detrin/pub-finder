@@ -1,7 +1,7 @@
 import argparse
-import json
 import glob
-from typing import List, Dict
+import json
+from typing import Dict, List
 
 import polars as pl
 
@@ -50,7 +50,9 @@ def extract_unique_stops(json_directory: str) -> pl.DataFrame:
     return df
 
 
-def main(json_dir="data", stops_file="data/Prague_stops.txt", output_file="data/Prague_stops_geo.csv"):
+def main(
+    json_dir="data", stops_file="data/Prague_stops.txt", output_file="data/Prague_stops_geo.csv"
+):
     stops_geo_data = extract_unique_stops(json_dir)
     with open(stops_file, "r", encoding="utf-8") as f:
         stops = [line.strip() for line in f if line.strip()]

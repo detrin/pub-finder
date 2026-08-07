@@ -13,12 +13,18 @@ import argparse
 
 def cmd_scrape(args):
     from .scraping import run
-    run(stops_file=args.stops_file, results_file=args.results,
-        num_processes=args.num_processes, num_tasks=args.num_tasks)
+
+    run(
+        stops_file=args.stops_file,
+        results_file=args.results,
+        num_processes=args.num_processes,
+        num_tasks=args.num_tasks,
+    )
 
 
 def cmd_manage(args):
     from .manager import run
+
     run(
         threshold_error_rate=args.threshold_error_rate,
         default_wait_time=args.default_wait_time,
@@ -30,13 +36,17 @@ def cmd_manage(args):
 
 def cmd_prepare(args):
     from .prepare_geo_data import main
+
     main(json_dir=args.json_dir, stops_file=args.stops_file, output_file=args.output)
 
 
 def cmd_bandit_sim(args):
     from .bandit import (
-        ThompsonSamplingBandit, EpsilonDecreasingBandit, UCB1Bandit,
-        deploy_bandit, testing_simulation_function,
+        EpsilonDecreasingBandit,
+        ThompsonSamplingBandit,
+        UCB1Bandit,
+        deploy_bandit,
+        testing_simulation_function,
     )
 
     bandit_classes = {
@@ -74,31 +84,51 @@ def main():
 
     # --- scrape ---
     sp_scrape = subparsers.add_parser("scrape", help="Scrape transit times for stop pairs")
-    sp_scrape.add_argument("--stops-file", default="data/Prague_stops.txt", help="Path to stops file")
+    sp_scrape.add_argument(
+        "--stops-file", default="data/Prague_stops.txt", help="Path to stops file"
+    )
     sp_scrape.add_argument("--results", default="results.json", help="Path to results JSON")
-    sp_scrape.add_argument("--num-processes", type=int, default=5, help="Number of parallel processes")
+    sp_scrape.add_argument(
+        "--num-processes", type=int, default=5, help="Number of parallel processes"
+    )
     sp_scrape.add_argument("--num-tasks", type=int, default=None, help="Limit number of tasks")
     sp_scrape.set_defaults(func=cmd_scrape)
 
     # --- manage ---
-    sp_manage = subparsers.add_parser("manage", help="Adaptive scraping with bandit-based scheduling")
-    sp_manage.add_argument("--threshold-error-rate", type=float, default=0.10, help="Error rate threshold")
-    sp_manage.add_argument("--default-wait-time", type=int, default=5, help="Wait time between runs (seconds)")
-    sp_manage.add_argument("--extra-wait-time", type=int, default=0, help="Extra wait on consecutive errors")
-    sp_manage.add_argument("--waiting-num-tasks", type=int, default=10, help="Tasks during wait/retry")
+    sp_manage = subparsers.add_parser(
+        "manage", help="Adaptive scraping with bandit-based scheduling"
+    )
+    sp_manage.add_argument(
+        "--threshold-error-rate", type=float, default=0.10, help="Error rate threshold"
+    )
+    sp_manage.add_argument(
+        "--default-wait-time", type=int, default=5, help="Wait time between runs (seconds)"
+    )
+    sp_manage.add_argument(
+        "--extra-wait-time", type=int, default=0, help="Extra wait on consecutive errors"
+    )
+    sp_manage.add_argument(
+        "--waiting-num-tasks", type=int, default=10, help="Tasks during wait/retry"
+    )
     sp_manage.add_argument("--num-processes", type=int, default=30, help="Number of processes")
     sp_manage.set_defaults(func=cmd_manage)
 
     # --- prepare ---
-    sp_prepare = subparsers.add_parser("prepare", help="Prepare geographic stop data from GPS JSON files")
+    sp_prepare = subparsers.add_parser(
+        "prepare", help="Prepare geographic stop data from GPS JSON files"
+    )
     sp_prepare.add_argument("--json-dir", default="data", help="Directory with GPS JSON files")
-    sp_prepare.add_argument("--stops-file", default="data/Prague_stops.txt", help="Path to stops list")
+    sp_prepare.add_argument(
+        "--stops-file", default="data/Prague_stops.txt", help="Path to stops list"
+    )
     sp_prepare.add_argument("--output", default="data/Prague_stops_geo.csv", help="Output CSV path")
     sp_prepare.set_defaults(func=cmd_prepare)
 
     # --- bandit-sim ---
     sp_sim = subparsers.add_parser("bandit-sim", help="Run a bandit algorithm simulation")
-    sp_sim.add_argument("--algorithm", choices=["thompson", "epsilon-decreasing", "ucb1"], default="thompson")
+    sp_sim.add_argument(
+        "--algorithm", choices=["thompson", "epsilon-decreasing", "ucb1"], default="thompson"
+    )
     sp_sim.add_argument("--arm-min", type=int, default=10, help="Minimum arm value")
     sp_sim.add_argument("--arm-max", type=int, default=200, help="Maximum arm value")
     sp_sim.add_argument("--arm-step", type=int, default=10, help="Step between arm values")
