@@ -13,6 +13,15 @@ def make_distance_table():
     })
 
 
+def make_asymmetric_distance_table():
+    return pl.DataFrame({
+        "from": ["A", "A", "B", "B", "X", "Y"],
+        "to": ["X", "Y", "X", "Y", "B", "B"],
+        "distance_in_km": [1, 1, 1, 1, 1, 1],
+        "total_minutes": [1, 100, 1, 100, 100, 1],
+    })
+
+
 def test_get_optimal_stop_pairs_symmetric():
     dt = make_distance_table()
     pairs = [("A", "A"), ("B", "B")]
@@ -28,6 +37,32 @@ def test_get_optimal_stop_pairs_asymmetric():
     result = get_optimal_stop_pairs(dt, "minimize-total", pairs, show_top_geo=3, show_top_time=3)
     assert isinstance(result, list)
     assert len(result) > 0
+
+
+def test_back_only_candidates_follow_target_to_end_direction():
+    result = get_optimal_stop_pairs(
+        make_asymmetric_distance_table(),
+        "minimize-total",
+        [("A", "B")],
+        show_top_geo=0,
+        show_top_time=1,
+        direction="back-only",
+    )
+
+    assert result == ["Y"]
+
+
+def test_round_trip_candidates_include_each_directed_leg():
+    result = get_optimal_stop_pairs(
+        make_asymmetric_distance_table(),
+        "minimize-total",
+        [("A", "B")],
+        show_top_geo=0,
+        show_top_time=1,
+        direction="round-trip",
+    )
+
+    assert set(result) == {"X", "Y"}
 
 
 def test_unreachable_stop_does_not_rank_above_reachable_ones():

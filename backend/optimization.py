@@ -13,19 +13,21 @@ def get_geo_optimal_stop(
     distance_table: pl.DataFrame,
     method: str, 
     selected_stops: List[str], 
-    show_top: int = 20
+    show_top: int = 20,
+    reverse: bool = False,
 ) -> List[str]:
     dfs = []
+    filter_column = "to" if reverse else "from"
+    candidate_column = "from" if reverse else "to"
     for si, stop in tqdm(
         enumerate(selected_stops),
         desc="Calculating optimal stops",
         total=len(selected_stops),
     ):
         df = (
-            distance_table.filter(pl.col("from") == stop)
-            .drop("from")
+            distance_table.filter(pl.col(filter_column) == stop)
             .with_columns(
-                pl.col("to").alias("target_stop"),
+                pl.col(candidate_column).alias("target_stop"),
                 pl.col("distance_in_km").alias(f"distance_in_km_{si}"),
             )
             .select("target_stop", f"distance_in_km_{si}")
@@ -59,19 +61,21 @@ def get_time_optimal_stop(
     distance_table: pl.DataFrame,
     method: str, 
     selected_stops: List[str], 
-    show_top: int = 20
+    show_top: int = 20,
+    reverse: bool = False,
 ) -> list[str]:
     dfs = []
+    filter_column = "to" if reverse else "from"
+    candidate_column = "from" if reverse else "to"
     for si, stop in tqdm(
         enumerate(selected_stops),
         desc="Calculating optimal stops",
         total=len(selected_stops),
     ):
         df = (
-            distance_table.filter(pl.col("from") == stop)
-            .drop("from")
+            distance_table.filter(pl.col(filter_column) == stop)
             .with_columns(
-                pl.col("to").alias("target_stop"),
+                pl.col(candidate_column).alias("target_stop"),
                 pl.col("total_minutes").alias(f"total_minutes_{si}"),
             )
             .select("target_stop", f"total_minutes_{si}")
@@ -195,15 +199,35 @@ def get_optimal_stop_pairs(
     """Get candidate stops considering start and/or end stops based on direction."""
     start_stops = [pair[0] for pair in stop_pairs]
     end_stops = [pair[1] for pair in stop_pairs]
-    if direction == "there-only":
-        relevant = list(set(start_stops))
-    elif direction == "back-only":
-        relevant = list(set(end_stops))
-    else:
-        relevant = list(set(start_stops + end_stops))
-    geo_candidates = get_geo_optimal_stop(distance_table, method, relevant, show_top_geo)
-    time_candidates = get_time_optimal_stop(distance_table, method, relevant, show_top_time)
-    return list(set(geo_candidates) | set(time_candidates))
+    candidates: list[str] = []
+
+    def add_candidates(selected_stops: list[str], *, reverse: bool) -> None:
+        relevant = list(dict.fromkeys(selected_stops))
+        candidates.extend(
+            get_geo_optimal_stop(
+                distance_table,
+                method,
+                relevant,
+                show_top_geo,
+                reverse=reverse,
+            )
+        )
+        candidates.extend(
+            get_time_optimal_stop(
+                distance_table,
+                method,
+                relevant,
+                show_top_time,
+                reverse=reverse,
+            )
+        )
+
+    if direction in {"there-only", "round-trip"}:
+        add_candidates(start_stops, reverse=False)
+    if direction in {"back-only", "round-trip"}:
+        add_candidates(end_stops, reverse=True)
+
+    return list(dict.fromkeys(candidates))
 
 
 def get_actual_time_optimal_stop_pairs(
