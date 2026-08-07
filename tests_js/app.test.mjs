@@ -5,9 +5,13 @@ import vm from "node:vm";
 
 const appSource = readFileSync(new URL("../static/app.js", import.meta.url), "utf8");
 
-function element() {
+function element(tagName = "div") {
     return {
-        appendChild() {},
+        children: [],
+        tagName: tagName.toUpperCase(),
+        appendChild(child) {
+            this.children.push(child);
+        },
         removeAttribute() {},
         setAttribute() {},
         style: {},
@@ -20,11 +24,23 @@ test("SSE results initialize a replaced map even when the data is unchanged", ()
     let mapInitializations = 0;
     let mapRemovals = 0;
     let markerCreations = 0;
+    const popupContents = [];
+    const unsafeName = '<img src=x onerror="globalThis.compromised=true">';
 
     const mapData = {
         dataset: {
             stops: JSON.stringify([{ lat: 50.08, lon: 14.43, name: "Muzeum" }]),
-            pubs: "[]",
+            pubs: JSON.stringify([
+                {
+                    lat: 50.081,
+                    lon: 14.431,
+                    name: unsafeName,
+                    rating: 4.5,
+                    rating_count: 10,
+                    stop: "Muzeum",
+                    url: "javascript:alert(1)",
+                },
+            ]),
             participants: "[]",
         },
     };
@@ -51,7 +67,9 @@ test("SSE results initialize a replaced map even when the data is unchanged", ()
         addEventListener(name, handler) {
             documentEvents.set(name, handler);
         },
-        createElement: element,
+        createElement(tagName) {
+            return element(tagName);
+        },
         createTextNode(text) {
             return { textContent: text };
         },
@@ -97,7 +115,11 @@ test("SSE results initialize a replaced map even when the data is unchanged", ()
         },
         marker() {
             markerCreations += 1;
-            return { bindPopup() {} };
+            return {
+                bindPopup(content) {
+                    popupContents.push(content);
+                },
+            };
         },
         tileLayer() {
             return { addTo() {} };
@@ -130,8 +152,12 @@ test("SSE results initialize a replaced map even when the data is unchanged", ()
 
     onSseMessage({ detail: { elt: searchProgress } });
     assert.equal(mapInitializations, 1);
-    assert.equal(markerCreations, 1);
+    assert.equal(markerCreations, 2);
     assert.equal(shareLink.style.display, "");
+    const unsafePopup = popupContents[1];
+    assert.equal(unsafePopup.children[0].textContent, unsafeName);
+    assert.equal(unsafePopup.children.some((child) => child.tagName === "A"), false);
+    assert.equal(context.compromised, undefined);
 
     onSseMessage({ detail: { elt: searchProgress } });
     assert.equal(mapInitializations, 1, "a duplicate event must not recreate the same map");
@@ -139,6 +165,6 @@ test("SSE results initialize a replaced map even when the data is unchanged", ()
     mapElement = element();
     onSseMessage({ detail: { elt: searchProgress } });
     assert.equal(mapInitializations, 2, "replaced result markup must receive a new map");
-    assert.equal(markerCreations, 2);
+    assert.equal(markerCreations, 4);
     assert.equal(mapRemovals, 1);
 });
