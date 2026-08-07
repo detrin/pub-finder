@@ -46,11 +46,37 @@ async def test_get_session(db):
 async def test_add_stops(db):
     session = await create_session(db, "Test Session", "Daniel")
     participant = await join_session(db, session["code"], "Petra")
-    await add_participant_stops(db, participant["id"], start_stop="Anděl", end_stop="Florenc")
+    await add_participant_stops(
+        db,
+        session["code"],
+        participant["id"],
+        start_stop="Anděl",
+        end_stop="Florenc",
+    )
     participants = await get_participants(db, session["code"])
     petra = [p for p in participants if p["name"] == "Petra"][0]
     assert petra["start_stop"] == "Anděl"
     assert petra["end_stop"] == "Florenc"
+
+
+@pytest.mark.asyncio
+async def test_add_stops_cannot_update_participant_from_another_session(db):
+    first = await create_session(db, "First", "Alice")
+    second = await create_session(db, "Second", "Bob")
+    alice = (await get_participants(db, first["code"]))[0]
+
+    updated = await add_participant_stops(
+        db,
+        second["code"],
+        alice["id"],
+        start_stop="Anděl",
+        end_stop="Florenc",
+    )
+
+    assert updated is False
+    alice_after = (await get_participants(db, first["code"]))[0]
+    assert alice_after["start_stop"] == ""
+    assert alice_after["end_stop"] == ""
 
 
 @pytest.mark.asyncio

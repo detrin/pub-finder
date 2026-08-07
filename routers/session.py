@@ -136,11 +136,12 @@ async def update_stops(
             "stop_error": "; ".join(errors),
         })
 
-    await add_participant_stops(db, participant_id, start_stop, end_stop)
+    updated = await add_participant_stops(db, code, participant_id, start_stop, end_stop)
     participants = await get_participants(db, code)
     return templates.TemplateResponse(request, "partials/session_participants_inner.html", {
         "session": {"code": code},
         "participants": participants,
+        "stop_error": None if updated else "Participant not found in this session.",
     })
 
 

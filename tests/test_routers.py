@@ -3,7 +3,7 @@ import pytest_asyncio
 import aiosqlite
 from httpx import ASGITransport, AsyncClient
 
-from backend.db import init_db
+from backend.db import create_session, get_participants, init_db
 from backend.app import app
 
 
@@ -71,3 +71,28 @@ async def test_session_page():
         page = await client.get(location, follow_redirects=True)
     assert page.status_code == 200
     assert "Daniel" in page.text
+
+
+@pytest.mark.asyncio
+async def test_update_stops_cannot_modify_participant_from_another_session():
+    first = await create_session(app.state.db, "First", "Alice")
+    second = await create_session(app.state.db, "Second", "Bob")
+    alice = (await get_participants(app.state.db, first["code"]))[0]
+    app.state.all_stops = ["Anděl", "Florenc"]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{second['code']}/stops",
+            data={
+                "participant_id": alice["id"],
+                "start_stop": "Anděl",
+                "end_stop": "Florenc",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "Participant not found in this session" in response.text
+    alice_after = (await get_participants(app.state.db, first["code"]))[0]
+    assert alice_after["start_stop"] == ""
+    assert alice_after["end_stop"] == ""

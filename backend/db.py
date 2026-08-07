@@ -170,13 +170,21 @@ async def remove_participant(db: aiosqlite.Connection, participant_id: int, sess
     return result.rowcount > 0
 
 
-async def add_participant_stops(db: aiosqlite.Connection, participant_id: int, start_stop: str, end_stop: str):
+async def add_participant_stops(
+    db: aiosqlite.Connection,
+    session_code: str,
+    participant_id: int,
+    start_stop: str,
+    end_stop: str,
+) -> bool:
     same = 1 if start_stop == end_stop else 0
-    await db.execute(
-        "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? WHERE id = ?",
-        (start_stop, end_stop, same, participant_id),
+    result = await db.execute(
+        "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? "
+        "WHERE id = ? AND session_code = ?",
+        (start_stop, end_stop, same, participant_id, session_code),
     )
     await db.commit()
+    return result.rowcount > 0
 
 
 async def save_search_results(db: aiosqlite.Connection, session_code: str, results_data: dict):

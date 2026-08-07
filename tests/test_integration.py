@@ -70,12 +70,12 @@ async def _create_session_with_participants(client, stops):
     # Get creator participant
     participants = await get_participants(db, code)
     p1 = [p for p in participants if p["name"] == "P1"][0]
-    await add_participant_stops(db, p1["id"], stops[0][0], stops[0][1])
+    await add_participant_stops(db, code, p1["id"], stops[0][0], stops[0][1])
 
     # Additional participants
     for i, (start, end) in enumerate(stops[1:], start=2):
         result = await join_session(db, code, f"P{i}")
-        await add_participant_stops(db, result["id"], start, end)
+        await add_participant_stops(db, code, result["id"], start, end)
 
     return code
 
