@@ -8,8 +8,8 @@
         <span class="session-heading__eyebrow">Session</span>
         <h1 class="session-heading__name">{{ session.name }}</h1>
     </div>
-    <button class="session-heading__share" aria-label="Copy invite link"
-        onclick="var btn = this; navigator.clipboard.writeText(window.location.origin + '/session/join?code={{ session.code }}').then(function() { btn.setAttribute('data-copied', ''); setTimeout(function() { btn.removeAttribute('data-copied'); }, 2000); });">
+    <button class="session-heading__share" id="copy-invite-link" aria-label="Copy invite link"
+        data-invite-url="/session/join?code={{ session.code }}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
@@ -19,7 +19,7 @@
     </button>
 </div>
 
-<script>window.__ALL_STOPS = {{ all_stops | tojson }};</script>
+<div id="all-stops-data" hidden data-stops='{{ all_stops | tojson }}'></div>
 
 <dialog id="stop-picker-dialog" class="stop-picker">
     <form method="dialog" class="stop-picker__form">
@@ -111,15 +111,6 @@
 
 <div id="results-section"></div>
 
-<script>
-document.addEventListener("htmx:afterSwap", function (event) {
-    if (event.detail.target && event.detail.target.id === "results-section") {
-        // Show the share results link after search completes
-        var link = document.getElementById("share-results-link");
-        if (link) link.style.display = "";
-    }
-});
-</script>
 <p id="share-results-link" style="display: none; text-align: center; margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.6;">
     <a href="/session/{{ session.code }}/results" target="_blank">Share results link</a>
 </p>

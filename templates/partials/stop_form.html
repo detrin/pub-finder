@@ -6,7 +6,7 @@
             <label class="stop-form-return">
                 <input type="checkbox" name="same_start_end" value="true"
                     {% if participant.same_start_end %}checked{% endif %}
-                    onchange="this.closest('form').querySelector('[name=end_stop]').disabled = this.checked;">
+                    data-same-start-end>
                 return
             </label>
         </div>

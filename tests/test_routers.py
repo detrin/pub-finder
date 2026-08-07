@@ -96,3 +96,33 @@ async def test_update_stops_cannot_modify_participant_from_another_session():
     alice_after = (await get_participants(app.state.db, first["code"]))[0]
     assert alice_after["start_stop"] == ""
     assert alice_after["end_stop"] == ""
+
+
+@pytest.mark.asyncio
+async def test_feedback_csp_allows_google_form_and_blocks_inline_handlers():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/feedback")
+
+    policy = response.headers["content-security-policy"]
+    assert "frame-src https://docs.google.com" in policy
+    assert "script-src-attr 'none'" in policy
+
+
+@pytest.mark.asyncio
+async def test_session_page_does_not_emit_inline_event_handlers():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/session/create",
+            data={"session_name": "Test Session", "creator_name": "Daniel"},
+            follow_redirects=False,
+        )
+        response = await client.get(
+            create_response.headers["location"],
+            follow_redirects=True,
+        )
+
+    assert " onclick=" not in response.text
+    assert " onchange=" not in response.text
+    assert "<script>" not in response.text

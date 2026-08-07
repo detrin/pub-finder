@@ -46,6 +46,37 @@ var map = null;
 var markersLayer = null;
 var currentMapHash = null;
 
+function createPopupContent(title, detailLines, link) {
+    const root = document.createElement("div");
+    const heading = document.createElement("strong");
+    heading.textContent = String(title || "");
+    root.appendChild(heading);
+
+    detailLines.forEach(function (line) {
+        root.appendChild(document.createElement("br"));
+        root.appendChild(document.createTextNode(String(line)));
+    });
+
+    if (link) {
+        try {
+            const parsed = new URL(link, window.location.origin);
+            if (parsed.protocol === "https:") {
+                const anchor = document.createElement("a");
+                anchor.href = parsed.href;
+                anchor.target = "_blank";
+                anchor.rel = "noopener noreferrer";
+                anchor.textContent = "Google Maps";
+                root.appendChild(document.createElement("br"));
+                root.appendChild(anchor);
+            }
+        } catch (_) {
+            // Invalid external URLs are omitted.
+        }
+    }
+
+    return root;
+}
+
 function initMap() {
     const dataEl = document.getElementById("map-data");
     if (!dataEl) return;
@@ -99,18 +130,19 @@ function initMap() {
 
     stops.forEach(function (stop, i) {
         const marker = L.marker([stop.lat, stop.lon], { icon: stopIcon });
-        marker.bindPopup("<strong>" + stop.name + "</strong><br>Stop #" + (i + 1));
+        marker.bindPopup(createPopupContent(stop.name, ["Stop #" + (i + 1)]));
         markersLayer.addLayer(marker);
         bounds.push([stop.lat, stop.lon]);
     });
 
     pubs.forEach(function (pub) {
         const marker = L.marker([pub.lat, pub.lon], { icon: pubIcon });
-        let popup = "<strong>" + pub.name + "</strong>";
-        if (pub.rating) popup += "<br>Rating: " + pub.rating + "/5 (" + pub.rating_count + ")";
-        popup += "<br>Near: " + pub.stop;
-        if (pub.url) popup += '<br><a href="' + pub.url + '" target="_blank">Google Maps</a>';
-        marker.bindPopup(popup);
+        const details = [];
+        if (pub.rating) {
+            details.push("Rating: " + pub.rating + "/5 (" + pub.rating_count + ")");
+        }
+        details.push("Near: " + pub.stop);
+        marker.bindPopup(createPopupContent(pub.name, details, pub.url));
         markersLayer.addLayer(marker);
         bounds.push([pub.lat, pub.lon]);
     });
@@ -130,7 +162,10 @@ function initMap() {
             className: "",
         });
         const marker = L.marker([p.lat, p.lon], { icon: icon });
-        marker.bindPopup("<strong>" + p.name + "</strong><br>" + (p.type === "from" ? "From: " : "To: ") + p.stop);
+        marker.bindPopup(createPopupContent(
+            p.name,
+            [(p.type === "from" ? "From: " : "To: ") + p.stop]
+        ));
         markersLayer.addLayer(marker);
         bounds.push([p.lat, p.lon]);
     });
@@ -143,7 +178,33 @@ function initMap() {
 document.addEventListener("htmx:afterSwap", function (event) {
     if (event.detail.target && event.detail.target.id === "results-section") {
         initMap();
+        var shareLink = document.getElementById("share-results-link");
+        if (shareLink) shareLink.style.display = "";
     }
+});
+
+initMap();
+
+document.addEventListener("click", function (event) {
+    var inviteButton = event.target.closest("#copy-invite-link");
+    if (!inviteButton) return;
+
+    var inviteUrl = new URL(inviteButton.dataset.inviteUrl, window.location.origin);
+    navigator.clipboard.writeText(inviteUrl.href).then(function () {
+        inviteButton.setAttribute("data-copied", "");
+        setTimeout(function () {
+            inviteButton.removeAttribute("data-copied");
+        }, 2000);
+    });
+});
+
+document.addEventListener("change", function (event) {
+    var checkbox = event.target.closest("[data-same-start-end]");
+    if (!checkbox) return;
+
+    var form = checkbox.closest("form");
+    var endStop = form && form.querySelector("[name=end_stop]");
+    if (endStop) endStop.disabled = checkbox.checked;
 });
 
 // ── Block SSE swap during HTMX requests & typing ──────────
@@ -186,7 +247,8 @@ document.addEventListener("htmx:afterSwap", function (event) {
 // ── Stop picker dialog ─────────────────────────────────────
 
 (function () {
-    var stops = window.__ALL_STOPS || [];
+    var stopsData = document.getElementById("all-stops-data");
+    var stops = stopsData ? JSON.parse(stopsData.dataset.stops || "[]") : [];
     if (!stops.length) return;
 
     function toAscii(str) {

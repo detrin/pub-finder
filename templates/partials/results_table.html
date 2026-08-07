@@ -27,9 +27,6 @@
     <h4>Map</h4>
     <div id="map"></div>
 </article>
-<script>
-    if (typeof initMap === 'function') initMap();
-</script>
 
 {% for row in results.rows(named=true) %}
 {% set rank = loop.index %}

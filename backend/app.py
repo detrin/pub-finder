@@ -58,11 +58,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+            "script-src 'self' https://unpkg.com https://cdn.jsdelivr.net; "
+            "script-src-attr 'none'; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
             "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.google.com; "
             "connect-src 'self'; "
             "font-src 'self' https://cdn.jsdelivr.net; "
+            "frame-src https://docs.google.com; "
             "frame-ancestors 'none'"
         )
         return response
