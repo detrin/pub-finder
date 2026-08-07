@@ -5,7 +5,6 @@ import secrets
 import time as _time
 from collections import defaultdict
 from datetime import datetime
-from threading import Lock
 
 import polars as pl
 from fastapi import APIRouter, Request, Form
@@ -24,11 +23,6 @@ logger = logging.getLogger(__name__)
 _search_timestamps: dict[str, list[float]] = defaultdict(list)
 SEARCH_RATE_LIMIT = 3
 SEARCH_RATE_WINDOW = 60  # seconds
-
-# In-flight search progress tracking
-_search_progress: dict[str, dict] = {}
-_search_progress_lock = Lock()
-
 
 def _is_rate_limited(session_code: str) -> bool:
     now = _time.monotonic()
@@ -150,15 +144,27 @@ async def search(
 
     # Create a search task ID and start search in background
     search_id = secrets.token_hex(8)
-    with _search_progress_lock:
-        _search_progress[search_id] = {"stage": "starting", "current": 0, "total": 0, "done": False, "result_html": None}
-
-    asyncio.create_task(_run_search(
-        request, code, search_id,
-        departure_date, departure_time, return_date, return_time,
-        method, direction, stop_pairs, participant_names, active_participants,
-        place_types,
-    ))
+    registry = request.app.state.search_registry
+    registry.prune()
+    registry.create(search_id, code)
+    registry.start(
+        search_id,
+        _run_search(
+            request,
+            code,
+            search_id,
+            departure_date,
+            departure_time,
+            return_date,
+            return_time,
+            method,
+            direction,
+            stop_pairs,
+            participant_names,
+            active_participants,
+            place_types,
+        ),
+    )
 
     # Return a progress bar that connects to SSE
     return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" hx-swap="innerHTML">
@@ -173,23 +179,25 @@ async def _run_search(
     place_types,
 ):
     """Run the search in the background, updating progress along the way."""
+    registry = request.app.state.search_registry
     try:
         def progress_callback(stage, current, total):
-            with _search_progress_lock:
-                if search_id in _search_progress:
-                    _search_progress[search_id].update({"stage": stage, "current": current, "total": total})
+            registry.update(search_id, stage=stage, current=current, total=total)
 
         departure_datetime = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
         return_datetime = datetime.strptime(f"{return_date} {return_time}", "%Y-%m-%d %H:%M")
         distance_table = request.app.state.distance_table
 
-        with _search_progress_lock:
-            _search_progress[search_id]["stage"] = "candidates"
+        registry.update(search_id, stage="candidates")
 
         target_stops = await asyncio.to_thread(get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction)
 
-        with _search_progress_lock:
-            _search_progress[search_id].update({"stage": "scraping", "current": 0, "total": len(target_stops)})
+        registry.update(
+            search_id,
+            stage="scraping",
+            current=0,
+            total=len(target_stops),
+        )
 
         df_results = await asyncio.to_thread(
             get_actual_time_optimal_stop_pairs,
@@ -204,8 +212,12 @@ async def _run_search(
         stop_geo = request.app.state.stop_geo
         top_stops = df_results["Target Stop"].to_list()
 
-        with _search_progress_lock:
-            _search_progress[search_id].update({"stage": "pubs", "current": 0, "total": len(top_stops)})
+        registry.update(
+            search_id,
+            stage="pubs",
+            current=0,
+            total=len(top_stops),
+        )
 
         pubs_by_stop_raw = {}
         places_api_error = False
@@ -229,8 +241,7 @@ async def _run_search(
                     logger.warning("Places API error for %s: %s", stop_name, e)
                     pubs_by_stop_raw[stop_name] = []
                     places_api_error = True
-            with _search_progress_lock:
-                _search_progress[search_id]["current"] = i + 1
+            registry.update(search_id, current=i + 1)
 
         # Filter by opening hours and deduplicate
         seen_place_ids: set[str] = set()
@@ -296,16 +307,14 @@ async def _run_search(
             warning=warning,
         )
 
-        with _search_progress_lock:
-            _search_progress[search_id].update({"done": True, "result_html": result_html})
+        registry.update(search_id, done=True, result_html=result_html)
 
     except Exception as e:
         logger.error("Search failed: %s", e, exc_info=True)
         error_html = templates.get_template("partials/results_table.html").render(
             request=request, error=f"Search failed: {e}", results=None,
         )
-        with _search_progress_lock:
-            _search_progress[search_id].update({"done": True, "result_html": error_html})
+        registry.update(search_id, done=True, result_html=error_html)
 
 
 @router.get("/session/{code}/search-progress/{search_id}")
@@ -314,30 +323,30 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
     if not search_id.isalnum() or len(search_id) > 32:
         return StreamingResponse(iter([]), media_type="text/event-stream", status_code=400)
 
+    registry = request.app.state.search_registry
+    registry.prune()
+
     async def event_stream():
         while True:
             if await request.is_disconnected():
                 break
 
-            with _search_progress_lock:
-                progress = _search_progress.get(search_id)
+            progress = registry.get(search_id, code)
 
             if progress is None:
                 # Search already completed and results were delivered — close silently
                 break
 
-            if progress["done"]:
-                html = progress["result_html"]
+            if progress.done:
+                html = progress.result_html or ""
                 escaped = html.replace("\n", "\ndata: ")
                 yield f'event: progress\ndata: {escaped}\n\n'
-                # Clean up
-                with _search_progress_lock:
-                    _search_progress.pop(search_id, None)
+                registry.pop(search_id, code)
                 break
 
-            stage = progress["stage"]
-            current = progress["current"]
-            total = progress["total"]
+            stage = progress.stage
+            current = progress.current
+            total = progress.total
 
             if stage == "starting" or stage == "candidates":
                 pct = 5

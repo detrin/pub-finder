@@ -22,7 +22,8 @@ from backend.db import (
     get_search_results,
 )
 from backend.app import app
-from backend.utils import get_total_minutes_with_retries
+from backend.search_registry import SearchRegistry
+from routers.search import _search_timestamps
 
 
 @pytest_asyncio.fixture
@@ -55,9 +56,13 @@ async def setup_app():
     app.state.distance_table = distance_table
     app.state.all_stops = ["A", "B"]
     app.state.stop_geo = stop_geo
+    registry = SearchRegistry(result_ttl_seconds=1)
+    app.state.search_registry = registry
+    _search_timestamps.clear()
 
     yield db
 
+    await registry.shutdown()
     await db.close()
 
 
@@ -214,14 +219,12 @@ async def test_search_requires_two_participants():
     assert "At least 2 participants" in resp.text
 
 
-async def _wait_for_search(search_id, timeout=10):
+async def _wait_for_search(search_id, session_code, timeout=10):
     """Wait for a background search to complete."""
-    from routers.search import _search_progress, _search_progress_lock
     start = time.monotonic()
     while time.monotonic() - start < timeout:
-        with _search_progress_lock:
-            progress = _search_progress.get(search_id)
-        if progress and progress["done"]:
+        progress = app.state.search_registry.get(search_id, session_code)
+        if progress and progress.done:
             return True
         await asyncio.sleep(0.1)
     return False
@@ -259,7 +262,7 @@ async def test_search_success_returns_progress():
                 assert "sse-connect" in resp.text
 
                 search_id = _extract_search_id(resp.text)
-                await _wait_for_search(search_id)
+                assert await _wait_for_search(search_id, code)
 
 
 @pytest.mark.asyncio
@@ -283,7 +286,7 @@ async def test_search_results_saved_to_db():
                     },
                 )
                 search_id = _extract_search_id(resp.text)
-                await _wait_for_search(search_id)
+                assert await _wait_for_search(search_id, code)
 
         # Check results are saved
         saved = await get_search_results(app.state.db, code)
@@ -312,11 +315,19 @@ async def test_search_rate_limiting():
 
         with patch("routers.search.get_total_minutes_with_retries", return_value=15):
             with patch("routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]):
+                search_ids = []
                 for _ in range(3):
-                    await client.post(f"/session/{code}/search", data=search_data)
+                    search_response = await client.post(
+                        f"/session/{code}/search",
+                        data=search_data,
+                    )
+                    search_ids.append(_extract_search_id(search_response.text))
 
                 # 4th search should be rate limited
                 resp = await client.post(f"/session/{code}/search", data=search_data)
+                assert all(
+                    [await _wait_for_search(search_id, code) for search_id in search_ids]
+                )
 
     assert resp.status_code == 200
     assert "Too many searches" in resp.text
