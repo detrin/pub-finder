@@ -45,6 +45,7 @@
 var map = null;
 var markersLayer = null;
 var currentMapHash = null;
+var currentMapElement = null;
 
 function createPopupContent(title, detailLines, link) {
     const root = document.createElement("div");
@@ -85,9 +86,11 @@ function initMap() {
     const pubsRaw = dataEl.dataset.pubs || "[]";
     const participantsRaw = dataEl.dataset.participants || "[]";
     const dataHash = stopsRaw + pubsRaw + participantsRaw;
+    const mapEl = document.getElementById("map");
+    if (!mapEl) return;
 
-    // Skip if map already shows this data
-    if (map && dataHash === currentMapHash) return;
+    // Skip repeat events only while the existing map still owns this DOM node.
+    if (map && mapEl === currentMapElement && dataHash === currentMapHash) return;
 
     const stops = JSON.parse(stopsRaw);
     const pubs = JSON.parse(pubsRaw);
@@ -95,15 +98,13 @@ function initMap() {
 
     if (stops.length === 0) return;
 
-    const mapEl = document.getElementById("map");
-    if (!mapEl) return;
-
     if (map) {
         map.remove();
         map = null;
     }
 
     currentMapHash = dataHash;
+    currentMapElement = mapEl;
 
     map = L.map("map").setView([stops[0].lat, stops[0].lon], 13);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -175,12 +176,26 @@ function initMap() {
     }
 }
 
+function refreshResultsUi(target) {
+    if (!target || typeof target.closest !== "function") return;
+
+    var resultsSection = target.id === "results-section"
+        ? target
+        : target.closest("#results-section");
+    if (!resultsSection) return;
+
+    var hasResults = Boolean(resultsSection.querySelector("#map-data"));
+    var shareLink = document.getElementById("share-results-link");
+    if (shareLink) shareLink.style.display = hasResults ? "" : "none";
+    if (hasResults) initMap();
+}
+
 document.addEventListener("htmx:afterSwap", function (event) {
-    if (event.detail.target && event.detail.target.id === "results-section") {
-        initMap();
-        var shareLink = document.getElementById("share-results-link");
-        if (shareLink) shareLink.style.display = "";
-    }
+    refreshResultsUi(event.detail.target);
+});
+
+document.addEventListener("htmx:sseMessage", function (event) {
+    refreshResultsUi(event.detail.elt);
 });
 
 initMap();

@@ -1,4 +1,5 @@
 import asyncio
+import threading
 
 import pytest
 
@@ -69,3 +70,34 @@ async def test_registry_shutdown_cancels_outstanding_tasks():
     assert task.cancelled()
     assert registry.task_count == 0
     assert registry.get("search-1", "session-1") is None
+
+
+@pytest.mark.asyncio
+async def test_registry_shutdown_waits_for_owned_blocking_worker():
+    registry = SearchRegistry()
+    registry.create("search-1", "session-1")
+    started = threading.Event()
+    release = threading.Event()
+    exited = threading.Event()
+
+    def blocking_work():
+        started.set()
+        release.wait(timeout=2)
+        exited.set()
+
+    async def work():
+        await registry.run_blocking(blocking_work)
+
+    registry.start("search-1", work())
+    assert await asyncio.to_thread(started.wait, 1)
+
+    shutdown_task = asyncio.create_task(registry.shutdown())
+    await asyncio.sleep(0)
+
+    assert not shutdown_task.done()
+    assert not exited.is_set()
+
+    release.set()
+    await shutdown_task
+
+    assert exited.is_set()

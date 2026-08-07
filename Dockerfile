@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir uv \
+RUN pip install --no-cache-dir uv==0.11.2 \
     && uv sync --locked --no-dev --no-install-project
 COPY . .
 

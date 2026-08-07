@@ -299,9 +299,14 @@ async def test_search_success_returns_progress():
                 assert resp.status_code == 200
                 assert "search-progress" in resp.text
                 assert "sse-connect" in resp.text
+                assert 'sse-close="complete"' in resp.text
 
                 search_id = _extract_search_id(resp.text)
                 assert await _wait_for_search(search_id, code)
+
+                progress_response = await client.get(f"/session/{code}/search-progress/{search_id}")
+                assert "event: progress" in progress_response.text
+                assert "event: complete" in progress_response.text
 
 
 @pytest.mark.asyncio

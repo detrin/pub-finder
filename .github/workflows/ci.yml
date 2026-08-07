@@ -24,9 +24,15 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
+          version: "0.11.2"
 
       - name: Install Python
         run: uv python install 3.12
+
+      - name: Install Node.js
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: "22"
 
       - name: Install dependencies
         run: uv sync --locked --extra dev
@@ -39,6 +45,9 @@ jobs:
 
       - name: Test
         run: uv run pytest -q
+
+      - name: Test browser behavior
+        run: node --test tests_js/*.test.mjs
 
       - name: Audit dependencies
         run: uv run pip-audit

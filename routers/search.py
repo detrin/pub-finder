@@ -141,7 +141,7 @@ async def search(
     )
 
     # Return a progress bar that connects to SSE
-    return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" hx-swap="innerHTML">
+    return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" sse-close="complete" hx-swap="innerHTML">
     {_render_progress_html(0, "Preparing search...")}
 </div>"""
 
@@ -176,7 +176,7 @@ async def _run_search(
 
         registry.update(search_id, stage="candidates")
 
-        target_stops = await asyncio.to_thread(
+        target_stops = await registry.run_blocking(
             get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction
         )
 
@@ -187,7 +187,7 @@ async def _run_search(
             total=len(target_stops),
         )
 
-        df_results = await asyncio.to_thread(
+        df_results = await registry.run_blocking(
             get_actual_time_optimal_stop_pairs,
             method,
             stop_pairs,
@@ -358,7 +358,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
             if progress.done:
                 html = progress.result_html or ""
                 escaped = html.replace("\n", "\ndata: ")
-                yield f"event: progress\ndata: {escaped}\n\n"
+                yield f"event: progress\ndata: {escaped}\n\nevent: complete\ndata: done\n\n"
                 registry.pop(search_id, code)
                 break
 
