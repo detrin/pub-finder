@@ -320,7 +320,7 @@ The one-person layer uses `T_i(t)` for the selected participant.
 
 ### Server boundary
 
-Add a read-only JSON endpoint scoped to a valid session and its current participant stops. The response includes:
+Add a read-only JSON endpoint scoped to a valid session and its last saved search. The search result snapshot must persist participant IDs, names, colours, start stops, end stops, and direction so the heatmap cannot drift from the displayed ranking after somebody edits the session. The response includes:
 
 - Participant IDs, names, colours, start stops, and end stops.
 - Stop name, latitude, and longitude.
@@ -329,7 +329,7 @@ Add a read-only JSON endpoint scoped to a valid session and its current particip
 - Search direction used to compute values.
 - Dataset label and coverage metadata.
 
-The endpoint computes values with Polars from the already loaded matrix. Cache responses by session code plus a hash of participant stops and direction. Session updates invalidate the relevant cache key naturally because the hash changes.
+The endpoint computes values with Polars from the already loaded matrix. Cache responses by session code plus the saved search `created_at` value and direction. A new completed search replaces the snapshot and naturally produces a new cache key. Participant edits without a new search do not alter an existing shared result or heatmap.
 
 ### Client boundary
 
