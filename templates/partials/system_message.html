@@ -1,6 +1,8 @@
 {% set message_kind = kind if kind in ["empty", "warning", "error"] else "warning" %}
+{% set message_hook = system_message_hook | default("") %}
 <section class="system-message system-message--{{ message_kind }}"
          data-system-message="{{ message_kind }}"
+         {% if message_hook in ["reachability-error"] %}data-{{ message_hook }}{% endif %}
          {% if hidden | default(false) %}hidden{% endif %}
          {% if message_kind == "error" %}role="alert"{% else %}role="status"{% endif %}>
     <h2>{{ title }}</h2>

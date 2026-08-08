@@ -56,6 +56,7 @@
             {% with kind="warning", title="Approximate transit layer unavailable.",
                     body="Ranked results remain available.",
                     action_href="/session/" ~ session_code ~ "/results", action_label="Reload results",
+                    system_message_hook="reachability-error",
                     hidden=true %}
                 {% include "partials/system_message.html" %}
             {% endwith %}

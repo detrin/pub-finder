@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -174,6 +175,35 @@ function fakeController() {
     };
 }
 
+function renderedReachabilityWarningTag() {
+    const script = String.raw`
+from types import SimpleNamespace
+from routers.session import templates
+
+results = SimpleNamespace(
+    columns=["Target Stop", "Worst Case Minutes", "Total Minutes"],
+    rows=lambda **_kwargs: [],
+)
+print(templates.env.get_template("partials/results_table.html").render(
+    results=results,
+    session_code="code",
+    participant_snapshot=[],
+    search_direction="round-trip",
+    pubs_by_stop={},
+    pub_search_stop_names=set(),
+    stops_json="[]",
+    pubs_json="[]",
+    participant_snapshot_json="[]",
+    warning=None,
+))
+`;
+    const html = execFileSync("uv", ["run", "python", "-c", script], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+    });
+    return html.match(/<section[^>]*data-system-message="warning"[^>]*>/)?.[0] ?? "";
+}
+
 test("new result initialization aborts and destroys a stale asynchronous controller", async () => {
     const first = deferred();
     const second = deferred();
@@ -232,6 +262,25 @@ test("rank, participant, threshold, and mobile handlers use the assigned control
     fixture.listView.dispatch("click");
     assert.equal(fixture.root.dataset.mobileView, "list");
     assert.equal(fixture.listView.getAttribute("aria-pressed"), "true");
+});
+
+test("rendered reachability warning is revealed on a reachability error", async () => {
+    const warningTag = renderedReachabilityWarningTag();
+    assert.match(warningTag, /data-reachability-error/);
+    assert.match(warningTag, /hidden/);
+
+    const assigned = fakeController();
+    const { module } = await loadResultsModule(async () => assigned);
+    const fixture = makeRoot();
+    fixture.root.selectorMap.delete("[data-reachability-error]");
+    if (/data-reachability-error/.test(warningTag)) {
+        fixture.root.selectorMap.set("[data-reachability-error]", fixture.error);
+    }
+
+    await module.initResultsUi(fixture.root);
+    fixture.map.dispatch("reachability:error");
+
+    assert.equal(fixture.error.hidden, false);
 });
 
 test("state changed while map creation is pending is synchronized after assignment", async () => {

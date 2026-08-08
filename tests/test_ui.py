@@ -333,6 +333,20 @@ async def test_results_without_saved_search_uses_empty_system_message():
 
 
 @pytest.mark.asyncio
+async def test_results_reachability_warning_keeps_the_results_js_hook():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], saved_result_fixture())
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    warning = response.text.split('data-system-message="warning"', 1)[1].split("</section>", 1)[0]
+    assert "data-reachability-error" in warning
+    assert "hidden" in warning
+
+
+@pytest.mark.asyncio
 async def test_mobile_compact_controls_have_44px_minimum_width():
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
