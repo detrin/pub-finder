@@ -496,6 +496,70 @@ async def test_legacy_saved_results_keep_existing_pub_suggestions():
 
 
 @pytest.mark.asyncio
+async def test_rating_display_formats_rating_and_review_count_in_collapsed_and_expanded_lists():
+    """Rendered venue pills show the same precise rating details before and after Show more."""
+    session = await create_session(app.state.db, "Test", "P1")
+    pubs = [
+        {
+            "place_id": "rated-collapsed",
+            "name": "Rated collapsed pub",
+            "lat": 50.08,
+            "lon": 14.42,
+            "rating": 4.6,
+            "rating_count": 23360,
+            "google_maps_url": "https://example.com/rated-collapsed",
+        },
+        {
+            "place_id": "other-one",
+            "name": "Other pub one",
+            "lat": 50.081,
+            "lon": 14.421,
+            "rating": 4.4,
+            "rating_count": 120,
+            "google_maps_url": "https://example.com/other-one",
+        },
+        {
+            "place_id": "other-two",
+            "name": "Other pub two",
+            "lat": 50.082,
+            "lon": 14.422,
+            "rating": 4.2,
+            "rating_count": 80,
+            "google_maps_url": "https://example.com/other-two",
+        },
+        {
+            "place_id": "rated-expanded",
+            "name": "Rated expanded pub",
+            "lat": 50.083,
+            "lon": 14.423,
+            "rating": 4.6,
+            "rating_count": 23360,
+            "google_maps_url": "https://example.com/rated-expanded",
+        },
+    ]
+    await save_search_results(
+        app.state.db,
+        session["code"],
+        {
+            "rows": [{"Target Stop": "A", "Worst Case Minutes": 10, "Total Minutes": 20}],
+            "pubs_by_stop": {"A": pubs},
+            "stops_geo": [],
+            "pubs_flat": [],
+            "participants_geo": [],
+            "warning": None,
+        },
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert response.status_code == 200
+    assert "4.6★ (23,360)" in response.text
+    assert response.text.count("4.6★ (23,360)") == 2
+
+
+@pytest.mark.asyncio
 async def test_search_success_returns_progress():
     """Search returns a progress bar that connects via SSE."""
     transport = ASGITransport(app=app)

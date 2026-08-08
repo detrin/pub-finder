@@ -93,9 +93,9 @@
                 <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
                    class="pub-pill">
                     <span class="pub-pill-name">{{ pub.name }}</span>
-                    {% if pub.rating %}
-                    <span class="pub-pill-rating" title="{{ pub.rating }}/5 from {{ pub.rating_count }} reviews">
-                        {{ pub.rating }}&#9733; ({{ pub.rating_count }})
+                    {% if pub.rating is not none and pub.rating_count is not none %}
+                    <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
+                        {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
                     </span>
                     {% endif %}
                 </a>
@@ -115,9 +115,9 @@
                     <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
                        class="pub-pill">
                         <span class="pub-pill-name">{{ pub.name }}</span>
-                        {% if pub.rating %}
-                        <span class="pub-pill-rating" title="{{ pub.rating }}/5 from {{ pub.rating_count }} reviews">
-                            {{ pub.rating }}&#9733;
+                        {% if pub.rating is not none and pub.rating_count is not none %}
+                        <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
+                            {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
                         </span>
                         {% endif %}
                     </a>
