@@ -24,8 +24,19 @@ async def test_home_page():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
-    assert "Pub Finder" in response.text
+    assert "Meet Somewhere" in response.text
     assert "Create a Session" in response.text
+
+
+@pytest.mark.asyncio
+async def test_csp_allows_only_self_hosted_fonts_and_existing_map_assets():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/")
+
+    csp = response.headers["content-security-policy"]
+    assert "font-src 'self'" in csp
+    assert "fonts.googleapis.com" not in csp
+    assert "https://unpkg.com" in csp
 
 
 @pytest.mark.asyncio
