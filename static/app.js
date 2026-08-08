@@ -220,7 +220,7 @@ document.addEventListener("change", function (event) {
     var form = checkbox.closest("form");
     var endStop = form && form.querySelector("[name=end_stop]");
     if (endStop) endStop.disabled = checkbox.checked;
-});
+}, true);
 
 // ── Block SSE swap during HTMX requests & typing ──────────
 

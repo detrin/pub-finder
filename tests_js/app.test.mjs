@@ -18,6 +18,59 @@ function element(tagName = "div") {
     };
 }
 
+test("disabling return includes the existing destination in the autosave request", () => {
+    const documentEvents = new Map();
+    const endStop = { disabled: true, name: "end_stop", value: "Florenc" };
+    const form = {
+        querySelector(selector) {
+            return selector === "[name=end_stop]" ? endStop : null;
+        },
+    };
+    const checkbox = {
+        checked: false,
+        closest(selector) {
+            if (selector === "[data-same-start-end]") return this;
+            if (selector === "form") return form;
+            return null;
+        },
+    };
+    const document = {
+        activeElement: null,
+        body: { addEventListener() {} },
+        documentElement: { style: {}, setAttribute() {} },
+        addEventListener(name, handler, capture = false) {
+            const handlers = documentEvents.get(name) ?? [];
+            handlers.push({ capture, handler });
+            documentEvents.set(name, handlers);
+        },
+        getElementById() {
+            return null;
+        },
+        querySelector() {
+            return null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+    const context = vm.createContext({
+        URL,
+        document,
+        localStorage: { getItem() { return null; }, setItem() {} },
+        navigator: { clipboard: { writeText: async () => {} } },
+        setTimeout,
+        window: { location: { origin: "https://pub-finder.example" }, matchMedia() { return { matches: false }; } },
+    });
+    vm.runInContext(appSource, context);
+
+    for (const listener of (documentEvents.get("change") ?? []).filter(({ capture }) => capture)) {
+        listener.handler({ target: checkbox });
+    }
+    const requestData = endStop.disabled ? {} : { [endStop.name]: endStop.value };
+
+    assert.deepEqual(requestData, { end_stop: "Florenc" });
+});
+
 test("SSE results initialize a replaced map even when the data is unchanged", () => {
     const documentEvents = new Map();
     let mapElement = element();
