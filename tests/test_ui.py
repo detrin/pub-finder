@@ -85,6 +85,9 @@ async def test_home_uses_meet_somewhere_shell():
     assert "Meet Somewhere" in response.text
     assert 'class="brand"' in response.text
     assert "/static/theme-init.js" in response.text
+    assert "/static/theme.js" in response.text
+    assert "/static/history.js" in response.text
+    assert "/static/app.js" not in response.text
     assert "oat.min.css" not in response.text
     assert "oat.min.js" not in response.text
 
@@ -100,8 +103,8 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
     assert "Pick a place that works for everyone." in response.text
     assert 'name="session_name"' in response.text
     assert 'name="creator_name"' in response.text
-    assert 'data-join-disclosure' in response.text
-    assert 'data-session-history' in response.text
+    assert "data-join-disclosure" in response.text
+    assert "data-session-history" in response.text
 
 
 @pytest.mark.asyncio
@@ -198,9 +201,9 @@ async def test_session_workspace_disables_search_until_every_participant_has_sto
     ) as client:
         response = await client.get(f"/session/{session['code']}")
 
-    assert 'data-session-readiness' in response.text
-    assert 'data-search-submit' in response.text
-    assert 'data-search-submit disabled' in response.text
+    assert "data-session-readiness" in response.text
+    assert "data-search-submit" in response.text
+    assert "data-search-submit disabled" in response.text
     assert "Daniel needs start and end stops." in response.text
 
 
@@ -240,7 +243,7 @@ async def test_results_rank_controls_expand_the_top_result_on_the_server():
     assert 'id="result-detail-2"' in response.text
     second_detail = response.text.split('id="result-detail-2"', 1)[1].split(">", 1)[0]
     assert "hidden" in second_detail
-    assert "data-mobile-view=\"map\"" in response.text
+    assert 'data-mobile-view="map"' in response.text
 
 
 @pytest.mark.asyncio
@@ -307,7 +310,7 @@ async def test_results_threshold_keeps_a_44px_pointer_target():
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
-    unsafe_name = "O'Reilly \"Stop\" <script>alert(1)</script>"
+    unsafe_name = 'O\'Reilly "Stop" <script>alert(1)</script>'
     fixture["rows"][0]["Target Stop"] = unsafe_name
     fixture["stops_geo"][0]["name"] = unsafe_name
     fixture["pubs_by_stop"] = {unsafe_name: [], "C": []}
@@ -371,7 +374,10 @@ async def test_feedback_keeps_google_form_and_gives_factual_report_instructions(
         "https://docs.google.com/forms/d/e/1FAIpQLSfAjnlpuEmWlHQj9sGgSqjgKx0DFjj_jr3hOwMx5-laZrJG3w/viewform?embedded=true"
         in response.text
     )
-    assert "what you expected, what happened, your browser and device, and the session code" in response.text
+    assert (
+        "what you expected, what happened, your browser and device, and the session code"
+        in response.text
+    )
 
 
 @pytest.mark.asyncio
@@ -422,9 +428,7 @@ def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
     def luminance(value: str) -> float:
         channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
         linear = [
-            channel / 12.92
-            if channel <= 0.04045
-            else ((channel + 0.055) / 1.055) ** 2.4
+            channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
             for channel in channels
         ]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]

@@ -1,6 +1,8 @@
-# Pub Finder
+# Meet Somewhere
 
-Find the optimal pub to meet with your friends in Prague, using public transit optimization.
+Meet Somewhere ranks Prague meeting points using public transport journey times for every person in a group. It can minimize the longest individual journey or total group travel time, then show nearby pubs, bars, cafes, and restaurants.
+
+The optional reachability layer is derived from 2,083,035 precomputed directional stop pairs. It is approximate. Ranked results use live DPP queries for the selected departure and return times.
 
 Try the live demo at https://pub-finder.hermandaniel.com.
 
@@ -19,8 +21,9 @@ The search works in stages: first, we select the top 10 stops by geographic dist
 
 - **Session-based** -- create a session, share the code, friends join and pick their stops
 - **Real-time updates** -- participant list updates live via Server-Sent Events
-- **Interactive map** -- Leaflet.js map showing stops and recommended pubs
-- **Pub discovery** -- type-balanced Google Places API integration for the top five results, with ratings, price level, and walking directions
+- **Interactive map** -- Leaflet.js map showing participants, ranked stops, and nearby venues
+- **Approximate reachability** -- participant and group views derived from precomputed typical transit times
+- **Venue discovery** -- type-balanced Google Places API integration for the top five results, with ratings, price level, and walking directions
 - **Shareable results** -- permanent link to search results for each session
 - **Round-trip support** -- optionally set a different return stop
 
@@ -53,7 +56,7 @@ Visit http://localhost:3000.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GOOGLE_PLACES_API_KEY` | _(empty)_ | Required for pub search |
+| `GOOGLE_PLACES_API_KEY` | _(empty)_ | Required for nearby venue search |
 | `DATABASE_PATH` | `pub_finder.db` | SQLite database path |
 | `HOST` | `0.0.0.0` | Server bind address |
 | `PORT` | `3000` | Server port |
@@ -75,6 +78,7 @@ tests/            Pytest test suite
 ```bash
 uv sync --locked --extra dev
 uv run pytest
+npm run test:js
 ```
 
 ## Data preparation

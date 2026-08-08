@@ -204,6 +204,25 @@ function bindReturnCheckboxes(root) {
     }, true);
 }
 
+function bindSseProtection(root) {
+    const pendingRequests = new Set();
+    const requestKey = (event) => event.detail?.xhr ?? event.detail?.elt;
+
+    document.addEventListener("htmx:beforeRequest", (event) => {
+        if (root.contains(event.detail?.elt)) pendingRequests.add(requestKey(event));
+    });
+    for (const eventName of ["htmx:afterRequest", "htmx:responseError", "htmx:sendError"]) {
+        document.addEventListener(eventName, (event) => {
+            pendingRequests.delete(requestKey(event));
+        });
+    }
+    document.addEventListener("htmx:sseBeforeMessage", (event) => {
+        const focusedInput = document.activeElement?.tagName === "INPUT"
+            && root.contains(document.activeElement);
+        if (pendingRequests.size || focusedInput) event.preventDefault();
+    });
+}
+
 function bindRemoveConfirmation(root) {
     const dialog = document.querySelector("[data-remove-dialog]");
     if (!dialog) return;
@@ -327,6 +346,7 @@ export function initSessionUi() {
     bindInviteCopy(root);
     bindStopPicker(root);
     bindReturnCheckboxes(root);
+    bindSseProtection(root);
     bindRemoveConfirmation(root);
     bindOccasionPresets(root);
     updateReadiness(root);

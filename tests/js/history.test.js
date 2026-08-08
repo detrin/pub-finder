@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+test("history module remembers the current plan and renders recent plans on load", async () => {
+    const store = new Map();
+    const historyRoot = {
+        hidden: true,
+        children: [],
+        replaceChildren(...children) { this.children = children; },
+    };
+    const sessionRoot = {
+        dataset: { sessionCode: "friday-crew", sessionName: "Friday crew" },
+    };
+    globalThis.localStorage = {
+        getItem(key) { return store.get(key) ?? null; },
+        setItem(key, value) { store.set(key, value); },
+    };
+    globalThis.document = {
+        readyState: "complete",
+        querySelector(selector) {
+            if (selector === "[data-session-code]") return sessionRoot;
+            if (selector === "[data-session-history]") return historyRoot;
+            return null;
+        },
+        createElement(tag) {
+            assert.equal(tag, "a");
+            return { href: "", textContent: "" };
+        },
+    };
+
+    await import(new URL(`../../static/history.js?test=${Math.random()}`, import.meta.url));
+
+    assert.deepEqual(JSON.parse(store.get("meet_somewhere_recent_sessions")), [
+        { code: "friday-crew", name: "Friday crew" },
+    ]);
+    assert.equal(historyRoot.hidden, false);
+    assert.equal(historyRoot.children.length, 1);
+    assert.equal(historyRoot.children[0].href, "/session/friday-crew");
+    assert.equal(historyRoot.children[0].textContent, "Friday crew");
+});

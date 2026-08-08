@@ -69,6 +69,7 @@ test("theme toggle survives an HTMX replacement shell without duplicate handlers
     const { initThemeToggle } = await import(
         new URL(`../../static/theme.js?test=${Math.random()}`, import.meta.url)
     );
+    assert.equal(initialButton.attributes["aria-label"], "Use dark theme");
     initThemeToggle();
     initThemeToggle();
 

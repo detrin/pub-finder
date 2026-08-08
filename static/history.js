@@ -48,3 +48,20 @@ export function renderRecentSessions() {
         }),
     );
 }
+
+export function initSessionHistory() {
+    const session = document.querySelector("[data-session-code]");
+    if (session) {
+        rememberSession({
+            code: session.dataset.sessionCode,
+            name: session.dataset.sessionName,
+        });
+    }
+    renderRecentSessions();
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initSessionHistory, { once: true });
+} else {
+    initSessionHistory();
+}

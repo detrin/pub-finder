@@ -11,7 +11,7 @@ async function loadSessionModule(document, window = {}) {
         setTimeout(callback) { callback(); },
         ...window,
     };
-    return import(new URL(`../static/session.js?test=${moduleNumber++}`, import.meta.url));
+    return import(new URL(`../../static/session.js?test=${moduleNumber++}`, import.meta.url));
 }
 
 function eventTarget(properties = {}) {
@@ -45,8 +45,8 @@ function createDocument(root, dialogs = {}) {
     };
 }
 
-function emit(document, name, detail) {
-    for (const handler of document.events[name] ?? []) handler({ detail });
+function emit(document, name, detail, event = {}) {
+    for (const handler of document.events[name] ?? []) handler({ ...event, detail });
 }
 
 test("session UI exposes a stable participant colour and idempotent initializer", async () => {
@@ -95,7 +95,7 @@ test("readiness updates after an SSE participant swap", async () => {
 });
 
 test("same-stop changes disable the end field before autosave", async () => {
-    const end = eventTarget({ disabled: false, selector: "[name=end_stop]" });
+    const end = eventTarget({ disabled: false, selector: "[name=end_stop]", value: "Florenc" });
     const form = { querySelector(selector) { return selector === "[name=end_stop]" ? end : null; } };
     const checkbox = eventTarget({
         checked: true,
@@ -110,6 +110,37 @@ test("same-stop changes disable the end field before autosave", async () => {
     await loadSessionModule(document);
     fire(root, "change", { target: checkbox });
     assert.equal(end.disabled, true);
+
+    checkbox.checked = false;
+    fire(root, "change", { target: checkbox });
+    assert.equal(end.disabled, false);
+    assert.equal(end.value, "Florenc");
+});
+
+test("SSE participant swaps wait for autosave and focused form inputs", async () => {
+    const input = eventTarget({ tagName: "INPUT" });
+    const request = {};
+    const root = eventTarget({
+        querySelector() { return null; },
+        querySelectorAll() { return []; },
+        contains(candidate) { return candidate === input || candidate === request; },
+    });
+    const document = createDocument(root);
+    document.activeElement = null;
+    await loadSessionModule(document);
+
+    emit(document, "htmx:beforeRequest", { elt: request, xhr: request });
+    let prevented = 0;
+    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    assert.equal(prevented, 1);
+
+    emit(document, "htmx:afterRequest", { elt: request, xhr: request });
+    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    assert.equal(prevented, 1);
+
+    document.activeElement = input;
+    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    assert.equal(prevented, 2);
 });
 
 test("occasion presets update source checkboxes and resync after manual changes", async () => {
