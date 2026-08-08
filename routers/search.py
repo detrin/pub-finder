@@ -43,6 +43,7 @@ VENUE_EXPANSION_RATE_WINDOW = 60
 PUB_DISCOVERY_STOP_LIMIT = 5
 PLACES_CONCURRENCY_LIMIT = 4
 PLACES_SEARCH_RADIUS_METERS = 500
+_PROGRESS_STAGES = {"starting", "candidates", "scraping", "pubs"}
 
 
 def _is_rate_limited(session_code: str) -> bool:
@@ -71,16 +72,54 @@ def _is_venue_expansion_rate_limited(session_code: str) -> bool:
     return False
 
 
-def _render_progress_html(pct: int, label: str) -> str:
-    return f"""<div class="progress-box">
-<div class="progress-info">
-<span class="progress-info-label">{label}</span>
-<span class="progress-info-pct">{pct}%</span>
-</div>
-<div class="progress-track">
-<div class="progress-fill" style="width:{pct}%"></div>
-</div>
-</div>"""
+def _normalise_progress(
+    percentage: object,
+    stage: object,
+    current: object,
+    total: object,
+) -> tuple[int, str, int, int]:
+    """Return safe values for a progress element and its operational status."""
+
+    def nonnegative_int(value: object) -> int:
+        try:
+            return max(int(value), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    safe_percentage = min(nonnegative_int(percentage), 100)
+    safe_stage = stage if isinstance(stage, str) and stage in _PROGRESS_STAGES else "starting"
+    safe_total = nonnegative_int(total)
+    safe_current = nonnegative_int(current)
+    if safe_total:
+        safe_current = min(safe_current, safe_total)
+    else:
+        safe_current = 0
+    return safe_percentage, safe_stage, safe_current, safe_total
+
+
+def _progress_percentage(stage: str, current: int, total: int) -> int:
+    if stage == "candidates":
+        return 5
+    if stage == "scraping":
+        return 10 + int((current / total) * 70) if total else 10
+    if stage == "pubs":
+        return 80 + int((current / total) * 18) if total else 80
+    return 0
+
+
+def _render_progress_html(
+    percentage: int,
+    stage: str,
+    current: int,
+    total: int,
+) -> str:
+    percentage, stage, current, total = _normalise_progress(percentage, stage, current, total)
+    return templates.get_template("partials/search_progress.html").render(
+        percentage=percentage,
+        stage=stage,
+        current=current,
+        total=total,
+    )
 
 
 router = APIRouter()
@@ -176,9 +215,12 @@ async def search(
     )
 
     # Return a progress bar that connects to SSE
-    return f"""<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" sse-close="complete" hx-swap="innerHTML">
-    {_render_progress_html(0, "Preparing search...")}
-</div>"""
+    return f"""<section class="search-progress-panel">
+<div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" sse-close="complete" hx-swap="innerHTML">
+    {_render_progress_html(0, "starting", 0, 0)}
+</div>
+<a class="search-progress-back" href="/session/{code}">Back to the plan</a>
+</section>"""
 
 
 async def _run_search(
@@ -457,24 +499,12 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
                 registry.pop(search_id, code)
                 break
 
-            stage = progress.stage
-            current = progress.current
-            total = progress.total
+            _, stage, current, total = _normalise_progress(
+                0, progress.stage, progress.current, progress.total
+            )
+            pct = _progress_percentage(stage, current, total)
 
-            if stage == "starting" or stage == "candidates":
-                pct = 5
-                label = "Finding candidate stops..."
-            elif stage == "scraping":
-                pct = 10 + int((current / max(total, 1)) * 70)
-                label = f"Querying live transit times... {current}/{total} stops"
-            elif stage == "pubs":
-                pct = 80 + int((current / max(total, 1)) * 18)
-                label = f"Finding nearby pubs... {current}/{total} stops"
-            else:
-                pct = 0
-                label = "Working..."
-
-            progress_html = _render_progress_html(pct, label)
+            progress_html = _render_progress_html(pct, stage, current, total)
             escaped_html = progress_html.replace("\n", "\ndata: ")
             yield f"event: progress\ndata: {escaped_html}\n\n"
             await asyncio.sleep(0.5)

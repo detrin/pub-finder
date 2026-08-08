@@ -277,6 +277,31 @@ def _extract_search_id(html: str) -> str:
     return match.group(1) if match else ""
 
 
+def test_progress_copy_names_each_operation():
+    """Progress rendering identifies the active search operation and its work count."""
+    assert (
+        "Select candidates from the transit matrix"
+        in search_router._render_progress_html(5, "candidates", 0, 0)
+    )
+    scraping = search_router._render_progress_html(42, "scraping", 14, 31)
+    assert "Query DPP journey times" in scraping
+    assert "14 of 31 candidate stops checked" in scraping
+    venues = search_router._render_progress_html(85, "pubs", 2, 5)
+    assert "Query nearby places" in venues
+    assert "2 of 5 stops checked" in venues
+
+
+def test_progress_rendering_clamps_invalid_progress_values():
+    """Unexpected registry values cannot produce an invalid progress element or count."""
+    scraping = search_router._render_progress_html(125, "scraping", 100, 3)
+    assert 'max="100" value="100"' in scraping
+    assert "3 of 3 candidate stops checked" in scraping
+
+    unknown = search_router._render_progress_html(-1, "unexpected", -4, 0)
+    assert 'max="100" value="0"' in unknown
+    assert "Preparing search." in unknown
+
+
 class _DirectSearchRegistry:
     """Minimal registry for exercising _run_search without an HTTP background task."""
 

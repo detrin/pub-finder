@@ -660,89 +660,106 @@ nav[data-topnav] strong {
     to { transform: rotate(360deg); }
 }
 
-/* Progress bar, plain oat-style */
+/* Search progress */
+.search-progress-panel {
+    width: min(100%, 640px);
+    margin: 0 auto;
+}
+
 .progress-box {
-    padding: 1.5rem 0 !important;
-    max-width: 500px !important;
-    margin: 0 auto !important;
+    padding: 1.25rem;
+    border: 2px solid var(--ink);
+    background: var(--sky);
+    box-shadow: var(--control-shadow);
+}
+
+.progress-status {
+    margin: 0 0 1rem;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
 }
 
 .progress-info {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: baseline !important;
-    margin: 0 0 0.5rem 0 !important;
-}
-
-.progress-info-label {
-    font-size: 0.85rem !important;
-    color: light-dark(#555, #aaa) !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-.progress-info-pct {
-    font-size: 0.85rem !important;
-    font-weight: 600 !important;
-    color: light-dark(#333, #ddd) !important;
-    font-variant-numeric: tabular-nums !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-.progress-track {
-    width: 100% !important;
-    height: 12px !important;
-    background: light-dark(#eee, #333) !important;
-    border-radius: 6px !important;
-    overflow: hidden !important;
-}
-
-.progress-fill {
-    height: 100% !important;
-    background: light-dark(#333, #ccc) !important;
-    border-radius: 6px !important;
-    transition: width 0.5s ease !important;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
 }
 
 .progress-steps {
-    display: flex !important;
-    justify-content: space-between !important;
-    margin-top: 0.75rem !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
 .progress-step {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    gap: 0.25rem !important;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    line-height: 1.25;
 }
 
-.progress-dot {
-    width: 8px !important;
-    height: 8px !important;
-    border-radius: 50% !important;
-    background: light-dark(#ddd, #444) !important;
+.progress-step--active {
+    color: var(--ink);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: var(--coral);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.24em;
 }
 
-.progress-dot--done,
-.progress-dot--active {
-    background: light-dark(#333, #ccc) !important;
+.progress-info-pct {
+    flex: 0 0 auto;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
-.progress-step-name {
-    font-size: 0.65rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.04em !important;
-    font-weight: 500 !important;
-    color: light-dark(#aaa, #666) !important;
-    margin: 0 !important;
-    padding: 0 !important;
+.progress-bar {
+    display: block;
+    width: 100%;
+    height: 0.85rem;
+    overflow: hidden;
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    background: var(--paper);
+    color: var(--coral);
+    accent-color: var(--coral);
 }
 
-.progress-step-name--done,
-.progress-step-name--active {
-    color: light-dark(#333, #ccc) !important;
+.progress-bar::-webkit-progress-bar {
+    background: var(--paper);
+}
+
+.progress-bar::-webkit-progress-value {
+    background: var(--coral);
+    transition: width 180ms ease;
+}
+
+.progress-bar::-moz-progress-bar {
+    background: var(--coral);
+    transition: width 180ms ease;
+}
+
+.search-progress-back {
+    display: inline-block;
+    margin-top: 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .progress-bar::-webkit-progress-value,
+    .progress-bar::-moz-progress-bar {
+        transition: none;
+    }
 }
 
 /* ============================================================

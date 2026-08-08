@@ -1,0 +1,22 @@
+<div class="progress-box">
+    <p id="search-progress-status" class="progress-status" aria-live="polite">
+        {% if stage == "candidates" %}
+        Select candidates from the transit matrix. 2,083,035 precomputed stop pairs.
+        {% elif stage == "scraping" %}
+        Query DPP journey times. {{ current }} of {{ total }} candidate stops checked.
+        {% elif stage == "pubs" %}
+        Query nearby places. {{ current }} of {{ total }} stops checked.
+        {% else %}
+        Preparing search.
+        {% endif %}
+    </p>
+    <div class="progress-info">
+        <ol class="progress-steps" aria-label="Search stages">
+            <li class="progress-step {% if stage == 'candidates' %}progress-step--active{% endif %}">Select candidates from the transit matrix</li>
+            <li class="progress-step {% if stage == 'scraping' %}progress-step--active{% endif %}">Query DPP journey times</li>
+            <li class="progress-step {% if stage == 'pubs' %}progress-step--active{% endif %}">Query nearby places</li>
+        </ol>
+        <span class="progress-info-pct" aria-hidden="true">{{ percentage }}%</span>
+    </div>
+    <progress class="progress-bar" max="100" value="{{ percentage }}" aria-describedby="search-progress-status">{{ percentage }}%</progress>
+</div>
