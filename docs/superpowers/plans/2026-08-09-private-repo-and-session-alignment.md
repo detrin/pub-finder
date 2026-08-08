@@ -46,6 +46,6 @@
 - Modify: this plan only to record completed steps
 
 - [x] Run all Python and JavaScript tests plus `git diff --check`.
-- [ ] Commit and push the code and tests to `main`.
-- [ ] Change `detrin/pub-finder` visibility to private with GitHub CLI.
-- [ ] Query GitHub and confirm the reported visibility is `PRIVATE`.
+- [x] Commit and push the code and tests to `main`.
+- [x] Change `detrin/pub-finder` visibility to private with GitHub CLI.
+- [x] Query GitHub and confirm the reported visibility is `PRIVATE`.
