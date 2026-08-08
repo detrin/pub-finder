@@ -74,6 +74,25 @@ async def test_session_page():
 
 
 @pytest.mark.asyncio
+async def test_session_page_autosaves_valid_stop_selections():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/session/create",
+            data={"session_name": "Test Session", "creator_name": "Daniel"},
+            follow_redirects=False,
+        )
+        page = await client.get(create_resp.headers["location"], follow_redirects=True)
+
+    assert (
+        'hx-trigger="change from:[data-stop-input], change from:[data-same-start-end]"'
+        in page.text
+    )
+    assert "Saving…" in page.text
+    assert ">Save<" not in page.text
+
+
+@pytest.mark.asyncio
 async def test_update_stops_cannot_modify_participant_from_another_session():
     first = await create_session(app.state.db, "First", "Alice")
     second = await create_session(app.state.db, "Second", "Bob")
