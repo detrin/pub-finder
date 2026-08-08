@@ -2,6 +2,7 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
+import backend.places as places
 from backend.db import init_db
 from backend.places import (
     cache_pubs,
@@ -9,6 +10,7 @@ from backend.places import (
     get_cached_pubs,
     get_cached_pubs_for_type,
     parse_places_response,
+    search_pubs_near_stop,
 )
 
 PUB = {
@@ -49,6 +51,33 @@ MOCK_PLACES_RESPONSE = {
         },
     ]
 }
+
+
+def fake_client(captured: dict, response_data: dict):
+    """Provide an httpx client double that records the request payload."""
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return response_data
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, *, json, headers):
+            captured.update({"url": url, "json": json, "headers": headers})
+            return FakeResponse()
+
+    return FakeAsyncClient
 
 
 @pytest_asyncio.fixture
@@ -136,3 +165,76 @@ def test_parse_missing_fields():
     pubs = parse_places_response(data)
     assert pubs[0]["rating"] is None
     assert pubs[0]["price_level"] is None
+
+
+@pytest.mark.asyncio
+async def test_nearby_search_uses_one_type_and_distance_ranking(monkeypatch):
+    """A combined-type or relevance-ranked request could hide nearby pubs."""
+    captured = {}
+    monkeypatch.setattr("backend.places.httpx.AsyncClient", fake_client(captured, {"places": []}))
+
+    await search_pubs_near_stop(50.08, 14.43, "pub")
+
+    assert captured["json"]["includedTypes"] == ["pub"]
+    assert captured["json"]["maxResultCount"] == 20
+    assert captured["json"]["rankPreference"] == "DISTANCE"
+
+
+def test_order_pubs_for_stop_deduplicates_and_breaks_distance_ties():
+    """Unordered duplicate results would produce unstable venue suggestions."""
+    pubs = [
+        {**PUB, "place_id": "far", "lat": 50.09, "lon": 14.43, "rating": 5.0},
+        {
+            **PUB,
+            "place_id": "tie-low",
+            "lat": 50.08,
+            "lon": 14.43,
+            "rating": 4.0,
+            "rating_count": 100,
+        },
+        {
+            **PUB,
+            "place_id": "tie-high-count",
+            "lat": 50.08,
+            "lon": 14.43,
+            "rating": 4.0,
+            "rating_count": 200,
+        },
+        {
+            **PUB,
+            "place_id": "tie-high-rating",
+            "lat": 50.08,
+            "lon": 14.43,
+            "rating": 4.5,
+            "rating_count": 1,
+        },
+        {
+            **PUB,
+            "place_id": "tie-zulu",
+            "lat": 50.08,
+            "lon": 14.43,
+            "rating": 3.0,
+            "rating_count": 1,
+        },
+        {
+            **PUB,
+            "place_id": "tie-alpha",
+            "lat": 50.08,
+            "lon": 14.43,
+            "rating": 3.0,
+            "rating_count": 1,
+        },
+        {**PUB, "place_id": "far", "lat": 50.07, "lon": 14.43, "rating": 1.0},
+    ]
+
+    ordered = places.order_pubs_for_stop(pubs, 50.08, 14.43)
+
+    assert [pub["place_id"] for pub in ordered] == [
+        "tie-high-rating",
+        "tie-high-count",
+        "tie-low",
+        "tie-alpha",
+        "tie-zulu",
+        "far",
+    ]
+    assert all(isinstance(pub["distance_m"], float) for pub in ordered)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime
 from typing import Optional
 
@@ -98,15 +99,52 @@ def is_open_during(pub: dict, arrival: datetime, departure: datetime) -> bool:
     return False
 
 
+def _distance_meters(lat: float, lon: float, pub_lat: float, pub_lon: float) -> float:
+    """Return the great-circle distance between a stop and a pub in metres."""
+    earth_radius_m = 6_371_000
+    lat_delta = math.radians(pub_lat - lat)
+    lon_delta = math.radians(pub_lon - lon)
+    haversine = (
+        math.sin(lat_delta / 2) ** 2
+        + math.cos(math.radians(lat))
+        * math.cos(math.radians(pub_lat))
+        * math.sin(lon_delta / 2) ** 2
+    )
+    return 2 * earth_radius_m * math.asin(math.sqrt(haversine))
+
+
+def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
+    """Deduplicate and deterministically order nearby pubs for one stop."""
+    unique_pubs = {}
+    for pub in pubs:
+        unique_pubs.setdefault(pub["place_id"], pub)
+
+    pubs_with_distance = []
+    for pub in unique_pubs.values():
+        ordered_pub = {
+            **pub,
+            "distance_m": _distance_meters(lat, lon, pub["lat"], pub["lon"]),
+        }
+        pubs_with_distance.append(ordered_pub)
+
+    return sorted(
+        pubs_with_distance,
+        key=lambda pub: (
+            pub["distance_m"],
+            -(pub.get("rating") or 0),
+            -(pub.get("rating_count") or 0),
+            pub["place_id"],
+        ),
+    )
+
+
 async def search_pubs_near_stop(
     lat: float,
     lon: float,
+    place_type: str,
     radius: int = 500,
-    place_types: Optional[list[str]] = None,
 ) -> list[dict]:
-    """Search Google Places API for bars/pubs/cafes near coordinates."""
-    if place_types is None:
-        place_types = ["bar", "pub", "cafe"]
+    """Search Google Places API for one place type near coordinates."""
     url = "https://places.googleapis.com/v1/places:searchNearby"
     headers = {
         "Content-Type": "application/json",
@@ -118,8 +156,9 @@ async def search_pubs_near_stop(
         ),
     }
     body = {
-        "includedTypes": place_types,
+        "includedTypes": [place_type],
         "maxResultCount": 20,
+        "rankPreference": "DISTANCE",
         "locationRestriction": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lon},
@@ -130,7 +169,7 @@ async def search_pubs_near_stop(
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(url, json=body, headers=headers)
         resp.raise_for_status()
-        return parse_places_response(resp.json())
+        return order_pubs_for_stop(parse_places_response(resp.json()), lat, lon)
 
 
 async def get_cached_pubs(
