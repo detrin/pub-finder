@@ -36,7 +36,7 @@ LICENSE
 data_preparation/
 tests/
 
-# Data files — include parquet + stops list, exclude the rest
+# Data files: include parquet + stops list, exclude the rest
 data/*.json
 data/Prague_stops_geo.csv
 *.json
