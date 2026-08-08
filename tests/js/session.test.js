@@ -120,10 +120,15 @@ test("same-stop changes disable the end field before autosave", async () => {
 test("SSE participant swaps wait for autosave and focused form inputs", async () => {
     const input = eventTarget({ tagName: "INPUT" });
     const request = {};
+    const participantStream = eventTarget({ id: "session-participants" });
     const root = eventTarget({
-        querySelector() { return null; },
+        querySelector(selector) {
+            return selector === "#session-participants" ? participantStream : null;
+        },
         querySelectorAll() { return []; },
-        contains(candidate) { return candidate === input || candidate === request; },
+        contains(candidate) {
+            return candidate === input || candidate === request || candidate === participantStream;
+        },
     });
     const document = createDocument(root);
     document.activeElement = null;
@@ -131,16 +136,55 @@ test("SSE participant swaps wait for autosave and focused form inputs", async ()
 
     emit(document, "htmx:beforeRequest", { elt: request, xhr: request });
     let prevented = 0;
-    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    emit(document, "htmx:sseBeforeMessage", { type: "participants" }, {
+        target: participantStream,
+        preventDefault() { prevented += 1; },
+    });
     assert.equal(prevented, 1);
 
     emit(document, "htmx:afterRequest", { elt: request, xhr: request });
-    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    emit(document, "htmx:sseBeforeMessage", { type: "participants" }, {
+        target: participantStream,
+        preventDefault() { prevented += 1; },
+    });
     assert.equal(prevented, 1);
 
     document.activeElement = input;
-    emit(document, "htmx:sseBeforeMessage", { elt: root }, { preventDefault() { prevented += 1; } });
+    emit(document, "htmx:sseBeforeMessage", { type: "participants" }, {
+        target: participantStream,
+        preventDefault() { prevented += 1; },
+    });
     assert.equal(prevented, 2);
+});
+
+test("search progress SSE messages remain independent from participant editing", async () => {
+    const input = eventTarget({ tagName: "INPUT" });
+    const request = {};
+    const participantStream = eventTarget({ id: "session-participants" });
+    const searchProgress = eventTarget({ id: "search-progress" });
+    const root = eventTarget({
+        querySelector(selector) {
+            return selector === "#session-participants" ? participantStream : null;
+        },
+        querySelectorAll() { return []; },
+        contains(candidate) {
+            return candidate === input || candidate === request || candidate === participantStream;
+        },
+    });
+    const document = createDocument(root);
+    document.activeElement = input;
+    await loadSessionModule(document);
+
+    emit(document, "htmx:beforeRequest", { elt: request, xhr: request });
+    let prevented = 0;
+    for (const type of ["progress", "complete"]) {
+        emit(document, "htmx:sseBeforeMessage", { type }, {
+            target: searchProgress,
+            preventDefault() { prevented += 1; },
+        });
+    }
+
+    assert.equal(prevented, 0);
 });
 
 test("occasion presets update source checkboxes and resync after manual changes", async () => {

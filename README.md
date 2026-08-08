@@ -15,7 +15,7 @@ We have 1,400+ transit stops in Prague. Given a set of `k` stops where friends a
 
 The naive approach uses geographic (Haversine) distance between stops. But public transit speeds vary by route, so we scraped ~2.1M stop-pair travel times from DPP to use actual transit minutes as the distance metric.
 
-The search works in stages: first, we select the top 10 stops by geographic distance and top 25 by pre-computed transit time. Then we scrape real-time travel times for the selected date/time and re-rank. The top 15 target stops are returned. For the top five transit-ranked stops, type-balanced Google Places discovery checks the selected venue types (pub, bar, cafe, and optionally restaurant) within 500m; results are cached for 90 days.
+The search works in stages. For each active direction, it selects up to 20 stops by geographic distance and up to 20 by precomputed transit time. Round-trip searches take the union of the outbound and return-direction candidate sets. It then queries live DPP journey times for the selected departure and return times, reranks the candidates, and returns the top 20 meeting points. For the top five transit-ranked stops, type-balanced Google Places discovery checks the selected venue types (pub, bar, cafe, and optionally restaurant) within 500m; results are cached for 90 days.
 
 ## Features
 

@@ -205,6 +205,7 @@ function bindReturnCheckboxes(root) {
 }
 
 function bindSseProtection(root) {
+    const participantStream = root.querySelector("#session-participants");
     const pendingRequests = new Set();
     const requestKey = (event) => event.detail?.xhr ?? event.detail?.elt;
 
@@ -217,6 +218,7 @@ function bindSseProtection(root) {
         });
     }
     document.addEventListener("htmx:sseBeforeMessage", (event) => {
+        if (event.target !== participantStream) return;
         const focusedInput = document.activeElement?.tagName === "INPUT"
             && root.contains(document.activeElement);
         if (pendingRequests.size || focusedInput) event.preventDefault();
