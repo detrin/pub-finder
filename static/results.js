@@ -1,4 +1,4 @@
-import { createReachabilityMap } from "./reachability-map.js";
+import { createReachabilityMap } from "./reachability-map.js?v=2";
 
 let controller = null;
 let activeRoot = null;

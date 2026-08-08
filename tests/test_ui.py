@@ -426,6 +426,7 @@ const button = {
 };
 globalThis.document = {
   documentElement: { dataset: { theme: "dark" }, style: {} },
+  addEventListener() {},
   querySelector() { return button; },
 };
 globalThis.localStorage = { setItem() {} };

@@ -11,6 +11,8 @@ Date: 2026-08-08
 - Added explicit dark surfaces for setup panels, cards, dialogs, Leaflet controls, and the Google Form surround.
 - Added route drawing with reduced-motion removal. Reduced motion also removes reachability-field and result-sheet transitions.
 - Added document-level horizontal overflow containment and retained visible yellow focus rings.
+- Reinitialized the theme toggle after HTMX shell replacement without duplicate click or lifecycle handlers.
+- Kept the interpolation workload within a proportional 96px grid while rendering the reachability field at the map's intrinsic output resolution. Observation dots now keep circular geometry on tall mobile maps.
 
 ## TDD evidence
 
@@ -27,6 +29,15 @@ After the minimum dialog helper and integrations were added:
 3 passed, 20 deselected
 ```
 
+Browser follow-up produced two more red-green regressions:
+
+```text
+theme replacement shell: missing htmx:afterSwap lifecycle handler
+non-square map: expected intrinsic canvas width 680, received 96
+```
+
+The replacement-shell test now covers dark/light state, accessible action labels, local storage, and duplicate-handler prevention. The 340x654 map test now covers proportional interpolation cells, a 680x1308 output canvas at 2x density, correctly scaled observation coordinates, circular dot radius, and the unchanged core 96x96 bound.
+
 ## Automated verification
 
 ```text
@@ -37,10 +48,13 @@ uv run pytest -q
 126 passed
 
 npm run test:js
-22 passed
+24 passed
 
 uv run ruff check backend routers tests
 All checks passed
+
+node tests/js/reachability-core.bench.js
+41.77ms best of 3 for 1,444 stops on a 96x96 grid
 ```
 
 Additional checks passed for JavaScript syntax, all Jinja template compilation, balanced CSS braces, required mobile and dark selectors, DOM control relationships, `git diff --check`, and changed-line em/en dash absence. Dark-theme text and action color pairs audited between 6.31:1 and 15.68:1.
@@ -58,10 +72,10 @@ The static audit covered the CSS and rendered DOM paths used at:
 
 State hooks audited: home, session, stop picker, all three search-progress stages, results map, results list, How It Works, feedback iframe surround, invalid/empty/error system messages, and dark home/session/results surfaces.
 
-## Browser limitation
+## Browser evidence and limitation
 
-No screenshots were captured. The requested in-app browser control surface was callable, but selecting it returned exactly `Browser is not available: iab`; the runtime browser inventory was empty. No alternate browser was substituted. Visual pixel comparison therefore remains for a browser-enabled environment.
+This agent's requested in-app browser control surface was callable, but selecting it returned exactly `Browser is not available: iab`; its runtime browser inventory was empty. The root task's browser was available and inspected the 390x844 flow. It observed zero horizontal page overflow and a 654px map height, while identifying two real defects: the theme toggle stopped after the HTMX body replacement, and the low-resolution reachability canvas stretched dots into vertical bars. Both defects now have red-green regressions and fixes. The rest of that screenshot was reported as visually sound.
 
 ## Concerns
 
-- Automated and structural checks cannot replace pixel inspection. The viewport and dark-theme states still need the requested screenshot sweep when the in-app browser is available.
+- The full requested viewport, state, theme, and reduced-motion screenshot matrix is not yet complete. Do not treat the single 390x844 root-browser pass as full visual acceptance.

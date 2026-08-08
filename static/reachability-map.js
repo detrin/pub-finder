@@ -4,6 +4,7 @@ const DEFAULT_CENTER = [50.0755, 14.4378];
 const DEFAULT_ZOOM = 12;
 const DEFAULT_THRESHOLD = 35;
 const DEFAULT_STEP = 15;
+const MAX_RENDER_GRID_SIZE = 96;
 const BAND_OPACITIES = [0.52, 0.36, 0.22, 0.1];
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -290,34 +291,51 @@ export class ReachabilityMapController {
 
     drawField() {
         const size = this.map.getSize();
-        const width = Math.max(1, Math.min(96, Math.round(size.x)));
-        const height = Math.max(1, Math.min(96, Math.round(size.y)));
-        const scaleX = width / Math.max(1, size.x);
-        const scaleY = height / Math.max(1, size.y);
+        const cssWidth = Math.max(1, Math.round(size.x));
+        const cssHeight = Math.max(1, Math.round(size.y));
+        const rawPixelRatio = this.options.pixelRatio
+            ?? this.document.defaultView?.devicePixelRatio
+            ?? 1;
+        const pixelRatio = Number.isFinite(rawPixelRatio)
+            ? Math.max(1, Math.min(2, rawPixelRatio))
+            : 1;
+        const outputWidth = Math.max(1, Math.round(cssWidth * pixelRatio));
+        const outputHeight = Math.max(1, Math.round(cssHeight * pixelRatio));
+        const gridScale = Math.min(1, MAX_RENDER_GRID_SIZE / Math.max(cssWidth, cssHeight));
+        const gridWidth = Math.max(1, Math.round(cssWidth * gridScale));
+        const gridHeight = Math.max(1, Math.round(cssHeight * gridScale));
+        const scaleX = gridWidth / cssWidth;
+        const scaleY = gridHeight / cssHeight;
         const observedPoints = [];
 
         this.payload.stops.forEach((stop, index) => {
             const value = this.layerValues[index];
             if (!Number.isFinite(value)) return;
             const point = this.map.latLngToContainerPoint([stop.lat, stop.lon]);
-            observedPoints.push({ x: point.x * scaleX, y: point.y * scaleY, value });
+            observedPoints.push({
+                x: point.x * scaleX,
+                y: point.y * scaleY,
+                outputX: point.x * pixelRatio,
+                outputY: point.y * pixelRatio,
+                value,
+            });
         });
 
-        this.canvas.width = width;
-        this.canvas.height = height;
-        this.canvas.style.width = `${Math.max(1, size.x)}px`;
-        this.canvas.style.height = `${Math.max(1, size.y)}px`;
+        this.canvas.width = outputWidth;
+        this.canvas.height = outputHeight;
+        this.canvas.style.width = `${cssWidth}px`;
+        this.canvas.style.height = `${cssHeight}px`;
         this.leaflet.DomUtil.setPosition(
             this.canvas,
             this.map.containerPointToLayerPoint([0, 0]),
         );
-        this.context.clearRect(0, 0, width, height);
+        this.context.clearRect(0, 0, outputWidth, outputHeight);
         if (observedPoints.length === 0) {
             this.canvas.hidden = true;
             return;
         }
 
-        const grid = interpolateGrid(observedPoints, width, height);
+        const grid = interpolateGrid(observedPoints, gridWidth, gridHeight);
         const minX = Math.min(...observedPoints.map((point) => point.x));
         const maxX = Math.max(...observedPoints.map((point) => point.x));
         const minY = Math.min(...observedPoints.map((point) => point.y));
@@ -332,7 +350,11 @@ export class ReachabilityMapController {
                 const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
                 if (band == null) continue;
                 this.context.globalAlpha = BAND_OPACITIES[band];
-                this.context.fillRect(x, y, 1, 1);
+                const left = Math.floor(x * outputWidth / grid.width);
+                const top = Math.floor(y * outputHeight / grid.height);
+                const right = Math.ceil((x + 1) * outputWidth / grid.width);
+                const bottom = Math.ceil((y + 1) * outputHeight / grid.height);
+                this.context.fillRect(left, top, right - left, bottom - top);
             }
         }
 
@@ -340,7 +362,13 @@ export class ReachabilityMapController {
         this.context.fillStyle = this.inkColor();
         for (const point of observedPoints) {
             this.context.beginPath();
-            this.context.arc(point.x, point.y, 1.15, 0, Math.PI * 2);
+            this.context.arc(
+                point.outputX,
+                point.outputY,
+                1.15 * pixelRatio,
+                0,
+                Math.PI * 2,
+            );
             this.context.fill();
         }
         this.context.globalAlpha = 1;

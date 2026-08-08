@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { interpolateGrid } from "../../static/reachability-core.js";
 import { createReachabilityMap } from "../../static/reachability-map.js";
 
-function createHarness() {
+function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     const events = [];
     const frameQueue = [];
     const canvasOperations = [];
@@ -30,7 +31,9 @@ function createHarness() {
             });
         },
         beginPath() {},
-        arc() {},
+        arc(x, y, radius) {
+            canvasOperations.push({ type: "arc", x, y, radius });
+        },
         fill() {
             canvasOperations.push({ type: "dot", fillStyle: this.fillStyle });
         },
@@ -74,7 +77,7 @@ function createHarness() {
         createTextNode(text) {
             return { textContent: text };
         },
-        defaultView: { CustomEvent },
+        defaultView: { CustomEvent, devicePixelRatio: pixelRatio },
     };
     const root = {
         ownerDocument: document,
@@ -96,7 +99,7 @@ function createHarness() {
                 failSizeRead = false;
                 throw new Error("forced canvas redraw failure");
             }
-            return { x: 4, y: 1 };
+            return { x: width, y: height };
         },
         latLngToContainerPoint([lat, lon]) {
             return { x: lon, y: lat };
@@ -253,6 +256,40 @@ test("controller owns separate marker and canvas layers and draws four travel-ti
     controller.setVenues([{ name: "Venue", lat: 0.5, lon: 0.5 }]);
     assert.equal(harness.createdGroups[1].layers.length, 1);
     assert.equal(harness.createdGroups[2].layers.length, 1);
+});
+
+test("non-square maps render circular observation dots at scaled output coordinates", async () => {
+    const harness = createHarness({ width: 340, height: 654, pixelRatio: 2 });
+    const tallPayload = {
+        participants: [],
+        stops: [
+            { name: "Northwest", lat: 10, lon: 10, participant_minutes: [], group_max_minutes: 20 },
+            { name: "Center", lat: 327, lon: 170, participant_minutes: [], group_max_minutes: 35 },
+            { name: "Southeast", lat: 644, lon: 330, participant_minutes: [], group_max_minutes: 50 },
+        ],
+    };
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => tallPayload }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+        pixelRatio: 2,
+    });
+
+    harness.runFrame();
+
+    assert.equal(harness.canvas.width, 680);
+    assert.equal(harness.canvas.height, 1308);
+    assert.equal(harness.canvas.style.width, "340px");
+    assert.equal(harness.canvas.style.height, "654px");
+    const centerDot = harness.canvasOperations.filter(({ type }) => type === "arc")[1];
+    assert.deepEqual(centerDot, { type: "arc", x: 340, y: 654, radius: 2.3 });
+    const fieldCell = harness.canvasOperations.find(({ type }) => type === "fillRect");
+    assert.ok(Math.abs(fieldCell.width - fieldCell.height) <= 1);
+
+    const boundedGrid = interpolateGrid([{ x: 1, y: 1, value: 20 }], 340, 654);
+    assert.deepEqual([boundedGrid.width, boundedGrid.height], [96, 96]);
 });
 
 test("selected result controls marker emphasis without changing its factual rank", async () => {

@@ -147,7 +147,7 @@ async function loadResultsModule(createReachabilityMap) {
     globalThis.__createReachabilityMap = createReachabilityMap;
     const source = await readFile(new URL("../../static/results.js", import.meta.url), "utf8");
     const testableSource = source.replace(
-        'import { createReachabilityMap } from "./reachability-map.js";',
+        'import { createReachabilityMap } from "./reachability-map.js?v=2";',
         "const createReachabilityMap = globalThis.__createReachabilityMap;",
     );
     const moduleUrl = `data:text/javascript;base64,${Buffer.from(testableSource).toString("base64")}#${Math.random()}`;

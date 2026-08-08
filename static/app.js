@@ -1,4 +1,4 @@
-import { initThemeToggle } from "/static/theme.js";
+import { initThemeToggle } from "/static/theme.js?v=2";
 import { rememberSession, renderRecentSessions } from "/static/history.js";
 
 initThemeToggle();
