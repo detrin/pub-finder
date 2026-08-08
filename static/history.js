@@ -2,54 +2,59 @@ const KEY = "meet_somewhere_recent_sessions";
 const LEGACY_KEY = "pubfinder_sessions";
 const LIMIT = 5;
 
-function validSession(value) {
-    return (
+function normalizeSession(value) {
+    if (!(
         value
         && typeof value === "object"
         && typeof value.code === "string"
         && value.code.length > 0
         && typeof value.name === "string"
-    );
+    )) return null;
+    return { code: value.code, name: value.name };
 }
 
-function getSessions() {
+function readSessions(key) {
     try {
-        const stored = JSON.parse(localStorage.getItem(KEY) || "[]");
-        return Array.isArray(stored) ? stored.filter(validSession).slice(0, LIMIT) : [];
+        const stored = JSON.parse(localStorage.getItem(key) || "[]");
+        return Array.isArray(stored)
+            ? stored.map(normalizeSession).filter((session) => session !== null)
+            : [];
     } catch (_) {
         return [];
     }
 }
 
-function migrateLegacySessions() {
-    let legacy = [];
-    try {
-        const stored = JSON.parse(localStorage.getItem(LEGACY_KEY) || "[]");
-        legacy = Array.isArray(stored) ? stored.filter(validSession) : [];
-    } catch (_) {
-        legacy = [];
-    }
-    if (!legacy.length) return;
-    const current = getSessions();
-    const seen = new Set(current.map((item) => item.code));
-    const migrated = legacy.filter((item) => {
-        if (seen.has(item.code)) return false;
-        seen.add(item.code);
+function uniqueSessions(sessions) {
+    const seen = new Set();
+    return sessions.filter((session) => {
+        if (seen.has(session.code)) return false;
+        seen.add(session.code);
         return true;
     });
-    const merged = [...current, ...migrated].slice(0, LIMIT);
+}
+
+function getSessions() {
+    return uniqueSessions(readSessions(KEY)).slice(0, LIMIT);
+}
+
+function migrateLegacySessions() {
+    const merged = uniqueSessions([
+        ...readSessions(KEY),
+        ...readSessions(LEGACY_KEY),
+    ]).slice(0, LIMIT);
     try {
         localStorage.setItem(KEY, JSON.stringify(merged));
-        localStorage.removeItem(LEGACY_KEY);
+        localStorage.removeItem?.(LEGACY_KEY);
     } catch (_) {
         // A failed migration is harmless and can be retried on a later load.
     }
 }
 
 export function rememberSession(session) {
-    if (!validSession(session)) return;
+    const normalized = normalizeSession(session);
+    if (!normalized) return;
 
-    const next = [session, ...getSessions().filter((item) => item.code !== session.code)]
+    const next = [normalized, ...getSessions().filter((item) => item.code !== normalized.code)]
         .slice(0, LIMIT);
 
     try {

@@ -598,6 +598,10 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
                 # Search already completed and results were delivered; close silently
                 break
 
+            if progress.cancelled:
+                registry.pop(search_id, code)
+                break
+
             if progress.done:
                 html = progress.result_html or ""
                 escaped = html.replace("\n", "\ndata: ")

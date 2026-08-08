@@ -4,6 +4,7 @@ import threading
 import pytest
 
 from backend.search_registry import SearchRegistry
+from routers.search import search_progress_stream
 
 
 class FakeClock:
@@ -52,6 +53,34 @@ async def test_newer_search_supersedes_and_cancels_the_older_session_search():
     assert not registry.is_current("old", "session-1")
 
 
+@pytest.mark.asyncio
+async def test_cancelled_search_stream_is_silent_while_latest_search_completes():
+    registry = SearchRegistry()
+    registry.create("old", "session1")
+    registry.create("new", "session1")
+    registry.update("new", done=True, result_html="<p>new result</p>")
+    request = type(
+        "Request",
+        (),
+        {
+            "app": type("App", (), {"state": type("State", (), {"search_registry": registry})()})(),
+            "is_disconnected": lambda self: asyncio.sleep(0, result=False),
+        },
+    )()
+
+    old_response = await search_progress_stream(request, "session1", "old")
+    old_events = [event async for event in old_response.body_iterator]
+    new_response = await search_progress_stream(request, "session1", "new")
+    new_events = [event async for event in new_response.body_iterator]
+
+    assert old_events == []
+    assert registry.get("old", "session1") is None
+    assert len(new_events) == 1
+    assert "<p>new result</p>" in new_events[0]
+    assert "event: complete" in new_events[0]
+    assert not registry.is_current("new", "session1")
+
+
 def test_registry_rejects_progress_access_from_another_session():
     registry = SearchRegistry()
     registry.create("search-1", "session-1")
@@ -85,6 +114,25 @@ def test_registry_prunes_only_expired_completed_results():
     assert registry.get("active", "session-1") is not None
 
 
+def test_pop_and_prune_clear_only_the_matching_active_search_mapping():
+    clock = FakeClock(100.0)
+    registry = SearchRegistry(result_ttl_seconds=30, clock=clock)
+    registry.create("old", "session-1")
+    registry.create("current", "session-1")
+
+    registry.pop("old", "session-1")
+    assert registry.is_current("current", "session-1")
+
+    registry.update("current", done=True, result_html="done")
+    clock.advance(31)
+    assert registry.prune() == 1
+    assert not registry.is_current("current", "session-1")
+
+    registry.create("popped", "session-2")
+    registry.pop("popped", "session-2")
+    assert not registry.is_current("popped", "session-2")
+
+
 @pytest.mark.asyncio
 async def test_registry_shutdown_cancels_outstanding_tasks():
     registry = SearchRegistry()
@@ -96,6 +144,7 @@ async def test_registry_shutdown_cancels_outstanding_tasks():
     assert task.cancelled()
     assert registry.task_count == 0
     assert registry.get("search-1", "session-1") is None
+    assert not registry.is_current("search-1", "session-1")
 
 
 @pytest.mark.asyncio

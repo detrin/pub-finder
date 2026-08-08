@@ -112,7 +112,10 @@ class SearchRegistry:
             progress = self._progress.get(search_id)
             if progress is None or progress.session_code != session_code:
                 return None
-            return self._progress.pop(search_id)
+            popped = self._progress.pop(search_id)
+            if self._active_searches.get(session_code) == search_id:
+                self._active_searches.pop(session_code, None)
+            return popped
 
     def prune(self) -> int:
         now = self._clock()
@@ -123,7 +126,12 @@ class SearchRegistry:
                 if progress.done and now - progress.updated_at > self._result_ttl_seconds
             ]
             for search_id in expired:
-                self._progress.pop(search_id, None)
+                progress = self._progress.pop(search_id, None)
+                if (
+                    progress is not None
+                    and self._active_searches.get(progress.session_code) == search_id
+                ):
+                    self._active_searches.pop(progress.session_code, None)
         return len(expired)
 
     def start(
@@ -196,3 +204,4 @@ class SearchRegistry:
 
         with self._progress_lock:
             self._progress.clear()
+            self._active_searches.clear()
