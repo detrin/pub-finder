@@ -61,13 +61,13 @@ function bindStopPicker(root) {
         const input = resolveActiveInput();
         if (input) {
             input.value = stop;
-            input.dispatchEvent(new Event("change", { bubbles: true }));
             pendingFocus = {
                 participantId: activeParticipantId,
                 fieldName: activeFieldName,
                 stop,
                 sourceForm: input.closest("form"),
             };
+            input.dispatchEvent(new Event("change", { bubbles: true }));
         }
         dialog.close();
     }
@@ -156,9 +156,14 @@ function bindStopPicker(root) {
         activeInvoker = null;
         if (focusTarget?.isConnected) focusTarget.focus();
     });
+    document.addEventListener("htmx:beforeRequest", (event) => {
+        if (pendingFocus && event.detail.elt === pendingFocus.sourceForm) {
+            pendingFocus.xhr = event.detail.xhr;
+        }
+    });
     document.addEventListener("htmx:afterSwap", (event) => {
         if (!pendingFocus || !root.contains(event.detail.target)) return;
-        if (event.detail.elt !== pendingFocus.sourceForm) return;
+        if (event.detail.xhr !== pendingFocus.xhr) return;
         const participantId = pendingFocus.participantId;
         const fieldName = pendingFocus.fieldName;
         const forms = root.querySelectorAll("form.stop-form");

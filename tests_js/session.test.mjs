@@ -208,7 +208,8 @@ test("stop focus intent survives an unrelated participant swap", async () => {
     });
     const original = eventTarget({ name: "start_stop", value: "", selector: "[data-stop-input]" });
     const replacement = eventTarget({ name: "start_stop", value: "Muzeum", selector: "[name=start_stop]" });
-    original.dispatchEvent = () => {};
+    const autosaveXhr = {};
+    const unrelatedXhr = {};
     function participantForm(idValue, input) {
         const id = eventTarget({ value: idValue });
         return {
@@ -228,15 +229,18 @@ test("stop focus intent survives an unrelated participant swap", async () => {
     });
     const document = createDocument(root, { "[data-stop-dialog]": dialog });
     await loadSessionModule(document);
+    original.dispatchEvent = () => {
+        emit(document, "htmx:beforeRequest", { elt: originalForm, xhr: autosaveXhr });
+    };
 
     fire(root, "click", { target: original, preventDefault() {} });
     fire(list.children[0], "click");
     original.isConnected = false;
     const unrelatedForm = participantForm("2", eventTarget({ name: "start_stop" }));
     forms = [unrelatedForm];
-    emit(document, "htmx:afterSwap", { target: root, elt: unrelatedForm });
+    emit(document, "htmx:afterSwap", { target: root, elt: root, xhr: unrelatedXhr });
     forms = [participantForm("1", replacement)];
-    emit(document, "htmx:afterSwap", { target: root, elt: originalForm });
+    emit(document, "htmx:afterSwap", { target: root, elt: root, xhr: autosaveXhr });
 
     assert.equal(replacement.focusCount, 1);
 });
