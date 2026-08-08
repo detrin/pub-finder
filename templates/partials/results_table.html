@@ -1,92 +1,149 @@
 {% if error %}
-<article class="card" style="border-left: 4px solid #dc2626; padding: 1rem;" role="alert">
-    <strong>Error:</strong> {{ error }}
+<article class="results-local-error" role="alert">
+    <strong>Search failed.</strong>
+    <p>{{ error }}</p>
 </article>
 {% elif results is not none %}
-
-{% if warning %}
-<article class="card" style="border-left: 4px solid #f59e0b; padding: 1rem; margin-bottom: 1rem;" role="status">
-    <strong>Note:</strong> {{ warning }}
-</article>
-{% endif %}
-
+{% set snapshot = participant_snapshot | default([], true) %}
 {% set ns = namespace(participants=[]) %}
 {% for col in results.columns %}
-    {% if col.startswith("Round trip (") %}
-        {% set name = col[12:-1] %}
-        {% set ns.participants = ns.participants + [name] %}
+    {% if col.startswith("To (") %}
+        {% set ns.participants = ns.participants + [col[4:-1]] %}
     {% endif %}
 {% endfor %}
 
-<div id="map-data" style="display:none;"
-     data-stops='{{ stops_json | default("[]") }}'
-     data-pubs='{{ pubs_json | default("[]") }}'
-     data-participants='{{ participants_json | default("[]") }}'>
-</div>
-<article class="card map-card">
-    <h4>Map</h4>
-    <div id="map"></div>
-</article>
-
-{% for row in results.rows(named=true) %}
-{% set rank = loop.index %}
-{% set stop_name = row["Target Stop"] %}
-{% set worst = row["Worst Case Minutes"] %}
-{% set total = row["Total Minutes"] %}
-{% set pubs = pubs_by_stop.get(stop_name, []) if pubs_by_stop else [] %}
-
-<article class="card result-card {% if rank == 1 %}result-card--top{% endif %}">
-    <div class="result-header">
-        <div class="result-rank">
-            {% if rank == 1 %}
-                <span class="rank-badge rank-badge--gold">Best Match</span>
-            {% else %}
-                <span class="rank-badge">#{{ rank }}</span>
-            {% endif %}
-        </div>
-        <div class="result-title">
-            <h3>{{ stop_name }}</h3>
-        </div>
-        <div class="result-metrics">
-            <div class="metric">
-                <span class="metric-value">{{ worst }}</span>
-                <span class="metric-label">worst case min</span>
-            </div>
-            <div class="metric">
-                <span class="metric-value">{{ total }}</span>
-                <span class="metric-label">total min</span>
-            </div>
-        </div>
+<section class="results-workspace"
+         data-results-root="true"
+         data-reachability-url="/session/{{ session_code }}/reachability"
+         data-selected-rank="1"
+         data-mobile-view="map">
+    <div class="results-mobile-views" aria-label="Results view">
+        <button type="button" data-mobile-view-target="map" aria-pressed="true">Map</button>
+        <button type="button" data-mobile-view-target="list" aria-pressed="false">List</button>
     </div>
 
-    <details class="travel-details">
-        <summary>Travel times per participant</summary>
-        <div class="travel-grid">
-            {% for p in ns.participants %}
-            <div class="travel-person">
-                <strong class="travel-person-name">{{ p }}</strong>
-                <div class="travel-times">
-                    <span class="travel-chip">
-                        <small>to</small> {{ row["To (" ~ p ~ ")"] }} min
-                    </span>
-                    <span class="travel-chip">
-                        <small>from</small> {{ row["From (" ~ p ~ ")"] }} min
-                    </span>
-                    <span class="travel-chip travel-chip--total">
-                        <small>round</small> {{ row["Round trip (" ~ p ~ ")"] }} min
-                    </span>
+    <aside class="results-rail" aria-label="Ranked meeting points">
+        <section class="reach-controls" aria-label="Reachability layer">
+            <div class="reach-controls__heading">
+                <div>
+                    <p class="control-eyebrow">Reachability layer</p>
+                    <h2>Longest journey</h2>
                 </div>
+                <span class="method-label">Minimize longest journey</span>
             </div>
-            {% endfor %}
+
+            <div class="participant-tabs" data-participant-tabs role="tablist"
+                 aria-label="Reachability view">
+                <button type="button" role="tab" data-participant-id=""
+                        aria-selected="true">Everyone</button>
+                {% for participant in snapshot %}
+                <button type="button" role="tab" data-participant-id="{{ participant.id }}"
+                        aria-selected="false"
+                        style="--participant-color: {{ participant.color | e }}">
+                    {{ participant.name }}
+                </button>
+                {% endfor %}
+            </div>
+
+            <label class="threshold-control">
+                <span>Maximum time <output data-threshold-value>35 min</output></span>
+                <input type="range" min="15" max="90" step="5" value="35" data-threshold>
+            </label>
+            <div class="reach-legend" aria-label="Travel time legend">
+                <span><i class="reach-legend__swatch reach-legend__swatch--short"></i>Shorter</span>
+                <span><i class="reach-legend__swatch reach-legend__swatch--long"></i>Longer</span>
+            </div>
+            <p class="reach-error" data-reachability-error role="status" hidden>
+                Approximate transit layer unavailable. Ranked results remain available.
+            </p>
+        </section>
+
+        {% if warning %}
+        <article class="results-warning" role="status">
+            <strong>Venue data is incomplete.</strong>
+            <p>{{ warning }}</p>
+        </article>
+        {% endif %}
+
+        <div class="ranked-stops">
+        {% for row in results.rows(named=true) %}
+            {% set rank = loop.index %}
+            {% set stop_name = row["Target Stop"] %}
+            {% set worst = row["Worst Case Minutes"] %}
+            {% set total = row["Total Minutes"] %}
+            {% set pubs = pubs_by_stop.get(stop_name, []) if pubs_by_stop else [] %}
+            <article class="ranked-stop{% if rank == 1 %} ranked-stop--selected{% endif %}"
+                     data-ranked-stop data-result-rank="{{ rank }}">
+                <button type="button" class="ranked-stop__toggle"
+                        data-rank="{{ rank }}" data-stop-name="{{ stop_name | e }}"
+                        aria-expanded="{{ 'true' if rank == 1 else 'false' }}"
+                        aria-controls="result-detail-{{ rank }}">
+                    <span class="ranked-stop__rank">
+                        {% if rank == 1 %}Best match{% else %}#{{ rank }}{% endif %}
+                    </span>
+                    <span class="ranked-stop__name">{{ stop_name }}</span>
+                    <span class="ranked-stop__metric">
+                        <strong>{{ worst }}</strong>
+                        <small>longest min</small>
+                    </span>
+                    <span class="ranked-stop__metric ranked-stop__metric--total">
+                        <strong>{{ total }}</strong>
+                        <small>total min</small>
+                    </span>
+                </button>
+
+                <div class="participant-time-strip" aria-label="Participant journey times">
+                    {% for participant in ns.participants %}
+                    <span class="participant-time-chip">
+                        <strong>{{ participant }}</strong>
+                        {{ row["Round trip (" ~ participant ~ ")"] }} min
+                    </span>
+                    {% endfor %}
+                </div>
+
+                <div id="result-detail-{{ rank }}" class="ranked-stop__detail"
+                     data-result-detail="{{ rank }}"{% if rank != 1 %} hidden{% endif %}>
+                    {% if ns.participants %}
+                    <div class="travel-grid">
+                        {% for participant in ns.participants %}
+                        <section class="travel-person">
+                            <h3>{{ participant }}</h3>
+                            <div class="travel-times">
+                                <span class="travel-chip"><small>to</small> {{ row["To (" ~ participant ~ ")"] }} min</span>
+                                <span class="travel-chip"><small>from</small> {{ row["From (" ~ participant ~ ")"] }} min</span>
+                                <span class="travel-chip travel-chip--total"><small>round trip</small> {{ row["Round trip (" ~ participant ~ ")"] }} min</span>
+                            </div>
+                        </section>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% with searched=(stop_name in pub_search_stop_names), venue_state=none,
+                            venue_error=none, map_update=false %}
+                        {% include "partials/venue_suggestions.html" %}
+                    {% endwith %}
+                </div>
+            </article>
+        {% endfor %}
         </div>
-    </details>
+    </aside>
 
-    {% with searched=(stop_name in pub_search_stop_names), venue_error=none, map_update=false %}
-        {% include "partials/venue_suggestions.html" %}
-    {% endwith %}
-</article>
-{% endfor %}
+    <section class="results-map-panel" aria-label="Meeting point map">
+        <div id="map" data-results-map></div>
+        <div class="map-caption">
+            <p class="map-source">Approximate from typical transit times</p>
+            <p>Stop observations are shown as points. Ranked results use live refinement.</p>
+        </div>
+    </section>
 
+    <div id="results-map-data" data-map-data hidden
+         data-stops="{{ stops_json | default('[]') | forceescape }}"
+         data-venues="{{ pubs_json | default('[]') | forceescape }}"
+         data-participants="{{ participant_snapshot_json | default('[]') | forceescape }}"></div>
+</section>
 {% else %}
-<p><em>No results yet. Make sure all participants have selected their stops.</em></p>
+<article class="results-local-error" role="status">
+    <strong>No results available.</strong>
+    <p>Make sure every participant has selected start and end stops.</p>
+</article>
 {% endif %}

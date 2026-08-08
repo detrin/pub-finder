@@ -145,7 +145,7 @@ function refreshResultsUi(target) {
         : target.closest("#results-section");
     if (!resultsSection) return;
 
-    var hasResults = Boolean(resultsSection.querySelector("#map-data"));
+    var hasResults = Boolean(resultsSection.querySelector("[data-results-root], #map-data"));
     var shareLink = document.getElementById("share-results-link");
     if (shareLink) shareLink.style.display = hasResults ? "" : "none";
     if (hasResults) initMap();

@@ -29,6 +29,47 @@ PUB_A = {**PUB, "place_id": "ChIJ_test_a", "name": "Pub A"}
 PUB_B = {**PUB, "place_id": "ChIJ_test_b", "name": "Pub B"}
 PUB_C = {**PUB, "place_id": "ChIJ_test_c", "name": "Pub C"}
 
+
+def render_venue_state(state, *, pubs=None):
+    from routers.search import templates
+
+    return templates.get_template("partials/venue_suggestions.html").render(
+        session_code="code",
+        stop_name="B",
+        pubs=pubs or [],
+        searched=state in {"loaded", "empty"},
+        venue_state=state,
+        map_update=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ("loading", "Checking nearby places"),
+        ("empty", "No suitable venues"),
+        ("not-searched", "Find nearby places"),
+        ("rate-limited", "Venue request limit reached"),
+        ("provider-error", "Places could not be loaded"),
+    ],
+)
+def test_venue_partial_renders_explicit_state_copy(state, expected):
+    assert expected in render_venue_state(state)
+
+
+def test_rate_limited_venue_partial_preserves_transit_context():
+    html = render_venue_state("rate-limited")
+    assert "Try again in one minute" in html
+    assert "Transit results are unchanged" in html
+
+
+def test_loaded_venue_state_preserves_rating_review_count_and_maps_link():
+    html = render_venue_state("loaded", pubs=[PUB])
+    assert "U Fleku" in html
+    assert "4.3" in html
+    assert "5,421" in html
+    assert PUB["google_maps_url"] in html
+
 MOCK_PLACES_RESPONSE = {
     "places": [
         {

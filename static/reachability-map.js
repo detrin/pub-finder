@@ -188,6 +188,7 @@ export class ReachabilityMapController {
         this.rankedStopLayer.clearLayers();
         this.results.forEach((stop, index) => {
             const rank = Number.isInteger(stop.rank) && stop.rank > 0 ? stop.rank : index + 1;
+            const selected = typeof stop.selected === "boolean" ? stop.selected : rank === 1;
             addCircle(
                 this.leaflet,
                 this.rankedStopLayer,
@@ -196,10 +197,10 @@ export class ReachabilityMapController {
                 {
                     className: "ranked-stop-marker",
                     color: "#17191c",
-                    fillColor: rank === 1 ? "#4dc694" : "#fffefa",
+                    fillColor: selected ? "#4dc694" : "#fffefa",
                     fillOpacity: 1,
-                    radius: rank === 1 ? 9 : 7,
-                    weight: 2,
+                    radius: selected ? 10 : 7,
+                    weight: selected ? 3 : 2,
                 },
                 [`Rank ${rank}`],
             );

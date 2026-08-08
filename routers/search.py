@@ -500,6 +500,17 @@ async def _run_search(
         if places_api_error:
             warning = "Google Places API limit reached; pub data may be incomplete for some stops."
 
+        participant_snapshot = [
+            {
+                "id": participant["id"],
+                "name": participant["name"],
+                "color": participant_color(participant["id"]),
+                "start_stop": start,
+                "end_stop": end,
+            }
+            for participant, (start, end) in zip(active_participants, stop_pairs)
+        ]
+
         # Save results
         results_rows = df_results.rows(named=True)
         results_columns = df_results.columns
@@ -518,16 +529,7 @@ async def _run_search(
                 "pubs_flat": pubs_flat,
                 "participants_geo": participants_geo,
                 "search_direction": direction,
-                "participant_snapshot": [
-                    {
-                        "id": participant["id"],
-                        "name": participant["name"],
-                        "color": participant_color(participant["id"]),
-                        "start_stop": start,
-                        "end_stop": end,
-                    }
-                    for participant, (start, end) in zip(active_participants, stop_pairs)
-                ],
+                "participant_snapshot": participant_snapshot,
                 "warning": warning,
             },
         )
@@ -541,7 +543,8 @@ async def _run_search(
             session_code=code,
             stops_json=json.dumps(stop_geo_data),
             pubs_json=json.dumps(pubs_flat),
-            participants_json=json.dumps(participants_geo),
+            participant_snapshot=participant_snapshot,
+            participant_snapshot_json=json.dumps(participant_snapshot),
             warning=warning,
         )
 
@@ -624,15 +627,23 @@ def _render_venue_suggestions(
     pubs: list[dict],
     *,
     searched: bool,
-    error: str | None = None,
+    state: str | None = None,
     saved_data: dict | None = None,
 ) -> HTMLResponse:
+    if state is None:
+        if searched and pubs:
+            state = "loaded"
+        elif searched:
+            state = "empty"
+        else:
+            state = "not-searched"
     context = {
         "session_code": code,
         "stop_name": stop_name,
         "pubs": pubs,
         "searched": searched,
-        "venue_error": error,
+        "venue_state": state,
+        "venue_error": None,
         "map_update": saved_data is not None,
     }
     if saved_data is not None:
@@ -640,7 +651,9 @@ def _render_venue_suggestions(
             {
                 "stops_json": json.dumps(saved_data.get("stops_geo", [])),
                 "pubs_json": json.dumps(saved_data.get("pubs_flat", [])),
-                "participants_json": json.dumps(saved_data.get("participants_geo", [])),
+                "participant_snapshot_json": json.dumps(
+                    saved_data.get("participant_snapshot", [])
+                ),
             }
         )
     return templates.TemplateResponse(request, "partials/venue_suggestions.html", context)
@@ -701,7 +714,7 @@ async def load_venues_for_stop(
                 stop_name,
                 [],
                 searched=False,
-                error="Venue suggestions are unavailable for this stop.",
+                state="provider-error",
             )
         lat, lon = coordinates
 
@@ -729,7 +742,7 @@ async def load_venues_for_stop(
                 stop_name,
                 [],
                 searched=False,
-                error="Too many venue lookups. Please wait a minute and try again.",
+                state="rate-limited",
             )
 
         semaphore = asyncio.Semaphore(PLACES_CONCURRENCY_LIMIT)
@@ -780,7 +793,7 @@ async def load_venues_for_stop(
                 stop_name,
                 [],
                 searched=False,
-                error="Venue suggestions could not be loaded. Please try again.",
+                state="provider-error",
             )
 
         departure_value = data.get("departure_datetime")
@@ -855,7 +868,8 @@ async def results_page(request: Request, code: str):
             "session_code": code,
             "stops_json": json.dumps(data["stops_geo"]),
             "pubs_json": json.dumps(data["pubs_flat"]),
-            "participants_json": json.dumps(data["participants_geo"]),
+            "participant_snapshot": data.get("participant_snapshot", []),
+            "participant_snapshot_json": json.dumps(data.get("participant_snapshot", [])),
             "warning": data.get("warning"),
             "created_at": saved["created_at"],
         },

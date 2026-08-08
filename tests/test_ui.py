@@ -9,7 +9,58 @@ import pytest_asyncio
 from httpx import ASGITransport
 
 from backend.app import app
-from backend.db import create_session, init_db
+from backend.db import create_session, init_db, save_search_results
+
+
+def saved_result_fixture():
+    return {
+        "rows": [
+            {
+                "Target Stop": "B",
+                "Worst Case Minutes": 15,
+                "Total Minutes": 25,
+                "To (Daniel)": 10,
+                "From (Daniel)": 11,
+                "Round trip (Daniel)": 21,
+            },
+            {
+                "Target Stop": "C",
+                "Worst Case Minutes": 18,
+                "Total Minutes": 29,
+                "To (Daniel)": 13,
+                "From (Daniel)": 15,
+                "Round trip (Daniel)": 28,
+            },
+        ],
+        "columns": [
+            "Target Stop",
+            "Worst Case Minutes",
+            "Total Minutes",
+            "To (Daniel)",
+            "From (Daniel)",
+            "Round trip (Daniel)",
+        ],
+        "pubs_by_stop": {"B": [], "C": []},
+        "pub_search_stop_names": ["B"],
+        "place_types": ["pub", "bar"],
+        "stops_geo": [
+            {"name": "B", "lat": 50.1, "lon": 14.1},
+            {"name": "C", "lat": 50.2, "lon": 14.2},
+        ],
+        "pubs_flat": [],
+        "participants_geo": [],
+        "participant_snapshot": [
+            {
+                "id": 1,
+                "name": "Daniel",
+                "color": "#ff6658",
+                "start_stop": "A",
+                "end_stop": "A",
+            }
+        ],
+        "search_direction": "round-trip",
+        "warning": None,
+    }
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -95,6 +146,66 @@ async def test_session_workspace_disables_search_until_every_participant_has_sto
     assert 'data-search-submit' in response.text
     assert 'data-search-submit disabled' in response.text
     assert "Daniel needs start and end stops." in response.text
+
+
+@pytest.mark.asyncio
+async def test_saved_results_render_split_workspace_and_reachability_url():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], saved_result_fixture())
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert 'class="results-workspace"' in response.text
+    assert f'data-reachability-url="/session/{session["code"]}/reachability"' in response.text
+    assert 'data-selected-rank="1"' in response.text
+    assert "data-map-data" in response.text
+    assert "data-stops=" in response.text
+    assert "data-venues=" in response.text
+    assert "data-participants=" in response.text
+    assert "Longest journey" in response.text
+    assert "Approximate from typical transit times" in response.text
+
+
+@pytest.mark.asyncio
+async def test_results_rank_controls_expand_the_top_result_on_the_server():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], saved_result_fixture())
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert 'data-rank="1"' in response.text
+    assert 'aria-controls="result-detail-1"' in response.text
+    assert 'aria-expanded="true"' in response.text
+    assert 'id="result-detail-1"' in response.text
+    assert 'id="result-detail-2"' in response.text
+    second_detail = response.text.split('id="result-detail-2"', 1)[1].split(">", 1)[0]
+    assert "hidden" in second_detail
+    assert "data-mobile-view=\"map\"" in response.text
+
+
+@pytest.mark.asyncio
+async def test_results_json_attributes_escape_names_without_losing_visible_text():
+    fixture = saved_result_fixture()
+    unsafe_name = "O'Reilly \"Stop\" <script>alert(1)</script>"
+    fixture["rows"][0]["Target Stop"] = unsafe_name
+    fixture["stops_geo"][0]["name"] = unsafe_name
+    fixture["pubs_by_stop"] = {unsafe_name: [], "C": []}
+    fixture["pub_search_stop_names"] = [unsafe_name]
+    fixture["participant_snapshot"][0]["name"] = 'Daniel "<script>"'
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], fixture)
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert unsafe_name not in response.text
+    assert "O&#39;Reilly" in response.text or "O&#x27;Reilly" in response.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
 
 
 @pytest.mark.asyncio

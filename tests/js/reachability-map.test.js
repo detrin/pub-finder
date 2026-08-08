@@ -255,6 +255,27 @@ test("controller owns separate marker and canvas layers and draws four travel-ti
     assert.equal(harness.createdGroups[2].layers.length, 1);
 });
 
+test("selected result controls marker emphasis without changing its factual rank", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => payload }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    controller.setResults([
+        { name: "First", lat: 0.5, lon: 1.5, rank: 1, selected: false },
+        { name: "Second", lat: 0.5, lon: 2.5, rank: 2, selected: true },
+    ]);
+
+    const [first, second] = harness.createdGroups[1].layers;
+    assert.ok(second.options.radius > first.options.radius);
+    assert.ok(second.options.weight > first.options.weight);
+    assert.equal(second.popup.children.at(-1).textContent, "Rank 2");
+});
+
 test("map movement coalesces redraws and destroy cleans up once", async () => {
     const harness = createHarness();
     const controller = await createReachabilityMap(harness.root, {

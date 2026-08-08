@@ -671,8 +671,10 @@ async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get(f"/session/{session['code']}/results")
 
-    sixth_result = response.text.split("<h3>F</h3>", 1)[1].split("</article>", 1)[0]
-    assert "Pub suggestions are shown for the top 5 meeting points" in sixth_result
+    sixth_result = response.text.split('data-result-rank="6"', 1)[1].split(
+        "</article>", 1
+    )[0]
+    assert "Nearby places not searched" in sixth_result
     assert f'hx-post="/session/{session["code"]}/venues"' in sixth_result
     assert 'name="stop_name" value="F"' in sixth_result
     assert "No pubs found nearby" not in sixth_result
@@ -776,6 +778,41 @@ async def test_on_demand_venues_fetches_selected_types_filters_orders_caches_and
         "tiny-perfect",
     ]
     assert [pub["stop"] for pub in saved["data"]["pubs_flat"]] == ["F", "F"]
+
+
+@pytest.mark.asyncio
+async def test_on_demand_venue_provider_failure_returns_explicit_retry_state(monkeypatch):
+    session = await create_session(app.state.db, "Test", "P1")
+    await save_search_results(
+        app.state.db,
+        session["code"],
+        {
+            "rows": [{"Target Stop": "A", "Worst Case Minutes": 10, "Total Minutes": 20}],
+            "pubs_by_stop": {},
+            "pub_search_stop_names": [],
+            "place_types": ["cafe"],
+            "stops_geo": [{"name": "A", "lat": 50.0, "lon": 14.0}],
+            "pubs_flat": [],
+            "participants_geo": [],
+            "warning": None,
+        },
+    )
+
+    async def failed_search(*args, **kwargs):
+        raise RuntimeError("provider secret must not reach the page")
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", failed_search)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{session['code']}/venues", data={"stop_name": "A"}
+        )
+
+    assert response.status_code == 200
+    assert 'data-venue-state="provider-error"' in response.text
+    assert "Places could not be loaded" in response.text
+    assert "Try again" in response.text
+    assert "Transit results are unchanged" in response.text
+    assert "provider secret" not in response.text
 
 
 @pytest.mark.asyncio

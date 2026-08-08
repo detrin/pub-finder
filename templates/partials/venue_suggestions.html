@@ -1,81 +1,103 @@
-<div class="pubs-section">
-    {% if venue_error %}
-    <p class="pubs-none" role="alert"><em>{{ venue_error }}</em></p>
+{% set state = venue_state | default(none) %}
+{% if not state and venue_error | default(none) %}
+    {% if venue_error in ["rate-limited", "provider-error"] %}
+        {% set state = venue_error %}
+    {% else %}
+        {% set state = "provider-error" %}
+    {% endif %}
+{% endif %}
+{% if not state %}
+    {% if searched and pubs %}
+        {% set state = "loaded" %}
+    {% elif searched %}
+        {% set state = "empty" %}
+    {% else %}
+        {% set state = "not-searched" %}
+    {% endif %}
+{% endif %}
+
+<section class="venue-suggestions" data-venue-state="{{ state }}" aria-label="Nearby places">
+    {% if state == "loaded" %}
+    <div class="venue-heading">
+        <h3>Nearby places</h3>
+        <span>{{ pubs | length }} found</span>
+    </div>
+    <ol class="venue-list">
+        {% for pub in pubs %}
+        <li class="venue-row">
+            <div class="venue-row__main">
+                <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener noreferrer">
+                    {{ pub.name }}
+                </a>
+                <div class="venue-row__meta">
+                    {% if pub.rating is not none and pub.rating_count is not none %}
+                    <span>{{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})</span>
+                    {% endif %}
+                    {% if pub.distance_m is defined and pub.distance_m is not none %}
+                    <span>{{ pub.distance_m | round | int }} m walk</span>
+                    {% endif %}
+                    {% if pub.opening_hours is defined and pub.opening_hours is not none %}
+                    <span>Open at selected time</span>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="https://www.google.com/maps/dir/?api=1&amp;origin={{ stop_name | urlencode }},Prague&amp;destination={{ pub.lat }},{{ pub.lon }}&amp;travelmode=walking"
+               target="_blank" rel="noopener noreferrer" class="venue-walk-link">
+                Walking directions
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+    {% elif state == "loading" %}
+    <div class="venue-state" role="status" aria-live="polite">
+        <h3>Checking nearby places</h3>
+        <p>Querying the selected place types within 500 m of this stop.</p>
+    </div>
+    {% elif state == "empty" %}
+    <div class="venue-state">
+        <h3>No suitable venues</h3>
+        <p>No selected place types were found open near this stop.</p>
+        <p>Transit results are unchanged.</p>
+    </div>
+    {% elif state == "rate-limited" %}
+    <div class="venue-state venue-state--error" role="alert">
+        <h3>Venue request limit reached</h3>
+        <p>Try again in one minute.</p>
+        <p>Transit results are unchanged.</p>
+    </div>
+    {% elif state == "provider-error" %}
+    <div class="venue-state venue-state--error" role="alert">
+        <h3>Places could not be loaded</h3>
+        <p>The venue provider did not return a usable response. Try again.</p>
+        <p>Transit results are unchanged.</p>
+    </div>
+    {% else %}
+    <div class="venue-state">
+        <h3>Nearby places not searched</h3>
+        <p>Load the selected place types for this meeting point.</p>
+    </div>
     {% endif %}
 
-    {% if searched %}
-        {% if pubs %}
-        <h4 class="pubs-heading">Nearby Pubs
-            <span class="pubs-count">{{ pubs | length }}</span>
-        </h4>
-        <div class="pub-pills">
-            {% for pub in pubs[:3] %}
-            <div class="pub-pill-row">
-                <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
-                   class="pub-pill">
-                    <span class="pub-pill-name">{{ pub.name }}</span>
-                    {% if pub.rating is not none and pub.rating_count is not none %}
-                    <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
-                        {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
-                    </span>
-                    {% endif %}
-                </a>
-                <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
-                   target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
-                    walk
-                </a>
-            </div>
-            {% endfor %}
-        </div>
-        {% if pubs | length > 3 %}
-        <details class="pubs-more">
-            <summary>Show {{ pubs | length - 3 }} more</summary>
-            <div class="pub-pills">
-                {% for pub in pubs[3:] %}
-                <div class="pub-pill-row">
-                    <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
-                       class="pub-pill">
-                        <span class="pub-pill-name">{{ pub.name }}</span>
-                        {% if pub.rating is not none and pub.rating_count is not none %}
-                        <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
-                            {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
-                        </span>
-                        {% endif %}
-                    </a>
-                    <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
-                       target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
-                        walk
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-        </details>
-        {% endif %}
-        {% else %}
-        <p class="pubs-none"><em>No pubs found nearby</em></p>
-        {% endif %}
-    {% else %}
-    <p class="pubs-none"><em>Pub suggestions are shown for the top 5 meeting points</em></p>
-    {% if session_code %}
+    {% if state in ["not-searched", "rate-limited", "provider-error"] and session_code %}
     <form class="venue-load-form"
           hx-post="/session/{{ session_code }}/venues"
-          hx-target="closest .pubs-section"
+          hx-target="closest .venue-suggestions"
           hx-swap="outerHTML"
           hx-disabled-elt="find button">
         <input type="hidden" name="stop_name" value="{{ stop_name }}">
-        <button type="submit" class="outline small">
-            <span class="venue-load-label">Load venue suggestions</span>
-            <span class="htmx-indicator">Loading…</span>
+        <button type="submit" class="venue-action">
+            <span class="venue-load-label">
+                {% if state in ["rate-limited", "provider-error"] %}Try again{% else %}Find nearby places{% endif %}
+            </span>
+            <span class="htmx-indicator">Checking nearby places...</span>
         </button>
     </form>
     {% endif %}
-    {% endif %}
-</div>
+</section>
 
 {% if map_update %}
-<div id="map-data" style="display:none;" hx-swap-oob="true"
-     data-stops='{{ stops_json | default("[]") }}'
-     data-pubs='{{ pubs_json | default("[]") }}'
-     data-participants='{{ participants_json | default("[]") }}'>
-</div>
+<div id="results-map-data" data-map-data hidden hx-swap-oob="outerHTML"
+     data-stops="{{ stops_json | default('[]') | forceescape }}"
+     data-venues="{{ pubs_json | default('[]') | forceescape }}"
+     data-participants="{{ participant_snapshot_json | default('[]') | forceescape }}"></div>
 {% endif %}
