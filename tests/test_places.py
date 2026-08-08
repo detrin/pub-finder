@@ -192,7 +192,7 @@ async def test_nearby_search_supports_legacy_combined_type_keyword(monkeypatch):
     assert "rankPreference" not in captured["json"]
 
 
-def test_order_pubs_for_stop_deduplicates_and_breaks_distance_ties():
+def test_order_pubs_for_stop_deduplicates_and_breaks_quality_ties():
     """Unordered duplicate results would produce unstable venue suggestions."""
     pubs = [
         {**PUB, "place_id": "far", "lat": 50.09, "lon": 14.43, "rating": 5.0},
@@ -242,11 +242,28 @@ def test_order_pubs_for_stop_deduplicates_and_breaks_distance_ties():
     ordered = places.order_pubs_for_stop(pubs, 50.08, 14.43)
 
     assert [pub["place_id"] for pub in ordered] == [
+        "far",
         "tie-high-rating",
         "tie-high-count",
         "tie-low",
         "tie-alpha",
         "tie-zulu",
-        "far",
     ]
     assert all(isinstance(pub["distance_m"], float) for pub in ordered)
+
+
+def test_order_pubs_for_stop_prefers_confident_quality_over_tiny_sample():
+    pubs = [
+        {**PUB, "place_id": "perfect-three", "rating": 5.0, "rating_count": 3},
+        {**PUB, "place_id": "trusted", "rating": 4.8, "rating_count": 100},
+    ]
+
+    ordered = places.order_pubs_for_stop(pubs, 50.08, 14.43)
+
+    assert [pub["place_id"] for pub in ordered] == ["trusted", "perfect-three"]
+    assert ordered[0]["quality_score"] > ordered[1]["quality_score"]
+
+
+def test_venue_quality_score_returns_none_for_missing_evidence():
+    assert places.venue_quality_score(None, 10) is None
+    assert places.venue_quality_score(4.5, None) is None

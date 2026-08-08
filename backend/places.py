@@ -21,6 +21,8 @@ PRICE_LEVEL_MAP = {
 # Google Places API day mapping: 0=Sunday, 1=Monday, ..., 6=Saturday
 # Python weekday(): 0=Monday, ..., 6=Sunday
 _PYTHON_TO_GOOGLE_DAY = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 0}
+QUALITY_PRIOR_RATING = 4.0
+QUALITY_PRIOR_WEIGHT = 25
 
 
 def parse_places_response(data: dict) -> list[dict]:
@@ -113,6 +115,15 @@ def _distance_meters(lat: float, lon: float, pub_lat: float, pub_lon: float) -> 
     return 2 * earth_radius_m * math.asin(math.sqrt(haversine))
 
 
+def venue_quality_score(rating: float | None, rating_count: int | None) -> float | None:
+    """Return a confidence-adjusted venue quality score."""
+    if rating is None or rating_count is None or rating_count < 0:
+        return None
+    return (
+        rating_count * rating + QUALITY_PRIOR_WEIGHT * QUALITY_PRIOR_RATING
+    ) / (rating_count + QUALITY_PRIOR_WEIGHT)
+
+
 def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
     """Deduplicate and deterministically order nearby pubs for one stop."""
     unique_pubs = {}
@@ -124,12 +135,17 @@ def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
         ordered_pub = {
             **pub,
             "distance_m": _distance_meters(lat, lon, pub["lat"], pub["lon"]),
+            "quality_score": venue_quality_score(
+                pub.get("rating"), pub.get("rating_count")
+            ),
         }
         pubs_with_distance.append(ordered_pub)
 
     return sorted(
         pubs_with_distance,
         key=lambda pub: (
+            pub["quality_score"] is None,
+            -(pub["quality_score"] or 0),
             pub["distance_m"],
             -(pub.get("rating") or 0),
             -(pub.get("rating_count") or 0),
