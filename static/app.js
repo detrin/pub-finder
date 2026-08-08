@@ -310,6 +310,22 @@ document.addEventListener("change", function (event) {
     var searchInput = dialog.querySelector(".stop-picker__search");
     var listEl = dialog.querySelector(".stop-picker__list");
     var activeInput = null;
+    var activeParticipantId = null;
+    var activeFieldName = null;
+
+    function resolveActiveInput() {
+        if (activeParticipantId && activeFieldName) {
+            var forms = document.querySelectorAll("form.stop-form");
+            for (var i = 0; i < forms.length; i++) {
+                var participantIdInput = forms[i].querySelector("[name=participant_id]");
+                if (participantIdInput && participantIdInput.value === activeParticipantId) {
+                    var input = forms[i].querySelector("[name=" + activeFieldName + "]");
+                    return input && !input.disabled ? input : null;
+                }
+            }
+        }
+        return activeInput && activeInput.isConnected ? activeInput : null;
+    }
 
     function renderList(query) {
         var matches = matchStops(query);
@@ -333,9 +349,10 @@ document.addEventListener("change", function (event) {
     }
 
     function selectStop(name) {
-        if (activeInput) {
-            activeInput.value = name;
-            activeInput.dispatchEvent(new Event("change", { bubbles: true }));
+        var input = resolveActiveInput();
+        if (input) {
+            input.value = name;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
         }
         dialog.close();
     }
@@ -362,6 +379,8 @@ document.addEventListener("change", function (event) {
     dialog.addEventListener("close", function () {
         searchInput.value = "";
         activeInput = null;
+        activeParticipantId = null;
+        activeFieldName = null;
         document.body.style.overflow = "";
     });
 
@@ -371,6 +390,10 @@ document.addEventListener("change", function (event) {
         if (!input || input.disabled) return;
         e.preventDefault();
         activeInput = input;
+        var form = input.closest("form");
+        var participantIdInput = form && form.querySelector("[name=participant_id]");
+        activeParticipantId = participantIdInput ? participantIdInput.value : null;
+        activeFieldName = input.name || null;
         searchInput.value = "";
         renderList("");
         dialog.showModal();

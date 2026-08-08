@@ -71,6 +71,141 @@ test("disabling return includes the existing destination in the autosave request
     assert.deepEqual(requestData, { end_stop: "Florenc" });
 });
 
+test("stop selection targets the replacement participant form after an HTMX swap", () => {
+    const documentEvents = new Map();
+    const dialogEvents = new Map();
+    let currentForms = [];
+    let replacementChanges = 0;
+
+    const searchInput = {
+        addEventListener() {},
+        focus() {},
+        value: "",
+    };
+    const stopList = {
+        children: [],
+        set innerHTML(value) {
+            this.children = [];
+        },
+        appendChild(child) {
+            this.children.push(child);
+        },
+        querySelector(selector) {
+            return selector === ".stop-picker__item" ? this.children[0] ?? null : null;
+        },
+    };
+    const dialog = {
+        addEventListener(name, handler) {
+            dialogEvents.set(name, handler);
+        },
+        close() {
+            dialogEvents.get("close")?.();
+        },
+        querySelector(selector) {
+            return {
+                ".stop-picker__search": searchInput,
+                ".stop-picker__list": stopList,
+            }[selector] ?? null;
+        },
+        showModal() {},
+    };
+
+    function participantForm(input) {
+        const participantId = { value: "participant-1" };
+        return {
+            querySelector(selector) {
+                if (selector === "[name=participant_id]") return participantId;
+                if (selector === "[name=start_stop]") return input;
+                return null;
+            },
+        };
+    }
+
+    const originalInput = {
+        disabled: false,
+        isConnected: true,
+        name: "start_stop",
+        value: "",
+        closest(selector) {
+            if (selector === "[data-stop-input]") return this;
+            if (selector === "form") return originalForm;
+            return null;
+        },
+        dispatchEvent() {
+            throw new Error("selection was dispatched to the detached input");
+        },
+    };
+    const originalForm = participantForm(originalInput);
+    const replacementInput = {
+        disabled: false,
+        isConnected: true,
+        name: "start_stop",
+        value: "",
+        dispatchEvent(event) {
+            assert.equal(event.type, "change");
+            assert.equal(event.bubbles, true);
+            replacementChanges += 1;
+        },
+    };
+    const replacementForm = participantForm(replacementInput);
+    currentForms = [originalForm];
+
+    const document = {
+        activeElement: null,
+        body: { addEventListener() {}, style: {} },
+        documentElement: { style: {}, setAttribute() {} },
+        addEventListener(name, handler) {
+            const handlers = documentEvents.get(name) ?? [];
+            handlers.push(handler);
+            documentEvents.set(name, handlers);
+        },
+        createElement() {
+            return {
+                addEventListener(name, handler) {
+                    this[name] = handler;
+                },
+            };
+        },
+        getElementById(id) {
+            return {
+                "all-stops-data": { dataset: { stops: '["Muzeum"]' } },
+                "stop-picker-dialog": dialog,
+            }[id] ?? null;
+        },
+        querySelector() {
+            return null;
+        },
+        querySelectorAll(selector) {
+            return selector === "form.stop-form" ? currentForms : [];
+        },
+    };
+    const context = vm.createContext({
+        Event,
+        URL,
+        document,
+        localStorage: { getItem() { return null; }, setItem() {} },
+        navigator: { clipboard: { writeText: async () => {} } },
+        setTimeout,
+        window: {
+            location: { origin: "https://pub-finder.example" },
+            matchMedia() { return { matches: false }; },
+        },
+    });
+    vm.runInContext(appSource, context);
+
+    for (const onClick of documentEvents.get("click") ?? []) {
+        onClick({ preventDefault() {}, target: originalInput });
+    }
+
+    originalInput.isConnected = false;
+    currentForms = [replacementForm];
+    stopList.children[0].click();
+
+    assert.equal(originalInput.value, "");
+    assert.equal(replacementInput.value, "Muzeum");
+    assert.equal(replacementChanges, 1);
+});
+
 test("SSE results initialize a replaced map even when the data is unchanged", () => {
     const documentEvents = new Map();
     let mapElement = element();
