@@ -72,8 +72,9 @@ CREATE TABLE IF NOT EXISTS pub_cache_queries (
   cached_at TEXT NOT NULL, PRIMARY KEY (stop_name, place_type, radius)
 );
 CREATE TABLE IF NOT EXISTS pub_cache_matches (
-  stop_name TEXT NOT NULL, place_type TEXT NOT NULL, place_id TEXT NOT NULL,
-  PRIMARY KEY (stop_name, place_type, place_id)
+  stop_name TEXT NOT NULL, place_type TEXT NOT NULL, radius INTEGER NOT NULL,
+  place_id TEXT NOT NULL,
+  PRIMARY KEY (stop_name, place_type, radius, place_id)
 );
 ```
 
@@ -89,6 +90,15 @@ async def test_refresh_replaces_only_refreshed_type_matches(db):
     await cache_pubs_for_type(db, "Muzeum", "pub", 500, [PUB_C])
     assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) == [PUB_C]
     assert await get_cached_pubs_for_type(db, "Muzeum", "cafe", 500) == [PUB_B]
+```
+
+```python
+@pytest.mark.asyncio
+async def test_cache_matches_are_isolated_by_radius(db):
+    await cache_pubs_for_type(db, "Muzeum", "pub", 500, [PUB_A])
+    await cache_pubs_for_type(db, "Muzeum", "pub", 1000, [PUB_B])
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) == [PUB_A]
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 1000) == [PUB_B]
 ```
 
 Run: `uv run pytest tests/test_places.py -q`
@@ -256,9 +266,8 @@ Request a read-only review before branch integration.
 
 ## Plan Self-Review
 
-- Task 1 covers fresh, empty, and type-scoped cache states.
+- Task 1 covers fresh, empty, type-scoped, and radius-scoped cache states.
 - Task 2 covers Google request shape and stable ordering.
 - Task 3 covers top-five scope, four-call concurrency, and local failures.
 - Task 4 covers truthful UI copy, documentation, and project-wide verification.
 - The interfaces are consistent: cache miss is always `None`; valid empty is always `[]`; route rendering consumes `pub_search_stop_names`.
-

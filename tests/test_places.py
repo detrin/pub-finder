@@ -3,7 +3,29 @@ import pytest
 import pytest_asyncio
 
 from backend.db import init_db
-from backend.places import cache_pubs, get_cached_pubs, parse_places_response
+from backend.places import (
+    cache_pubs,
+    cache_pubs_for_type,
+    get_cached_pubs,
+    get_cached_pubs_for_type,
+    parse_places_response,
+)
+
+PUB = {
+    "place_id": "ChIJ_test1",
+    "name": "U Fleku",
+    "lat": 50.0789,
+    "lon": 14.4186,
+    "rating": 4.3,
+    "rating_count": 5421,
+    "price_level": 2,
+    "google_maps_url": "https://maps.google.com/?cid=123",
+    "opening_hours": None,
+    "primary_type": "",
+}
+PUB_A = {**PUB, "place_id": "ChIJ_test_a", "name": "Pub A"}
+PUB_B = {**PUB, "place_id": "ChIJ_test_b", "name": "Pub B"}
+PUB_C = {**PUB, "place_id": "ChIJ_test_c", "name": "Pub C"}
 
 MOCK_PLACES_RESPONSE = {
     "places": [
@@ -65,6 +87,35 @@ async def test_cache_and_retrieve_pubs(db):
     cached = await get_cached_pubs(db, "Národní třída")
     assert len(cached) == 1
     assert cached[0]["name"] == "U Fleku"
+
+
+@pytest.mark.asyncio
+async def test_cached_empty_query_is_not_a_miss(db):
+    await cache_pubs_for_type(db, "Muzeum", "pub", 500, [])
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) == []
+
+
+@pytest.mark.asyncio
+async def test_cache_is_scoped_to_requested_type(db):
+    await cache_pubs_for_type(db, "Muzeum", "cafe", 500, [PUB])
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_replaces_only_refreshed_type_matches(db):
+    await cache_pubs_for_type(db, "Muzeum", "pub", 500, [PUB_A])
+    await cache_pubs_for_type(db, "Muzeum", "cafe", 500, [PUB_B])
+    await cache_pubs_for_type(db, "Muzeum", "pub", 500, [PUB_C])
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) == [PUB_C]
+    assert await get_cached_pubs_for_type(db, "Muzeum", "cafe", 500) == [PUB_B]
+
+
+@pytest.mark.asyncio
+async def test_cache_matches_are_isolated_by_radius(db):
+    await cache_pubs_for_type(db, "Muzeum", "pub", 500, [PUB_A])
+    await cache_pubs_for_type(db, "Muzeum", "pub", 1000, [PUB_B])
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 500) == [PUB_A]
+    assert await get_cached_pubs_for_type(db, "Muzeum", "pub", 1000) == [PUB_B]
 
 
 def test_parse_empty_response():

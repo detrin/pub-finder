@@ -43,9 +43,9 @@ Keep `pub_cache` as the place payload table. Add two tables:
 - `pub_cache_queries(stop_name, place_type, radius, cached_at)`: one row means
   the precise query completed successfully. Its presence also represents a
   successful empty result.
-- `pub_cache_matches(stop_name, place_type, place_id)`: maps the completed query
-  to every returned place. A place may appear under several types without
-  duplicating its cached payload.
+- `pub_cache_matches(stop_name, place_type, radius, place_id)`: maps each
+  completed query to every returned place. A place may appear under several
+  types and radii without duplicating its cached payload.
 
 Both tables use composite primary keys and indexes that support cache lookup by
 stop, type, and radius. A cache read is valid only when the query row is within
@@ -84,7 +84,8 @@ its query timestamp atomically with the payload upserts.
 - A response with 20 cafes cannot suppress a subsequent pub query for the same
   stop.
 - A completed empty query is cached and does not refetch.
-- Refreshing a type replaces only that type's match rows.
+- Refreshing a query replaces only that query's match rows; same-type queries
+  with different radii retain independent payloads.
 - One failed type does not prevent remaining types or stops from returning.
 - Only the top five result rows receive pub suggestions; the rendered UI labels
   this behavior accurately.

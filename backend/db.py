@@ -45,6 +45,22 @@ async def init_db(db: aiosqlite.Connection):
             UNIQUE(stop_name, place_id)
         );
 
+        CREATE TABLE IF NOT EXISTS pub_cache_queries (
+            stop_name TEXT NOT NULL,
+            place_type TEXT NOT NULL,
+            radius INTEGER NOT NULL,
+            cached_at TEXT NOT NULL,
+            PRIMARY KEY (stop_name, place_type, radius)
+        );
+
+        CREATE TABLE IF NOT EXISTS pub_cache_matches (
+            stop_name TEXT NOT NULL,
+            place_type TEXT NOT NULL,
+            radius INTEGER NOT NULL,
+            place_id TEXT NOT NULL,
+            PRIMARY KEY (stop_name, place_type, radius, place_id)
+        );
+
         CREATE TABLE IF NOT EXISTS search_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_code TEXT NOT NULL REFERENCES sessions(code),
@@ -55,6 +71,8 @@ async def init_db(db: aiosqlite.Connection):
 
         CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_code);
         CREATE INDEX IF NOT EXISTS idx_pub_cache_stop ON pub_cache(stop_name, cached_at);
+        CREATE INDEX IF NOT EXISTS idx_pub_cache_queries_fresh
+            ON pub_cache_queries(stop_name, place_type, radius, cached_at);
         CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at);
     """)
 
