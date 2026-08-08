@@ -5,6 +5,7 @@
 </article>
 {% elif results is not none %}
 {% set snapshot = participant_snapshot | default([], true) %}
+{% set direction = search_direction | default("round-trip", true) %}
 {% set ns = namespace(participants=[]) %}
 {% for col in results.columns %}
     {% if col.startswith("To (") %}
@@ -32,13 +33,12 @@
                 <span class="method-label">Minimize longest journey</span>
             </div>
 
-            <div class="participant-tabs" data-participant-tabs role="tablist"
+            <div class="participant-tabs" data-participant-tabs role="group"
                  aria-label="Reachability view">
-                <button type="button" role="tab" data-participant-id=""
-                        aria-selected="true">Everyone</button>
+                <button type="button" data-participant-id="" aria-pressed="true">Everyone</button>
                 {% for participant in snapshot %}
-                <button type="button" role="tab" data-participant-id="{{ participant.id }}"
-                        aria-selected="false"
+                <button type="button" data-participant-id="{{ participant.id }}"
+                        aria-pressed="false"
                         style="--participant-color: {{ participant.color | e }}">
                     {{ participant.name }}
                 </button>
@@ -96,7 +96,13 @@
                     {% for participant in ns.participants %}
                     <span class="participant-time-chip">
                         <strong>{{ participant }}</strong>
-                        {{ row["Round trip (" ~ participant ~ ")"] }} min
+                        {% if direction == "there-only" %}
+                        <small>to</small> {{ row["To (" ~ participant ~ ")"] }} min
+                        {% elif direction == "back-only" %}
+                        <small>from</small> {{ row["From (" ~ participant ~ ")"] }} min
+                        {% else %}
+                        <small>round trip</small> {{ row["Round trip (" ~ participant ~ ")"] }} min
+                        {% endif %}
                     </span>
                     {% endfor %}
                 </div>
@@ -109,9 +115,15 @@
                         <section class="travel-person">
                             <h3>{{ participant }}</h3>
                             <div class="travel-times">
+                                {% if direction != "back-only" %}
                                 <span class="travel-chip"><small>to</small> {{ row["To (" ~ participant ~ ")"] }} min</span>
+                                {% endif %}
+                                {% if direction != "there-only" %}
                                 <span class="travel-chip"><small>from</small> {{ row["From (" ~ participant ~ ")"] }} min</span>
+                                {% endif %}
+                                {% if direction == "round-trip" %}
                                 <span class="travel-chip travel-chip--total"><small>round trip</small> {{ row["Round trip (" ~ participant ~ ")"] }} min</span>
+                                {% endif %}
                             </div>
                         </section>
                         {% endfor %}

@@ -85,7 +85,7 @@ function bindReachabilityControls(root) {
                 ? null
                 : (/^-?\d+$/.test(rawId) ? Number(rawId) : rawId);
             root.querySelectorAll("[data-participant-id]").forEach((candidate) => {
-                candidate.setAttribute("aria-selected", String(candidate === button));
+                candidate.setAttribute("aria-pressed", String(candidate === button));
             });
             controller?.setParticipant(participantId);
         });
@@ -100,6 +100,23 @@ function bindReachabilityControls(root) {
         if (output) output.textContent = `${minutes} min`;
         controller?.setThreshold(minutes);
     });
+}
+
+function selectedParticipant(root) {
+    const selected = [...root.querySelectorAll("[data-participant-id]")]
+        .find((button) => button.getAttribute("aria-pressed") === "true");
+    const rawId = selected?.dataset.participantId ?? "";
+    return rawId === "" ? null : (/^-?\d+$/.test(rawId) ? Number(rawId) : rawId);
+}
+
+function synchronizeController(root) {
+    if (!controller || activeRoot !== root) return;
+    const data = readMapData(root);
+    const threshold = Number(root.querySelector("[data-threshold]")?.value);
+    controller.setResults(rankedStops(root));
+    controller.setVenues(data.venues);
+    controller.setParticipant(selectedParticipant(root));
+    if (Number.isFinite(threshold)) controller.setThreshold(threshold);
 }
 
 function showReachabilityError(root) {
@@ -178,6 +195,7 @@ export async function initResultsUi(target = document) {
             return;
         }
         controller = createdController;
+        synchronizeController(root);
     } catch (_) {
         if (ownInitialization === initialization && activeRoot === root) {
             showReachabilityError(root);

@@ -1461,7 +1461,7 @@ input[data-stop-input]:not(:disabled) {
     box-shadow: none;
 }
 
-.participant-tabs button[aria-selected="true"] {
+.participant-tabs button[aria-pressed="true"] {
     background: var(--participant-color, var(--yellow));
     color: #17191C;
     box-shadow: 2px 2px 0 var(--ink);
@@ -1484,7 +1484,7 @@ input[data-stop-input]:not(:disabled) {
 }
 
 .threshold-control input {
-    min-height: 28px;
+    min-height: 44px;
     padding: 0;
     border: 0;
     accent-color: var(--lilac);

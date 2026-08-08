@@ -545,6 +545,7 @@ async def _run_search(
             pubs_json=json.dumps(pubs_flat),
             participant_snapshot=participant_snapshot,
             participant_snapshot_json=json.dumps(participant_snapshot),
+            search_direction=direction,
             warning=warning,
         )
 
@@ -870,6 +871,7 @@ async def results_page(request: Request, code: str):
             "pubs_json": json.dumps(data["pubs_flat"]),
             "participant_snapshot": data.get("participant_snapshot", []),
             "participant_snapshot_json": json.dumps(data.get("participant_snapshot", [])),
+            "search_direction": data.get("search_direction", "round-trip"),
             "warning": data.get("warning"),
             "created_at": saved["created_at"],
         },

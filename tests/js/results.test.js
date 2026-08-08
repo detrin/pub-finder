@@ -87,8 +87,8 @@ function makeRoot(name = "B") {
     secondDetail.hidden = true;
     const everyone = new FakeElement({ participantId: "" });
     const daniel = new FakeElement({ participantId: "7" });
-    everyone.setAttribute("aria-selected", "true");
-    daniel.setAttribute("aria-selected", "false");
+    everyone.setAttribute("aria-pressed", "true");
+    daniel.setAttribute("aria-pressed", "false");
     everyone.parent = root;
     daniel.parent = root;
     const threshold = new FakeElement();
@@ -197,8 +197,9 @@ test("new result initialization aborts and destroys a stale asynchronous control
 
     assert.equal(staleController.destroyed, 1);
     assert.equal(newestController.destroyed, 0);
+    const resultCallsBeforeStaleClick = newestController.resultCalls.length;
     firstRoot.secondButton.dispatch("click");
-    assert.equal(newestController.resultCalls.length, 0);
+    assert.equal(newestController.resultCalls.length, resultCallsBeforeStaleClick);
 });
 
 test("rank, participant, threshold, and mobile handlers use the assigned controller", async () => {
@@ -222,14 +223,41 @@ test("rank, participant, threshold, and mobile handlers use the assigned control
     assert.equal(assigned.resultCalls.at(-1)[1].selected, true);
 
     fixture.daniel.dispatch("click");
-    assert.deepEqual(assigned.participantCalls, [7]);
+    assert.equal(assigned.participantCalls.at(-1), 7);
+    assert.equal(fixture.daniel.getAttribute("aria-pressed"), "true");
     fixture.threshold.value = "50";
     fixture.threshold.dispatch("input");
-    assert.deepEqual(assigned.thresholdCalls, [50]);
+    assert.equal(assigned.thresholdCalls.at(-1), 50);
     assert.equal(fixture.output.textContent, "50 min");
     fixture.listView.dispatch("click");
     assert.equal(fixture.root.dataset.mobileView, "list");
     assert.equal(fixture.listView.getAttribute("aria-pressed"), "true");
+});
+
+test("state changed while map creation is pending is synchronized after assignment", async () => {
+    const creation = deferred();
+    const { module } = await loadResultsModule(() => creation.promise);
+    const fixture = makeRoot();
+    const initialization = module.initResultsUi(fixture.root);
+
+    fixture.mapData.dataset.venues = JSON.stringify([
+        { name: "Late Cafe", lat: 50.15, lon: 14.15 },
+    ]);
+    fixture.secondButton.dispatch("click");
+    fixture.daniel.dispatch("click");
+    fixture.threshold.value = "55";
+    fixture.threshold.dispatch("input");
+
+    const assigned = fakeController();
+    creation.resolve(assigned);
+    await initialization;
+
+    assert.equal(assigned.resultCalls.at(-1)[1].selected, true);
+    assert.deepEqual(assigned.venueCalls.at(-1), [
+        { name: "Late Cafe", lat: 50.15, lon: 14.15 },
+    ]);
+    assert.equal(assigned.participantCalls.at(-1), 7);
+    assert.equal(assigned.thresholdCalls.at(-1), 55);
 });
 
 test("venue out-of-band data updates markers without rebuilding the map", async () => {

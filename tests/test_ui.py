@@ -188,6 +188,67 @@ async def test_results_rank_controls_expand_the_top_result_on_the_server():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("direction", "to_minutes", "from_minutes", "round_minutes", "shown_labels"),
+    [
+        ("there-only", 10, 999, 10, ("to",)),
+        ("back-only", 999, 11, 11, ("from",)),
+        ("round-trip", 10, 11, 21, ("to", "from", "round trip")),
+    ],
+)
+async def test_results_show_only_journey_legs_used_by_the_saved_direction(
+    direction, to_minutes, from_minutes, round_minutes, shown_labels
+):
+    fixture = saved_result_fixture()
+    fixture["search_direction"] = direction
+    fixture["rows"] = [fixture["rows"][0]]
+    fixture["stops_geo"] = [fixture["stops_geo"][0]]
+    fixture["rows"][0]["To (Daniel)"] = to_minutes
+    fixture["rows"][0]["From (Daniel)"] = from_minutes
+    fixture["rows"][0]["Round trip (Daniel)"] = round_minutes
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], fixture)
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert "999 min" not in response.text
+    assert ">15</strong>" in response.text
+    assert ">25</strong>" in response.text
+    for label in {"to", "from", "round trip"}:
+        marker = f"<small>{label}</small>"
+        assert (marker in response.text) is (label in shown_labels)
+
+
+@pytest.mark.asyncio
+async def test_participant_reachability_selector_is_a_pressed_button_group():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], saved_result_fixture())
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert 'data-participant-tabs role="group"' in response.text
+    assert 'data-participant-id="" aria-pressed="true"' in response.text
+    assert 'role="tablist"' not in response.text
+    assert 'role="tab"' not in response.text
+
+
+@pytest.mark.asyncio
+async def test_results_threshold_keeps_a_44px_pointer_target():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/static/app.css")
+
+    threshold_rule = response.text.split(".threshold-control input {", 1)[1].split("}", 1)[0]
+    assert "min-height: 44px;" in threshold_rule
+
+
+@pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
     unsafe_name = "O'Reilly \"Stop\" <script>alert(1)</script>"
