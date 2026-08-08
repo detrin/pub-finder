@@ -372,6 +372,10 @@ button.outline {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+
+    .reachability-field {
+        transition: none;
+    }
 }
 
 /* ============================================================
@@ -1309,9 +1313,32 @@ input[data-stop-input]:not(:disabled) {
 
 /* Map */
 #map {
+    position: relative;
     height: 500px;
     border-radius: 8px;
     overflow: hidden;
+}
+
+.reachability-field {
+    position: absolute;
+    z-index: 350;
+    pointer-events: none;
+    image-rendering: pixelated;
+    transition: opacity 120ms ease;
+}
+
+.participant-marker,
+.ranked-stop-marker,
+.venue-marker {
+    vector-effect: non-scaling-stroke;
+}
+
+[data-theme="dark"] #map .leaflet-tile-pane {
+    filter: brightness(0.72) contrast(1.12) saturate(0.72);
+}
+
+[data-theme="dark"] #map .leaflet-control-attribution {
+    color: #17191C;
 }
 
 .map-card {

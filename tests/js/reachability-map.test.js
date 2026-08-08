@@ -1,0 +1,303 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createReachabilityMap } from "../../static/reachability-map.js";
+
+function createHarness() {
+    const events = [];
+    const frameQueue = [];
+    const canvasOperations = [];
+    const createdGroups = [];
+    const mapListeners = new Map();
+    let mapRemoveCount = 0;
+    let cancelledFrames = 0;
+
+    const context = {
+        clearRect() {},
+        setTransform() {},
+        fillRect(x, y, width, height) {
+            canvasOperations.push({
+                type: "fillRect",
+                alpha: this.globalAlpha,
+                fillStyle: this.fillStyle,
+                x,
+                y,
+                width,
+                height,
+            });
+        },
+        beginPath() {},
+        arc() {},
+        fill() {
+            canvasOperations.push({ type: "dot", fillStyle: this.fillStyle });
+        },
+        globalAlpha: 1,
+        fillStyle: "",
+    };
+    const canvas = {
+        className: "",
+        height: 0,
+        parentNode: null,
+        style: {},
+        width: 0,
+        getContext() {
+            return context;
+        },
+        remove() {
+            this.parentNode = null;
+        },
+    };
+    const overlayPane = {
+        appendChild(element) {
+            element.parentNode = this;
+        },
+    };
+    const document = {
+        createElement(tagName) {
+            if (tagName === "canvas") return canvas;
+            return {
+                children: [],
+                append(...children) {
+                    this.children.push(...children);
+                },
+                appendChild(child) {
+                    this.children.push(child);
+                },
+                setAttribute() {},
+                textContent: "",
+            };
+        },
+        createTextNode(text) {
+            return { textContent: text };
+        },
+        defaultView: { CustomEvent },
+    };
+    const root = {
+        ownerDocument: document,
+        dispatchEvent(event) {
+            events.push(event);
+            return true;
+        },
+    };
+    const map = {
+        containerPointToLayerPoint(point) {
+            return point;
+        },
+        fitBounds() {},
+        getPanes() {
+            return { overlayPane };
+        },
+        getSize() {
+            return { x: 4, y: 1 };
+        },
+        latLngToContainerPoint([lat, lon]) {
+            return { x: lon, y: lat };
+        },
+        off(names, handler) {
+            assert.equal(mapListeners.get(names), handler);
+            mapListeners.delete(names);
+        },
+        on(names, handler) {
+            mapListeners.set(names, handler);
+        },
+        remove() {
+            mapRemoveCount += 1;
+        },
+        setView() {
+            return map;
+        },
+    };
+    const leaflet = {
+        DomUtil: {
+            setPosition(element, point) {
+                element.position = point;
+            },
+        },
+        circleMarker(latLng, options) {
+            return {
+                latLng,
+                options,
+                bindPopup(content) {
+                    this.popup = content;
+                    return this;
+                },
+                bindTooltip(content) {
+                    this.tooltip = content;
+                    return this;
+                },
+            };
+        },
+        latLngBounds(points) {
+            return points;
+        },
+        layerGroup() {
+            const group = {
+                layers: [],
+                addLayer(layer) {
+                    this.layers.push(layer);
+                    return this;
+                },
+                addTo() {
+                    return this;
+                },
+                clearLayers() {
+                    this.layers.length = 0;
+                },
+            };
+            createdGroups.push(group);
+            return group;
+        },
+        map() {
+            return map;
+        },
+        tileLayer() {
+            return { addTo() {} };
+        },
+    };
+
+    return {
+        canvas,
+        canvasOperations,
+        createdGroups,
+        events,
+        frameQueue,
+        leaflet,
+        map,
+        mapListeners,
+        root,
+        cancelAnimationFrame() {
+            cancelledFrames += 1;
+        },
+        get cancelledFrames() {
+            return cancelledFrames;
+        },
+        get mapRemoveCount() {
+            return mapRemoveCount;
+        },
+        requestAnimationFrame(callback) {
+            frameQueue.push(callback);
+            return frameQueue.length;
+        },
+        runFrame() {
+            const callback = frameQueue.shift();
+            assert.equal(typeof callback, "function");
+            callback();
+        },
+    };
+}
+
+const payload = {
+    participants: [{
+        id: 7,
+        name: "Daniel <script>",
+        color: "#ff6658",
+        start_stop: "Start",
+        end_stop: "Start",
+    }],
+    stops: [
+        { name: "Start", lat: 0.5, lon: 0.5, participant_minutes: [20], group_max_minutes: 20 },
+        { name: "B", lat: 0.5, lon: 1.5, participant_minutes: [50], group_max_minutes: 50 },
+        { name: "C", lat: 0.5, lon: 2.5, participant_minutes: [65], group_max_minutes: 65 },
+        { name: "D", lat: 0.5, lon: 3.5, participant_minutes: [80], group_max_minutes: 80 },
+    ],
+};
+
+test("controller owns separate marker and canvas layers and draws four travel-time bands", async () => {
+    const harness = createHarness();
+    const fetchCalls = [];
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/session/code/reachability",
+        fetch: async (url, options) => {
+            fetchCalls.push({ url, options });
+            return { ok: true, json: async () => payload };
+        },
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+        stops: [{ name: "Ranked", lat: 0.5, lon: 1.5, rank: 1 }],
+        venues: [{ name: "Cafe", lat: 0.5, lon: 2.5 }],
+        threshold: 35,
+    });
+
+    assert.equal(typeof controller.setParticipant, "function");
+    assert.equal(typeof controller.setThreshold, "function");
+    assert.equal(typeof controller.setResults, "function");
+    assert.equal(typeof controller.setVenues, "function");
+    assert.equal(typeof controller.destroy, "function");
+    assert.equal(harness.createdGroups.length, 4);
+    assert.equal(harness.createdGroups[3].layers.length, 1);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].url, "/session/code/reachability");
+    assert.deepEqual(fetchCalls[0].options.headers, { Accept: "application/json" });
+    assert.ok(fetchCalls[0].options.signal instanceof AbortSignal);
+
+    harness.runFrame();
+    const fieldPixels = harness.canvasOperations.filter((operation) => operation.type === "fillRect");
+    assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.52, 0.36, 0.22, 0.1]);
+    assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 4);
+
+    controller.setParticipant(7);
+    controller.setThreshold(50);
+    controller.setResults([{ name: "Next", lat: 0.5, lon: 3.5, rank: 2 }]);
+    controller.setVenues([{ name: "Venue", lat: 0.5, lon: 0.5 }]);
+    assert.equal(harness.createdGroups[1].layers.length, 1);
+    assert.equal(harness.createdGroups[2].layers.length, 1);
+});
+
+test("map movement coalesces redraws and destroy cleans up once", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => payload }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+    harness.runFrame();
+
+    const redraw = harness.mapListeners.get("move zoom resize");
+    redraw();
+    redraw();
+    assert.equal(harness.frameQueue.length, 1);
+
+    controller.destroy();
+    controller.destroy();
+    assert.equal(harness.mapListeners.size, 0);
+    assert.equal(harness.cancelledFrames, 1);
+    assert.equal(harness.mapRemoveCount, 1);
+    assert.equal(harness.canvas.parentNode, null);
+});
+
+test("reachability fetch errors emit a safe event and preserve ranked and venue markers", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: false, status: 503 }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+        stops: [{ name: "Ranked", lat: 0.5, lon: 1.5 }],
+        venues: [{ name: "Venue", lat: 0.5, lon: 2.5 }],
+    });
+
+    assert.equal(harness.events.length, 1);
+    assert.equal(harness.events[0].type, "reachability:error");
+    assert.equal(harness.events[0].detail.message, "Reachability request failed: 503");
+    assert.equal(harness.createdGroups[1].layers.length, 1);
+    assert.equal(harness.createdGroups[2].layers.length, 1);
+    assert.equal(typeof controller.destroy, "function");
+});
+
+test("malformed reachability JSON emits an error instead of rendering untrusted data", async () => {
+    const harness = createHarness();
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => ({ stops: "invalid" }) }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    assert.equal(harness.events.length, 1);
+    assert.equal(harness.events[0].detail.message, "Reachability response is invalid");
+});
