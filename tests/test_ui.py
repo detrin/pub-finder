@@ -7,6 +7,7 @@ import aiosqlite
 import httpx
 import pytest
 import pytest_asyncio
+from bs4 import BeautifulSoup
 from httpx import ASGITransport
 
 from backend.app import app
@@ -406,6 +407,24 @@ async def test_shell_routes_use_meet_somewhere_titles():
             response = await client.get(path)
             assert response.status_code == 200
             assert f"<title>{title}</title>" in response.text
+
+
+@pytest.mark.asyncio
+async def test_footer_does_not_link_to_the_private_repository():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    footer = soup.select_one(".site-footer")
+    navigation = soup.select_one(".site-nav")
+
+    assert footer is not None
+    assert navigation is not None
+    assert footer.find("a", href="https://www.hermandaniel.com") is not None
+    assert footer.find("a", href="https://github.com/detrin/pub-finder") is None
+    assert navigation.find("a", href="https://github.com/detrin/pub-finder") is not None
 
 
 @pytest.mark.asyncio

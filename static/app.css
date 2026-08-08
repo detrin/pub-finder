@@ -1498,10 +1498,6 @@ input[data-stop-input]:not(:disabled) {
     flex-shrink: 0;
 }
 
-#session-participants {
-    margin-bottom: 1.5rem;
-}
-
 /* Stop form compact row */
 .stop-form {
     margin: 0;
@@ -2539,6 +2535,15 @@ input[data-stop-input]:not(:disabled) {
     border-radius: var(--frame-radius);
     background: var(--surface);
     box-shadow: var(--frame-shadow);
+}
+
+#session-participants {
+    align-self: stretch;
+}
+
+#session-participants-inner,
+.participants-panel {
+    height: 100%;
 }
 
 .participants-panel {
