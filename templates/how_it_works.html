@@ -62,5 +62,5 @@
 <p>Each participant can set a different start and end stop. The optimization considers the full round trip: <code>travel(start &rarr; target) + travel(target &rarr; end)</code>.</p>
 
 <h2>Pub Discovery</h2>
-<p>For the top 5 meeting points, the app searches for nearby pubs using the Google Places API (within 500m radius) and shows ratings, review counts, and Google Maps links.</p>
+<p>For the top 5 transit-ranked meeting points, the app searches each selected venue type (pub, bar, cafe, and optionally restaurant) separately with the Google Places API within a 500m radius. This keeps discovery balanced across venue types while bounding API work; results show ratings, review counts, and Google Maps links.</p>
 {% endblock %}

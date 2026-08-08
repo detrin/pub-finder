@@ -311,9 +311,13 @@ async def _run_direct_search(monkeypatch, code, place_types):
             "lon": [14.00, 14.01, 14.02, 14.03, 14.04, 14.05],
         }
     )
-    monkeypatch.setattr(search_router, "get_optimal_stop_pairs", lambda *args, **kwargs: list("ABCDEF"))
     monkeypatch.setattr(
-        search_router, "get_actual_time_optimal_stop_pairs", lambda *args, **kwargs: _six_stop_results()
+        search_router, "get_optimal_stop_pairs", lambda *args, **kwargs: list("ABCDEF")
+    )
+    monkeypatch.setattr(
+        search_router,
+        "get_actual_time_optimal_stop_pairs",
+        lambda *args, **kwargs: _six_stop_results(),
     )
 
     await search_router._run_search(
@@ -375,9 +379,7 @@ async def test_duplicate_place_types_do_not_repeat_cache_or_live_queries(monkeyp
     monkeypatch.setattr(search_router, "cache_pubs_for_type", fake_cache)
     monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
 
-    await _run_direct_search(
-        monkeypatch, session["code"], ["pub", "bar", "pub", "cafe", "bar"]
-    )
+    await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "pub", "cafe", "bar"])
 
     expected_queries = {
         (stop_name, place_type)
@@ -385,7 +387,9 @@ async def test_duplicate_place_types_do_not_repeat_cache_or_live_queries(monkeyp
         for place_type in ["pub", "bar", "cafe"]
     }
     assert {(stop_name, place_type) for stop_name, place_type, _ in cache_reads} == expected_queries
-    assert {(stop_name, place_type) for stop_name, place_type, _ in cache_writes} == expected_queries
+    assert {
+        (stop_name, place_type) for stop_name, place_type, _ in cache_writes
+    } == expected_queries
     assert len(cache_reads) == len(expected_queries)
     assert len(cache_writes) == len(expected_queries)
     assert len(live_calls) == len(expected_queries)
@@ -422,12 +426,35 @@ async def test_one_type_failure_keeps_other_results(monkeypatch):
     registry = await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "cafe"])
 
     saved = await get_search_results(app.state.db, session["code"])
-    assert saved["data"]["warning"] == "Google Places API limit reached — pub data may be incomplete for some stops."
+    assert (
+        saved["data"]["warning"]
+        == "Google Places API limit reached — pub data may be incomplete for some stops."
+    )
     assert [pub["primary_type"] for pub in saved["data"]["pubs_by_stop"]["A"]] == ["pub", "pub"]
     assert len(calls) == 15
     assert await get_cached_pubs_for_type(app.state.db, "A", "bar") is None
     assert await get_cached_pubs_for_type(app.state.db, "A", "pub") is not None
     assert any(update.get("done") for _, update in registry.updates)
+
+
+@pytest.mark.asyncio
+async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
+    """Stops outside focused discovery explain why they have no venue status."""
+    session = await create_session(app.state.db, "Test", "P1")
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        return []
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "cafe"])
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    sixth_result = response.text.split("<h3>F</h3>", 1)[1].split("</article>", 1)[0]
+    assert "Pub suggestions are shown for the top 5 meeting points" in sixth_result
+    assert "No pubs found nearby" not in sixth_result
 
 
 @pytest.mark.asyncio

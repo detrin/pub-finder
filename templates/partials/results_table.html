@@ -81,6 +81,7 @@
         </div>
     </details>
 
+    {% if stop_name in pub_search_stop_names %}
     {% if pubs %}
     <div class="pubs-section">
         <h4 class="pubs-heading">Nearby Pubs
@@ -133,6 +134,11 @@
     {% else %}
     <div class="pubs-section">
         <p class="pubs-none"><em>No pubs found nearby</em></p>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="pubs-section">
+        <p class="pubs-none"><em>Pub suggestions are shown for the top 5 meeting points</em></p>
     </div>
     {% endif %}
 </article>

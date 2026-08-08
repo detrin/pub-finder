@@ -227,9 +227,7 @@ async def _run_search(
             if len(geo_row) == 0:
                 logger.warning("No coordinates available for stop %s", stop_name)
                 continue
-            searchable_stops.append(
-                (stop_name, float(geo_row["lat"][0]), float(geo_row["lon"][0]))
-            )
+            searchable_stops.append((stop_name, float(geo_row["lat"][0]), float(geo_row["lon"][0])))
         pub_search_stop_names = [stop_name for stop_name, _, _ in searchable_stops]
         pubs_by_stop_raw = {stop_name: [] for stop_name in pub_search_stop_names}
         places_api_error = False
@@ -264,9 +262,7 @@ async def _run_search(
             except Exception as exc:
                 return stop_name, place_type, [], exc
 
-        query_results = await asyncio.gather(
-            *(fetch_query(*query) for query in pending_queries)
-        )
+        query_results = await asyncio.gather(*(fetch_query(*query) for query in pending_queries))
         # Cache writes are intentionally sequential: aiosqlite shares one connection and
         # cache_pubs_for_type uses an explicit transaction for each completed query.
         for stop_name, place_type, pubs, error in query_results:
@@ -280,7 +276,9 @@ async def _run_search(
                     db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
                 )
             except Exception as exc:
-                logger.warning("Could not cache Places response for %s (%s): %s", stop_name, place_type, exc)
+                logger.warning(
+                    "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
+                )
 
         for current, _ in enumerate(pub_search_stop_names, start=1):
             registry.update(search_id, current=current)
@@ -372,7 +370,7 @@ async def _run_search(
             error=None,
             results=df_results,
             pubs_by_stop=pubs_by_stop,
-            pub_search_stop_names=pub_search_stop_names,
+            pub_search_stop_names=set(pub_search_stop_names),
             stops_json=json.dumps(stop_geo_data),
             pubs_json=json.dumps(pubs_flat),
             participants_json=json.dumps(participants_geo),
@@ -473,7 +471,7 @@ async def results_page(request: Request, code: str):
             "has_results": True,
             "results": df_results,
             "pubs_by_stop": data["pubs_by_stop"],
-            "pub_search_stop_names": data.get("pub_search_stop_names", []),
+            "pub_search_stop_names": set(data.get("pub_search_stop_names", [])),
             "stops_json": json.dumps(data["stops_geo"]),
             "pubs_json": json.dumps(data["pubs_flat"]),
             "participants_json": json.dumps(data["participants_geo"]),

@@ -13,14 +13,14 @@ We have 1,400+ transit stops in Prague. Given a set of `k` stops where friends a
 
 The naive approach uses geographic (Haversine) distance between stops. But public transit speeds vary by route, so we scraped ~2.1M stop-pair travel times from DPP to use actual transit minutes as the distance metric.
 
-The search works in stages: first, we select the top 10 stops by geographic distance and top 25 by pre-computed transit time. Then we scrape real-time travel times for the selected date/time and re-rank. The top 15 target stops are returned, each with nearby pubs discovered via the Google Places API (cached for 90 days).
+The search works in stages: first, we select the top 10 stops by geographic distance and top 25 by pre-computed transit time. Then we scrape real-time travel times for the selected date/time and re-rank. The top 15 target stops are returned. For the top five transit-ranked stops, type-balanced Google Places discovery checks the selected venue types (pub, bar, cafe, and optionally restaurant) within 500m; results are cached for 90 days.
 
 ## Features
 
 - **Session-based** -- create a session, share the code, friends join and pick their stops
 - **Real-time updates** -- participant list updates live via Server-Sent Events
 - **Interactive map** -- Leaflet.js map showing stops and recommended pubs
-- **Pub discovery** -- Google Places API integration with rating, price level, and walking directions
+- **Pub discovery** -- type-balanced Google Places API integration for the top five results, with ratings, price level, and walking directions
 - **Shareable results** -- permanent link to search results for each session
 - **Round-trip support** -- optionally set a different return stop
 
