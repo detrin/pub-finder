@@ -170,6 +170,18 @@ async def test_feedback_csp_allows_google_form_and_blocks_inline_handlers():
 
 
 @pytest.mark.asyncio
+async def test_invalid_session_redirect_renders_specific_home_message():
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", follow_redirects=True
+    ) as client:
+        response = await client.get("/session/not-valid/results")
+
+    assert "This invite link is not valid." in response.text
+    assert "Start a new plan" in response.text
+    assert 'data-system-message="error"' in response.text
+
+
+@pytest.mark.asyncio
 async def test_session_page_does_not_emit_inline_event_handlers():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

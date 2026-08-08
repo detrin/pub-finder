@@ -1,0 +1,11 @@
+{% set message_kind = kind if kind in ["empty", "warning", "error"] else "warning" %}
+<section class="system-message system-message--{{ message_kind }}"
+         data-system-message="{{ message_kind }}"
+         {% if hidden | default(false) %}hidden{% endif %}
+         {% if message_kind == "error" %}role="alert"{% else %}role="status"{% endif %}>
+    <h2>{{ title }}</h2>
+    <p>{{ body }}</p>
+    {% if action_href | default(false) and action_label | default(false) %}
+    <a class="system-message__action" href="{{ action_href }}">{{ action_label }}</a>
+    {% endif %}
+</section>

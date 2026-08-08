@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if error == "session_not_found" %}
+{% with kind="error", title="This invite link is not valid.",
+        body="Check the link with the person who created the plan.",
+        action_href="/", action_label="Start a new plan" %}
+    {% include "partials/system_message.html" %}
+{% endwith %}
+{% elif error == "rate_limited" %}
+{% with kind="warning", title="Too many requests.",
+        body="Wait one minute before trying again.",
+        action_href="/", action_label="Start a new plan" %}
+    {% include "partials/system_message.html" %}
+{% endwith %}
+{% endif %}
 <section class="home-hero">
     <div class="home-hero__copy">
         <span class="sticker">Made for Prague</span>

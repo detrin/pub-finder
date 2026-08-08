@@ -53,9 +53,12 @@
                 <span><i class="reach-legend__swatch reach-legend__swatch--short"></i>Shorter</span>
                 <span><i class="reach-legend__swatch reach-legend__swatch--long"></i>Longer</span>
             </div>
-            <p class="reach-error" data-reachability-error role="status" hidden>
-                Approximate transit layer unavailable. Ranked results remain available.
-            </p>
+            {% with kind="warning", title="Approximate transit layer unavailable.",
+                    body="Ranked results remain available.",
+                    action_href="/session/" ~ session_code ~ "/results", action_label="Reload results",
+                    hidden=true %}
+                {% include "partials/system_message.html" %}
+            {% endwith %}
         </section>
 
         {% if warning %}

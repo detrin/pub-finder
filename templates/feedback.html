@@ -3,19 +3,20 @@
 {% block title %}Feedback - Meet Somewhere{% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>Feedback</h1>
-    <p>Help us improve Pub Finder. Your input matters!</p>
-</div>
-
-<div class="row">
-    <div class="col-8 offset-2">
-        <article class="card" style="padding: 0; overflow: hidden;">
-            <iframe
-                src="https://docs.google.com/forms/d/e/1FAIpQLSfAjnlpuEmWlHQj9sGgSqjgKx0DFjj_jr3hOwMx5-laZrJG3w/viewform?embedded=true"
-                width="100%" height="700" frameborder="0" marginheight="0" marginwidth="0"
-                style="border: none;">Loading…</iframe>
-        </article>
+<section class="feedback-page">
+    <header class="feedback-page__header">
+        <p class="technical-page__eyebrow">Feedback</p>
+        <h1>Report what happened</h1>
+    </header>
+    <section class="feedback-intro">
+        <p>Include what you expected, what happened, your browser and device, and the session code if available.</p>
+        <p>The form is hosted by Google, so its contents keep Google’s own styling.</p>
+    </section>
+    <div class="external-form-frame">
+        <iframe
+            src="https://docs.google.com/forms/d/e/1FAIpQLSfAjnlpuEmWlHQj9sGgSqjgKx0DFjj_jr3hOwMx5-laZrJG3w/viewform?embedded=true"
+            width="100%" height="700" frameborder="0" marginheight="0" marginwidth="0"
+            style="border: none;">Loading…</iframe>
     </div>
-</div>
+</section>
 {% endblock %}

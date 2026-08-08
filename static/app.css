@@ -171,6 +171,180 @@ a:hover {
     margin: 0;
 }
 
+/* Technical, feedback, and reusable system pages */
+.technical-page__header,
+.feedback-page__header {
+    max-width: 48rem;
+    margin-bottom: 2rem;
+}
+
+.technical-page__eyebrow {
+    margin-bottom: 0.5rem;
+    color: var(--blue);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.technical-page {
+    display: grid;
+    grid-template-columns: minmax(10rem, 14rem) minmax(0, 48rem);
+    align-items: start;
+    gap: clamp(2rem, 6vw, 5rem);
+}
+
+.technical-page__toc {
+    position: sticky;
+    top: 1.5rem;
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem;
+    border: 2px solid var(--ink);
+    background: var(--sky);
+    box-shadow: var(--control-shadow);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.technical-page__toc p {
+    margin-bottom: 0.35rem;
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.technical-page__toc a {
+    text-decoration: none;
+}
+
+.technical-page__toc a:hover {
+    color: var(--coral);
+    text-decoration: underline;
+}
+
+.technical-page__content section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 2rem;
+}
+
+.technical-page__content li {
+    margin-bottom: 0.45rem;
+}
+
+.technical-page__equations {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.technical-page__equations > div,
+.feedback-intro,
+.external-form-frame,
+.system-message {
+    border: 2px solid var(--ink);
+    background: var(--surface);
+    box-shadow: var(--frame-shadow);
+}
+
+.technical-page__equations > div {
+    padding: 1rem;
+}
+
+.technical-page__equations h3 {
+    margin-bottom: 0.75rem;
+}
+
+.technical-page__equations code {
+    display: block;
+    overflow-x: auto;
+    color: var(--blue);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.technical-page__equations p {
+    margin: 0.85rem 0 0;
+}
+
+.technical-page__repository {
+    padding-top: 1rem;
+    border-top: 2px solid var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.feedback-page {
+    max-width: 48rem;
+}
+
+.feedback-intro {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--sky);
+}
+
+.feedback-intro p:last-child {
+    margin-bottom: 0;
+}
+
+.external-form-frame {
+    overflow: hidden;
+}
+
+.external-form-frame iframe {
+    display: block;
+}
+
+.system-message {
+    max-width: 42rem;
+    margin: 1.5rem auto;
+    padding: clamp(1rem, 4vw, 2rem);
+}
+
+.system-message--empty {
+    background: var(--sky);
+}
+
+.system-message--warning {
+    background: var(--yellow);
+}
+
+.system-message--error {
+    border-left-width: 6px;
+    border-left-color: var(--coral);
+}
+
+.system-message h2 {
+    margin-bottom: 0.65rem;
+}
+
+.system-message p {
+    max-width: 38rem;
+    margin-bottom: 1rem;
+}
+
+.system-message__action {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0.5rem 0.85rem;
+    border: 2px solid var(--ink);
+    background: var(--coral);
+    box-shadow: var(--control-shadow);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.system-message__action:hover {
+    color: var(--ink);
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0 var(--ink);
+}
+
 /* Legacy layout compatibility: remove in Task 10 after template migration. */
 main {
     padding-top: 2rem;
@@ -2627,6 +2801,24 @@ input[data-stop-input]:not(:disabled) {
 }
 
 @media (max-width: 760px) {
+    .technical-page {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .technical-page__toc {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .technical-page__toc p {
+        grid-column: 1 / -1;
+    }
+
+    .technical-page__equations {
+        grid-template-columns: 1fr;
+    }
+
     .home-hero {
         grid-template-columns: 1fr;
         gap: 1.5rem;

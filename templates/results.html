@@ -18,8 +18,10 @@
     {% include "partials/results_table.html" %}
 </div>
 {% else %}
-<article class="card" style="text-align: center; padding: 3rem 1rem;">
-    <p>No search results yet. Run a search from the <a href="/session/{{ session.code }}">session page</a>.</p>
-</article>
+{% with kind="empty", title="No saved results.",
+        body="Run a search from the plan to save a ranked result set.",
+        action_href="/session/" ~ session.code, action_label="Open plan" %}
+    {% include "partials/system_message.html" %}
+{% endwith %}
 {% endif %}
 {% endblock %}

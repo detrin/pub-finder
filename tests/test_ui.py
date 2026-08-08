@@ -291,6 +291,48 @@ async def test_shell_routes_use_meet_somewhere_titles():
 
 
 @pytest.mark.asyncio
+async def test_how_it_works_uses_verified_dataset_facts():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/how-it-works")
+
+    assert "1,444" in response.text
+    assert "2,083,035" in response.text
+    assert "precomputed typical times" in response.text
+    assert "live DPP" in response.text
+    assert "1,463" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_feedback_keeps_google_form_and_gives_factual_report_instructions():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/feedback")
+
+    assert (
+        "https://docs.google.com/forms/d/e/1FAIpQLSfAjnlpuEmWlHQj9sGgSqjgKx0DFjj_jr3hOwMx5-laZrJG3w/viewform?embedded=true"
+        in response.text
+    )
+    assert "what you expected, what happened, your browser and device, and the session code" in response.text
+
+
+@pytest.mark.asyncio
+async def test_results_without_saved_search_uses_empty_system_message():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert 'data-system-message="empty"' in response.text
+    assert "No saved results" in response.text
+    message = response.text.split('data-system-message="empty"', 1)[1].split("</section>", 1)[0]
+    assert message.count("Open plan") == 1
+
+
+@pytest.mark.asyncio
 async def test_mobile_compact_controls_have_44px_minimum_width():
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
