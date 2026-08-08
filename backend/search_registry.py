@@ -18,6 +18,7 @@ class SearchProgress:
     stage: str
     current: int
     total: int
+    place_type_labels: tuple[str, ...]
     done: bool
     result_html: str | None
     updated_at: float
@@ -45,12 +46,18 @@ class SearchRegistry:
     def task_count(self) -> int:
         return len(self._tasks)
 
-    def create(self, search_id: str, session_code: str) -> SearchProgress:
+    def create(
+        self,
+        search_id: str,
+        session_code: str,
+        place_type_labels: tuple[str, ...] = (),
+    ) -> SearchProgress:
         progress = SearchProgress(
             session_code=session_code,
             stage="starting",
             current=0,
             total=0,
+            place_type_labels=place_type_labels,
             done=False,
             result_html=None,
             updated_at=self._clock(),

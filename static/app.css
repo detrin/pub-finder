@@ -680,6 +680,10 @@ nav[data-topnav] strong {
     font-size: 0.85rem;
 }
 
+.progress-announcement {
+    margin: 0;
+}
+
 .progress-info {
     display: flex;
     align-items: center;

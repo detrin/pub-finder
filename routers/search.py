@@ -5,6 +5,7 @@ import secrets
 import time as _time
 from collections import defaultdict
 from datetime import datetime
+from html import escape
 
 import polars as pl
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -44,6 +45,12 @@ PUB_DISCOVERY_STOP_LIMIT = 5
 PLACES_CONCURRENCY_LIMIT = 4
 PLACES_SEARCH_RADIUS_METERS = 500
 _PROGRESS_STAGES = {"starting", "candidates", "scraping", "pubs"}
+_PLACE_TYPE_LABELS = {
+    "pub": "Drinks",
+    "bar": "Drinks",
+    "cafe": "Coffee",
+    "restaurant": "Food",
+}
 
 
 def _is_rate_limited(session_code: str) -> bool:
@@ -70,6 +77,23 @@ def _is_venue_expansion_rate_limited(session_code: str) -> bool:
         return True
     recent.append(now)
     return False
+
+
+def _selected_place_type_labels(place_types: list[str]) -> tuple[str, ...]:
+    labels = []
+    for place_type in place_types:
+        label = _PLACE_TYPE_LABELS.get(place_type)
+        if label and label not in labels:
+            labels.append(label)
+    return tuple(labels)
+
+
+def _format_place_type_labels(place_type_labels: tuple[str, ...]) -> str:
+    if len(place_type_labels) < 2:
+        return "".join(place_type_labels)
+    if len(place_type_labels) == 2:
+        return " and ".join(place_type_labels)
+    return f"{', '.join(place_type_labels[:-1])}, and {place_type_labels[-1]}"
 
 
 def _normalise_progress(
@@ -107,11 +131,25 @@ def _progress_percentage(stage: str, current: int, total: int) -> int:
     return 0
 
 
+def _progress_announcement(stage: str, place_type_labels: tuple[str, ...], total: int) -> str:
+    if stage == "candidates":
+        return "Select candidates from the transit matrix."
+    if stage == "scraping":
+        return "Query DPP journey times."
+    if stage == "pubs":
+        type_summary = _format_place_type_labels(place_type_labels)
+        if type_summary:
+            return f"Query nearby places for {type_summary} across {total} top stops."
+        return f"Query nearby places across {total} top stops."
+    return "Preparing search."
+
+
 def _render_progress_html(
     percentage: int,
     stage: str,
     current: int,
     total: int,
+    place_type_labels: tuple[str, ...] = (),
 ) -> str:
     percentage, stage, current, total = _normalise_progress(percentage, stage, current, total)
     return templates.get_template("partials/search_progress.html").render(
@@ -119,7 +157,29 @@ def _render_progress_html(
         stage=stage,
         current=current,
         total=total,
+        place_type_labels=_format_place_type_labels(place_type_labels),
     )
+
+
+def _render_progress_update_html(
+    percentage: int,
+    stage: str,
+    current: int,
+    total: int,
+    place_type_labels: tuple[str, ...],
+    announced_stage: str,
+) -> tuple[str, str]:
+    percentage, stage, current, total = _normalise_progress(percentage, stage, current, total)
+    progress_html = _render_progress_html(percentage, stage, current, total, place_type_labels)
+    if stage == announced_stage:
+        return progress_html, stage
+    announcement = escape(_progress_announcement(stage, place_type_labels, total))
+    announcement_html = (
+        '<p id="search-progress-announcement" class="progress-announcement visually-hidden" '
+        'aria-live="polite" hx-swap-oob="true">'
+        f"{announcement}</p>"
+    )
+    return f"{progress_html}\n{announcement_html}", stage
 
 
 router = APIRouter()
@@ -194,7 +254,8 @@ async def search(
     search_id = secrets.token_hex(8)
     registry = request.app.state.search_registry
     registry.prune()
-    registry.create(search_id, code)
+    selected_place_type_labels = _selected_place_type_labels(place_types)
+    registry.create(search_id, code, place_type_labels=selected_place_type_labels)
     registry.start(
         search_id,
         _run_search(
@@ -216,8 +277,9 @@ async def search(
 
     # Return a progress bar that connects to SSE
     return f"""<section class="search-progress-panel">
+<p id="search-progress-announcement" class="progress-announcement visually-hidden" aria-live="polite">Preparing search.</p>
 <div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" sse-close="complete" hx-swap="innerHTML">
-    {_render_progress_html(0, "starting", 0, 0)}
+    {_render_progress_html(0, "starting", 0, 0, selected_place_type_labels)}
 </div>
 <a class="search-progress-back" href="/session/{code}">Back to the plan</a>
 </section>"""
@@ -282,13 +344,6 @@ async def _run_search(
         top_stops = df_results["Target Stop"].to_list()
         pub_search_stop_names = top_stops[:PUB_DISCOVERY_STOP_LIMIT]
 
-        registry.update(
-            search_id,
-            stage="pubs",
-            current=0,
-            total=len(pub_search_stop_names),
-        )
-
         searchable_stops = []
         for stop_name in pub_search_stop_names:
             geo_row = stop_geo.filter(pl.col("name") == stop_name)
@@ -299,10 +354,17 @@ async def _run_search(
         pub_search_stop_names = [stop_name for stop_name, _, _ in searchable_stops]
         pubs_by_stop_raw = {stop_name: [] for stop_name in pub_search_stop_names}
         places_api_error = False
-        pending_queries = []
+        pending_queries_by_stop = {stop_name: [] for stop_name in pub_search_stop_names}
         # Form validation has already limited these values to supported types. Preserve
         # the submitted order while ensuring each stop/type coverage is checked once.
         unique_place_types = list(dict.fromkeys(place_types))
+
+        registry.update(
+            search_id,
+            stage="pubs",
+            current=0,
+            total=len(pub_search_stop_names),
+        )
 
         # Check coverage per stop and type before scheduling only cache misses. An empty
         # cached response is meaningful coverage, so distinguish it from a cache miss.
@@ -312,7 +374,7 @@ async def _run_search(
                     db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
                 )
                 if cached is None:
-                    pending_queries.append((stop_name, lat, lon, place_type))
+                    pending_queries_by_stop[stop_name].append((stop_name, lat, lon, place_type))
                 else:
                     pubs_by_stop_raw[stop_name].extend(cached)
 
@@ -330,26 +392,42 @@ async def _run_search(
             except Exception as exc:
                 return stop_name, place_type, [], exc
 
-        query_results = await asyncio.gather(*(fetch_query(*query) for query in pending_queries))
+        async def fetch_stop(stop_name, queries):
+            return stop_name, await asyncio.gather(*(fetch_query(*query) for query in queries))
+
+        pending_stop_tasks = [
+            asyncio.create_task(fetch_stop(stop_name, queries))
+            for stop_name, queries in pending_queries_by_stop.items()
+            if queries
+        ]
+        completed_stops = 0
+
+        # Fully cached stops are already checked. Report each before waiting for live work.
+        for stop_name in pub_search_stop_names:
+            if not pending_queries_by_stop[stop_name]:
+                completed_stops += 1
+                registry.update(search_id, current=completed_stops)
+
         # Cache writes are intentionally sequential: aiosqlite shares one connection and
         # cache_pubs_for_type uses an explicit transaction for each completed query.
-        for stop_name, place_type, pubs, error in query_results:
-            if error is not None:
-                logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
-                places_api_error = True
-                continue
-            pubs_by_stop_raw[stop_name].extend(pubs)
-            try:
-                await cache_pubs_for_type(
-                    db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
-                )
-
-        for current, _ in enumerate(pub_search_stop_names, start=1):
-            registry.update(search_id, current=current)
+        for completed_task in asyncio.as_completed(pending_stop_tasks):
+            _, query_results = await completed_task
+            for stop_name, place_type, pubs, error in query_results:
+                if error is not None:
+                    logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
+                    places_api_error = True
+                    continue
+                pubs_by_stop_raw[stop_name].extend(pubs)
+                try:
+                    await cache_pubs_for_type(
+                        db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
+                    )
+            completed_stops += 1
+            registry.update(search_id, current=completed_stops)
 
         # Filter by opening hours and deduplicate
         seen_place_ids: set[str] = set()
@@ -482,6 +560,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
     registry.prune()
 
     async def event_stream():
+        announced_stage = "starting"
         while True:
             if await request.is_disconnected():
                 break
@@ -504,7 +583,9 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
             )
             pct = _progress_percentage(stage, current, total)
 
-            progress_html = _render_progress_html(pct, stage, current, total)
+            progress_html, announced_stage = _render_progress_update_html(
+                pct, stage, current, total, progress.place_type_labels, announced_stage
+            )
             escaped_html = progress_html.replace("\n", "\ndata: ")
             yield f"event: progress\ndata: {escaped_html}\n\n"
             await asyncio.sleep(0.5)

@@ -45,6 +45,16 @@ def test_registry_rejects_progress_access_from_another_session():
     assert registry.get("search-1", "session-1") is not None
 
 
+def test_registry_keeps_selected_place_type_labels():
+    """SSE rendering can use the stable venue types chosen when a search started."""
+    registry = SearchRegistry()
+    registry.create("search-1", "session-1", place_type_labels=("Coffee", "Food"))
+
+    progress = registry.get("search-1", "session-1")
+    assert progress is not None
+    assert progress.place_type_labels == ("Coffee", "Food")
+
+
 def test_registry_prunes_only_expired_completed_results():
     clock = FakeClock(100.0)
     registry = SearchRegistry(result_ttl_seconds=30, clock=clock)

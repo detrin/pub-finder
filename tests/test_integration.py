@@ -302,6 +302,43 @@ def test_progress_rendering_clamps_invalid_progress_values():
     assert "Preparing search." in unknown
 
 
+def test_progress_event_announces_only_stage_transitions():
+    """Count changes replace only visual progress, while a stage change updates the live region."""
+    same_stage, announced_stage = search_router._render_progress_update_html(
+        42, "scraping", 14, 31, (), "scraping"
+    )
+    assert announced_stage == "scraping"
+    assert "aria-live" not in same_stage
+    assert "hx-swap-oob" not in same_stage
+
+    changed_stage, announced_stage = search_router._render_progress_update_html(
+        42, "scraping", 14, 31, (), "candidates"
+    )
+    assert announced_stage == "scraping"
+    assert 'aria-live="polite"' in changed_stage
+    assert 'hx-swap-oob="true"' in changed_stage
+    announcement = changed_stage.split('hx-swap-oob="true"', 1)[1]
+    assert "14" not in announcement
+    assert "31" not in announcement
+    assert "42" not in announcement
+
+
+def test_nearby_place_progress_names_selected_types_and_top_stops():
+    """Venue progress identifies both the selected categories and focused stop count."""
+    venues = search_router._render_progress_html(85, "pubs", 2, 5, ("Coffee", "Food"))
+    assert "Query nearby places for Coffee and Food across 5 top stops" in venues
+    assert "2 of 5 stops checked" in venues
+
+
+def test_progress_updates_keep_selected_types_after_the_initial_fragment():
+    """SSE count updates retain the venue labels chosen when the search started."""
+    venues, announced_stage = search_router._render_progress_update_html(
+        85, "pubs", 2, 5, ("Coffee", "Food"), "pubs"
+    )
+    assert announced_stage == "pubs"
+    assert "Query nearby places for Coffee and Food across 5 top stops" in venues
+
+
 class _DirectSearchRegistry:
     """Minimal registry for exercising _run_search without an HTTP background task."""
 
@@ -465,6 +502,87 @@ async def test_one_type_failure_keeps_other_results(monkeypatch):
     assert await get_cached_pubs_for_type(app.state.db, "A", "bar") is None
     assert await get_cached_pubs_for_type(app.state.db, "A", "pub") is not None
     assert any(update.get("done") for _, update in registry.updates)
+
+
+@pytest.mark.asyncio
+async def test_venue_progress_advances_when_each_stop_group_finishes(monkeypatch):
+    """Venue progress advances for a completed stop without waiting for slower top stops."""
+    session = await create_session(app.state.db, "Test", "P1")
+    registry = _DirectSearchRegistry()
+    app.state.search_registry = registry
+    app.state.stop_geo = pl.DataFrame(
+        {
+            "name": ["A", "B", "C", "D", "E", "F"],
+            "lat": [50.00, 50.01, 50.02, 50.03, 50.04, 50.05],
+            "lon": [14.00, 14.01, 14.02, 14.03, 14.04, 14.05],
+        }
+    )
+    monkeypatch.setattr(
+        search_router, "get_optimal_stop_pairs", lambda *args, **kwargs: list("ABCDEF")
+    )
+    monkeypatch.setattr(
+        search_router,
+        "get_actual_time_optimal_stop_pairs",
+        lambda *args, **kwargs: _six_stop_results(),
+    )
+    first_stop_release = asyncio.Event()
+    later_stops_release = asyncio.Event()
+    requests_started = asyncio.Event()
+    request_count = 0
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        nonlocal request_count
+        request_count += 1
+        if request_count >= 4:
+            requests_started.set()
+        if lat == 50.00:
+            await first_stop_release.wait()
+        else:
+            await later_stops_release.wait()
+        return []
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    task = asyncio.create_task(
+        search_router._run_search(
+            type("Request", (), {"app": app})(),
+            session["code"],
+            "direct-search",
+            "2026-08-10",
+            "20:00",
+            "2026-08-10",
+            "23:00",
+            "minimize-worst-case",
+            "round-trip",
+            [("A", "A"), ("B", "B")],
+            ["P1", "P2"],
+            [],
+            ["pub", "cafe"],
+        )
+    )
+    await asyncio.wait_for(requests_started.wait(), timeout=1)
+    assert any(update.get("stage") == "pubs" for _, update in registry.updates)
+
+    first_stop_release.set()
+    for _ in range(100):
+        if any(update.get("current") == 1 for _, update in registry.updates):
+            break
+        await asyncio.sleep(0.01)
+    else:
+        later_stops_release.set()
+        await task
+        pytest.fail("first completed stop did not update venue progress")
+
+    later_stops_release.set()
+    await task
+
+    venue_stage_index = next(
+        index for index, (_, update) in enumerate(registry.updates) if update.get("stage") == "pubs"
+    )
+    venue_updates = [
+        update["current"] for _, update in registry.updates[venue_stage_index:] if "current" in update
+    ]
+    assert venue_updates[0] == 0
+    assert venue_updates[-1] == 5
 
 
 @pytest.mark.asyncio
