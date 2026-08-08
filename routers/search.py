@@ -14,7 +14,13 @@ from starlette.responses import StreamingResponse
 
 from backend.db import get_participants, get_search_results, get_session, save_search_results
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
-from backend.places import cache_pubs, get_cached_pubs, is_open_during, search_pubs_near_stop
+from backend.places import (
+    cache_pubs_for_type,
+    get_cached_pubs_for_type,
+    is_open_during,
+    order_pubs_for_stop,
+    search_pubs_near_stop,
+)
 from backend.utils import get_total_minutes_with_retries, validate_date_time
 
 logger = logging.getLogger(__name__)
@@ -23,6 +29,9 @@ logger = logging.getLogger(__name__)
 _search_timestamps: dict[str, list[float]] = defaultdict(list)
 SEARCH_RATE_LIMIT = 3
 SEARCH_RATE_WINDOW = 60  # seconds
+PUB_DISCOVERY_STOP_LIMIT = 5
+PLACES_CONCURRENCY_LIMIT = 4
+PLACES_SEARCH_RADIUS_METERS = 500
 
 
 def _is_rate_limited(session_code: str) -> bool:
@@ -203,44 +212,86 @@ async def _run_search(
         db = request.app.state.db
         stop_geo = request.app.state.stop_geo
         top_stops = df_results["Target Stop"].to_list()
+        pub_search_stop_names = top_stops[:PUB_DISCOVERY_STOP_LIMIT]
 
         registry.update(
             search_id,
             stage="pubs",
             current=0,
-            total=len(top_stops),
+            total=len(pub_search_stop_names),
         )
 
-        pubs_by_stop_raw = {}
+        searchable_stops = []
+        for stop_name in pub_search_stop_names:
+            geo_row = stop_geo.filter(pl.col("name") == stop_name)
+            if len(geo_row) == 0:
+                logger.warning("No coordinates available for stop %s", stop_name)
+                continue
+            searchable_stops.append(
+                (stop_name, float(geo_row["lat"][0]), float(geo_row["lon"][0]))
+            )
+        pub_search_stop_names = [stop_name for stop_name, _, _ in searchable_stops]
+        pubs_by_stop_raw = {stop_name: [] for stop_name in pub_search_stop_names}
         places_api_error = False
-        for i, stop_name in enumerate(top_stops):
-            cached = await get_cached_pubs(db, stop_name, place_types=place_types)
-            if cached:
-                pubs_by_stop_raw[stop_name] = cached
-            elif places_api_error:
-                pubs_by_stop_raw[stop_name] = []
-            else:
-                geo_row = stop_geo.filter(pl.col("name") == stop_name)
-                if len(geo_row) == 0:
-                    continue
-                lat = geo_row["lat"][0]
-                lon = geo_row["lon"][0]
-                try:
-                    pubs = await search_pubs_near_stop(lat, lon, place_types=place_types)
-                    await cache_pubs(db, stop_name, pubs)
-                    pubs_by_stop_raw[stop_name] = pubs
-                except Exception as e:
-                    logger.warning("Places API error for %s: %s", stop_name, e)
-                    pubs_by_stop_raw[stop_name] = []
-                    places_api_error = True
-            registry.update(search_id, current=i + 1)
+        pending_queries = []
+
+        # Check coverage per stop and type before scheduling only cache misses. An empty
+        # cached response is meaningful coverage, so distinguish it from a cache miss.
+        for stop_name, lat, lon in searchable_stops:
+            for place_type in place_types:
+                cached = await get_cached_pubs_for_type(
+                    db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
+                )
+                if cached is None:
+                    pending_queries.append((stop_name, lat, lon, place_type))
+                else:
+                    pubs_by_stop_raw[stop_name].extend(cached)
+
+        # The semaphore is deliberately scoped to this search invocation. It limits live
+        # Google requests without serialising cache reads or response processing.
+        places_semaphore = asyncio.Semaphore(PLACES_CONCURRENCY_LIMIT)
+
+        async def fetch_query(stop_name, lat, lon, place_type):
+            try:
+                async with places_semaphore:
+                    pubs = await search_pubs_near_stop(
+                        lat, lon, place_type, radius=PLACES_SEARCH_RADIUS_METERS
+                    )
+                return stop_name, place_type, pubs, None
+            except Exception as exc:
+                return stop_name, place_type, [], exc
+
+        query_results = await asyncio.gather(
+            *(fetch_query(*query) for query in pending_queries)
+        )
+        # Cache writes are intentionally sequential: aiosqlite shares one connection and
+        # cache_pubs_for_type uses an explicit transaction for each completed query.
+        for stop_name, place_type, pubs, error in query_results:
+            if error is not None:
+                logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
+                places_api_error = True
+                continue
+            pubs_by_stop_raw[stop_name].extend(pubs)
+            try:
+                await cache_pubs_for_type(
+                    db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
+                )
+            except Exception as exc:
+                logger.warning("Could not cache Places response for %s (%s): %s", stop_name, place_type, exc)
+
+        for current, _ in enumerate(pub_search_stop_names, start=1):
+            registry.update(search_id, current=current)
 
         # Filter by opening hours and deduplicate
         seen_place_ids: set[str] = set()
         pubs_by_stop = {}
-        for stop_name in top_stops:
+        for stop_name in pub_search_stop_names:
+            geo_row = stop_geo.filter(pl.col("name") == stop_name)
+            ordered_pubs = order_pubs_for_stop(
+                pubs_by_stop_raw[stop_name], float(geo_row["lat"][0]), float(geo_row["lon"][0])
+            )
             unique_pubs = []
-            for pub in pubs_by_stop_raw.get(stop_name, []):
+            for pub in ordered_pubs:
                 if pub["place_id"] in seen_place_ids:
                     continue
                 if not is_open_during(pub, departure_datetime, return_datetime):
@@ -305,6 +356,7 @@ async def _run_search(
                 "rows": results_rows,
                 "columns": results_columns,
                 "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
+                "pub_search_stop_names": pub_search_stop_names,
                 "stops_geo": stop_geo_data,
                 "pubs_flat": pubs_flat,
                 "participants_geo": participants_geo,
@@ -317,6 +369,7 @@ async def _run_search(
             error=None,
             results=df_results,
             pubs_by_stop=pubs_by_stop,
+            pub_search_stop_names=pub_search_stop_names,
             stops_json=json.dumps(stop_geo_data),
             pubs_json=json.dumps(pubs_flat),
             participants_json=json.dumps(participants_geo),
@@ -417,6 +470,7 @@ async def results_page(request: Request, code: str):
             "has_results": True,
             "results": df_results,
             "pubs_by_stop": data["pubs_by_stop"],
+            "pub_search_stop_names": data.get("pub_search_stop_names", []),
             "stops_json": json.dumps(data["stops_geo"]),
             "pubs_json": json.dumps(data["pubs_flat"]),
             "participants_json": json.dumps(data["participants_geo"]),

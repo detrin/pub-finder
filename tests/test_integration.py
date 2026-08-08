@@ -6,11 +6,13 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import aiosqlite
+import httpx
 import polars as pl
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+import routers.search as search_router
 from backend.app import app
 from backend.db import (
     add_participant_stops,
@@ -21,6 +23,7 @@ from backend.db import (
     join_session,
     save_search_results,
 )
+from backend.places import get_cached_pubs_for_type
 from backend.search_registry import SearchRegistry
 from routers.search import _search_timestamps
 
@@ -272,6 +275,119 @@ def _extract_search_id(html: str) -> str:
 
     match = re.search(r"search-progress/([a-f0-9]+)", html)
     return match.group(1) if match else ""
+
+
+class _DirectSearchRegistry:
+    """Minimal registry for exercising _run_search without an HTTP background task."""
+
+    def __init__(self):
+        self.updates = []
+
+    async def run_blocking(self, func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    def update(self, search_id, **kwargs):
+        self.updates.append((search_id, kwargs))
+
+
+def _six_stop_results():
+    return pl.DataFrame(
+        {
+            "Target Stop": ["A", "B", "C", "D", "E", "F"],
+            "Worst Case Minutes": [10, 11, 12, 13, 14, 15],
+            "Total Minutes": [20, 21, 22, 23, 24, 25],
+        }
+    )
+
+
+async def _run_direct_search(monkeypatch, code, place_types):
+    """Run a six-stop venue search with deterministic candidate and transit data."""
+    registry = _DirectSearchRegistry()
+    app.state.search_registry = registry
+    app.state.stop_geo = pl.DataFrame(
+        {
+            "name": ["A", "B", "C", "D", "E", "F"],
+            "lat": [50.00, 50.01, 50.02, 50.03, 50.04, 50.05],
+            "lon": [14.00, 14.01, 14.02, 14.03, 14.04, 14.05],
+        }
+    )
+    monkeypatch.setattr(search_router, "get_optimal_stop_pairs", lambda *args, **kwargs: list("ABCDEF"))
+    monkeypatch.setattr(
+        search_router, "get_actual_time_optimal_stop_pairs", lambda *args, **kwargs: _six_stop_results()
+    )
+
+    await search_router._run_search(
+        type("Request", (), {"app": app})(),
+        code,
+        "direct-search",
+        "2026-08-10",
+        "20:00",
+        "2026-08-10",
+        "23:00",
+        "minimize-worst-case",
+        "round-trip",
+        [("A", "A"), ("B", "B")],
+        ["P1", "P2"],
+        [],
+        place_types,
+    )
+    return registry
+
+
+@pytest.mark.asyncio
+async def test_search_queries_each_type_for_only_five_stops(monkeypatch):
+    """Venue discovery is fair across types while bounded to the best five stops."""
+    session = await create_session(app.state.db, "Test", "P1")
+    calls = []
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        calls.append((lat, lon, place_type))
+        return []
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "cafe"])
+
+    assert len(calls) == 15
+    assert {call[0] for call in calls} == {50.00, 50.01, 50.02, 50.03, 50.04}
+    assert {call[2] for call in calls} == {"pub", "bar", "cafe"}
+
+
+@pytest.mark.asyncio
+async def test_one_type_failure_keeps_other_results(monkeypatch):
+    """A failed type query neither cancels peers nor hides their venue results."""
+    session = await create_session(app.state.db, "Test", "P1")
+    pub = {
+        "place_id": "pub-id",
+        "name": "A Pub",
+        "lat": 50.0,
+        "lon": 14.0,
+        "rating": 4.5,
+        "rating_count": 42,
+        "price_level": None,
+        "google_maps_url": "https://example.com/pub",
+        "opening_hours": None,
+        "primary_type": "pub",
+    }
+    request = httpx.Request("POST", "https://places.googleapis.com/v1/places:searchNearby")
+    response = httpx.Response(429, request=request)
+    calls = []
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        calls.append((lat, place_type))
+        if place_type == "bar":
+            raise httpx.HTTPStatusError("limited", request=request, response=response)
+        return [{**pub, "place_id": f"{place_type}-{lat}"}]
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    registry = await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "cafe"])
+
+    saved = await get_search_results(app.state.db, session["code"])
+    assert saved["data"]["warning"] == "Google Places API limit reached — pub data may be incomplete for some stops."
+    assert [pub["primary_type"] for pub in saved["data"]["pubs_by_stop"]["A"]] == ["pub", "pub"]
+    assert len(calls) == 15
+    assert await get_cached_pubs_for_type(app.state.db, "A", "bar") is None
+    assert await get_cached_pubs_for_type(app.state.db, "A", "pub") is not None
+    assert any(update.get("done") for _, update in registry.updates)
 
 
 @pytest.mark.asyncio
