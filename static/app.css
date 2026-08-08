@@ -31,6 +31,8 @@
     --yellow: #FFD447;
     --mint: #4DC694;
     --lilac: #B9A8FF;
+    --reach-short: #4DC694;
+    --reach-long: #D83B55;
     --muted: #686D71;
     --surface: var(--paper);
     --accent-ink: #17191C;
@@ -1780,11 +1782,11 @@ input[data-stop-input]:not(:disabled) {
     width: 1.4rem;
     height: 0.5rem;
     border: 1px solid var(--ink);
-    background: color-mix(in srgb, var(--lilac) 35%, transparent);
+    background: color-mix(in srgb, var(--reach-long) 72%, transparent);
 }
 
 .reach-legend__swatch--short {
-    background: color-mix(in srgb, var(--lilac) 80%, transparent);
+    background: color-mix(in srgb, var(--reach-short) 72%, transparent);
 }
 
 .reach-error,

@@ -247,7 +247,13 @@ test("controller owns separate marker and canvas layers and draws four travel-ti
 
     harness.runFrame();
     const fieldPixels = harness.canvasOperations.filter((operation) => operation.type === "fillRect");
-    assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.52, 0.36, 0.22, 0.1]);
+    assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.fillStyle))], [
+        "#4dc694",
+        "#ffd447",
+        "#ff8a47",
+        "#d83b55",
+    ]);
+    assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.48]);
     assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 4);
 
     controller.setParticipant(7);

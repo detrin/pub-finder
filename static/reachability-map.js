@@ -5,7 +5,8 @@ const DEFAULT_ZOOM = 12;
 const DEFAULT_THRESHOLD = 35;
 const DEFAULT_STEP = 15;
 const MAX_RENDER_GRID_SIZE = 96;
-const BAND_OPACITIES = [0.52, 0.36, 0.22, 0.1];
+const BAND_COLORS = ["#4dc694", "#ffd447", "#ff8a47", "#d83b55"];
+const BAND_OPACITY = 0.48;
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function errorMessage(error) {
@@ -340,8 +341,6 @@ export class ReachabilityMapController {
         const maxX = Math.max(...observedPoints.map((point) => point.x));
         const minY = Math.min(...observedPoints.map((point) => point.y));
         const maxY = Math.max(...observedPoints.map((point) => point.y));
-        this.context.fillStyle = this.lilacColor();
-
         for (let y = 0; y < grid.height; y += 1) {
             for (let x = 0; x < grid.width; x += 1) {
                 const centerX = x + 0.5;
@@ -349,7 +348,8 @@ export class ReachabilityMapController {
                 if (centerX < minX || centerX > maxX || centerY < minY || centerY > maxY) continue;
                 const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
                 if (band == null) continue;
-                this.context.globalAlpha = BAND_OPACITIES[band];
+                this.context.fillStyle = BAND_COLORS[band];
+                this.context.globalAlpha = BAND_OPACITY;
                 const left = Math.floor(x * outputWidth / grid.width);
                 const top = Math.floor(y * outputHeight / grid.height);
                 const right = Math.ceil((x + 1) * outputWidth / grid.width);
@@ -373,14 +373,6 @@ export class ReachabilityMapController {
         }
         this.context.globalAlpha = 1;
         this.canvas.hidden = false;
-    }
-
-    lilacColor() {
-        const getStyle = this.document.defaultView?.getComputedStyle ?? globalThis.getComputedStyle;
-        const value = typeof getStyle === "function"
-            ? getStyle(this.root).getPropertyValue("--lilac").trim()
-            : "";
-        return value || "#b9a8ff";
     }
 
     inkColor() {
