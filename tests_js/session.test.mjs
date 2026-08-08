@@ -65,7 +65,7 @@ test("session UI exposes a stable participant colour and idempotent initializer"
     assert.equal(root.dataset.bound, "true");
 });
 
-test("readiness updates after an HTMX participant swap", async () => {
+test("readiness updates after an SSE participant swap", async () => {
     const start = eventTarget({ value: "", selector: "[data-participant-name]", dataset: { participantName: "Daniel" } });
     const end = eventTarget({ value: "", selector: "[name=end_stop]" });
     const same = eventTarget({ checked: false, selector: "[data-same-start-end]" });
@@ -88,7 +88,7 @@ test("readiness updates after an HTMX participant swap", async () => {
 
     start.value = "Anděl";
     end.value = "Florenc";
-    emit(document, "htmx:afterSwap", { target: root });
+    emit(document, "htmx:sseMessage", { elt: root });
 
     assert.equal(submit.disabled, false);
     assert.equal(status.textContent, "Everyone is ready.");
@@ -129,16 +129,23 @@ test("occasion presets update source checkboxes and resync after manual changes"
     });
     const document = createDocument(root);
     await loadSessionModule(document);
-    fire(root, "click", { target: drinks });
-    assert.deepEqual(inputs.filter((input) => input.checked).map((input) => input.value), ["pub", "bar"]);
-    assert.equal(drinks.attributes["aria-pressed"], "true");
+    for (const [button, expected] of [
+        [drinks, ["pub", "bar"]],
+        [coffee, ["cafe"]],
+        [food, ["restaurant"]],
+        [anything, ["pub", "bar", "cafe", "restaurant"]],
+    ]) {
+        fire(root, "click", { target: button });
+        assert.deepEqual(inputs.filter((input) => input.checked).map((input) => input.value), expected);
+        assert.equal(button.attributes["aria-pressed"], "true");
+    }
 
     inputs[1].checked = false;
     fire(root, "change", { target: { closest() { return null; }, matches(selector) { return selector === "input[name=place_types]"; } } });
     assert.equal(drinks.attributes["aria-pressed"], "false");
 });
 
-test("stop selection retargets the replacement field and restores focus after swap", async () => {
+test("stop selection resolves the latest replacement field once", async () => {
     let forms = [];
     const search = eventTarget({ value: "" });
     const list = eventTarget({
@@ -153,7 +160,11 @@ test("stop selection retargets the replacement field and restores focus after sw
     const original = eventTarget({ name: "start_stop", value: "", selector: "[data-stop-input]" });
     const replacement = eventTarget({ name: "start_stop", value: "", selector: "[name=start_stop]" });
     let changes = 0;
-    original.dispatchEvent = (event) => { assert.equal(event.type, "change"); changes += 1; };
+    replacement.dispatchEvent = (event) => {
+        assert.equal(event.type, "change");
+        assert.equal(event.bubbles, true);
+        changes += 1;
+    };
     function participantForm(input) {
         const id = eventTarget({ value: "1" });
         return {
@@ -175,14 +186,58 @@ test("stop selection retargets the replacement field and restores focus after sw
     await loadSessionModule(document);
 
     fire(root, "click", { target: original, preventDefault() {} });
-    fire(list.children[0], "click");
     original.isConnected = false;
-    replacement.value = "Muzeum";
     forms = [participantForm(replacement)];
-    emit(document, "htmx:afterSwap", { target: root });
+    fire(list.children[0], "click");
 
     assert.equal(replacement.value, "Muzeum");
     assert.equal(changes, 1);
+});
+
+test("stop focus intent survives an unrelated participant swap", async () => {
+    let forms = [];
+    const search = eventTarget({ value: "" });
+    const list = eventTarget({
+        replaceChildren(...children) { this.children = children; },
+        querySelectorAll(selector) { return selector === ".stop-picker__item" ? this.children ?? [] : []; },
+    });
+    const dialog = eventTarget({
+        querySelector(selector) { return { ".stop-picker__search": search, ".stop-picker__list": list, "[data-stop-picker-context]": eventTarget() }[selector] ?? null; },
+        showModal() {},
+        close() { fire(this, "close"); },
+    });
+    const original = eventTarget({ name: "start_stop", value: "", selector: "[data-stop-input]" });
+    const replacement = eventTarget({ name: "start_stop", value: "Muzeum", selector: "[name=start_stop]" });
+    original.dispatchEvent = () => {};
+    function participantForm(idValue, input) {
+        const id = eventTarget({ value: idValue });
+        return {
+            querySelector(selector) {
+                return { "[name=participant_id]": id, "[name=start_stop]": input }[selector] ?? null;
+            },
+        };
+    }
+    const originalForm = participantForm("1", original);
+    original.closest = (selector) => selector === "form" ? originalForm : (selector === "[data-stop-input]" ? original : null);
+    forms = [originalForm];
+    const root = eventTarget({
+        dataset: { stops: '["Muzeum"]' },
+        querySelector() { return null; },
+        querySelectorAll(selector) { return selector === "form.stop-form" ? forms : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root, { "[data-stop-dialog]": dialog });
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: original, preventDefault() {} });
+    fire(list.children[0], "click");
+    original.isConnected = false;
+    const unrelatedForm = participantForm("2", eventTarget({ name: "start_stop" }));
+    forms = [unrelatedForm];
+    emit(document, "htmx:afterSwap", { target: root, elt: unrelatedForm });
+    forms = [participantForm("1", replacement)];
+    emit(document, "htmx:afterSwap", { target: root, elt: originalForm });
+
     assert.equal(replacement.focusCount, 1);
 });
 
@@ -259,4 +314,50 @@ test("removal confirmation names the participant and focuses a stable replacemen
 
     assert.equal(dialog.open, false);
     assert.equal(nextRemove.focusCount, 1);
+});
+
+test("failed removal focuses the replacement control for the same participant", async () => {
+    let controls = [];
+    const form = eventTarget();
+    const name = eventTarget();
+    const id = eventTarget({ value: "" });
+    const cancel = eventTarget();
+    const dialog = eventTarget({
+        querySelector(selector) {
+            return {
+                "[data-remove-form]": form,
+                "[data-remove-participant-name]": name,
+                "[data-remove-participant-id]": id,
+                "[data-dialog-cancel]": cancel,
+            }[selector] ?? null;
+        },
+        showModal() {},
+        close() { fire(this, "close"); },
+    });
+    const remove = eventTarget({
+        selector: "[data-remove-participant]",
+        dataset: { participantId: "1", participantName: "Daniel" },
+    });
+    const replacement = eventTarget({
+        selector: "[data-remove-participant]",
+        dataset: { participantId: "1", participantName: "Daniel" },
+    });
+    controls = [remove];
+    const root = eventTarget({
+        querySelector(selector) {
+            if (selector === "[data-remove-participant]") return controls[0] ?? null;
+            return null;
+        },
+        querySelectorAll(selector) { return selector === "[data-remove-participant]" ? controls : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root, { "[data-remove-dialog]": dialog });
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: remove });
+    fire(form, "submit");
+    controls = [replacement];
+    fire(form, "htmx:afterRequest");
+
+    assert.equal(replacement.focusCount, 1);
 });

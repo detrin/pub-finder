@@ -65,6 +65,8 @@ function bindStopPicker(root) {
             pendingFocus = {
                 participantId: activeParticipantId,
                 fieldName: activeFieldName,
+                stop,
+                sourceForm: input.closest("form"),
             };
         }
         dialog.close();
@@ -156,14 +158,15 @@ function bindStopPicker(root) {
     });
     document.addEventListener("htmx:afterSwap", (event) => {
         if (!pendingFocus || !root.contains(event.detail.target)) return;
+        if (event.detail.elt !== pendingFocus.sourceForm) return;
         const participantId = pendingFocus.participantId;
         const fieldName = pendingFocus.fieldName;
-        pendingFocus = null;
         const forms = root.querySelectorAll("form.stop-form");
         for (const form of forms) {
             if (form.querySelector("[name=participant_id]")?.value !== participantId) continue;
             const input = form.querySelector(`[name=${fieldName}]`);
-            if (input && !input.disabled) {
+            if (input && !input.disabled && input.value === pendingFocus.stop) {
+                pendingFocus = null;
                 window.requestAnimationFrame(() => input.focus());
             }
             break;
