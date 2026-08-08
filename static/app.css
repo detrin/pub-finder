@@ -308,6 +308,11 @@ button.outline {
         position: relative;
     }
 
+    button,
+    .site-nav__menu summary {
+        min-width: 44px;
+    }
+
     .site-nav__menu summary {
         display: flex;
         min-height: 44px;
