@@ -408,26 +408,33 @@ async def _run_search(
                 completed_stops += 1
                 registry.update(search_id, current=completed_stops)
 
-        # Cache writes are intentionally sequential: aiosqlite shares one connection and
-        # cache_pubs_for_type uses an explicit transaction for each completed query.
-        for completed_task in asyncio.as_completed(pending_stop_tasks):
-            _, query_results = await completed_task
-            for stop_name, place_type, pubs, error in query_results:
-                if error is not None:
-                    logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
-                    places_api_error = True
-                    continue
-                pubs_by_stop_raw[stop_name].extend(pubs)
-                try:
-                    await cache_pubs_for_type(
-                        db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
-                    )
-            completed_stops += 1
-            registry.update(search_id, current=completed_stops)
+        try:
+            # Cache writes are intentionally sequential: aiosqlite shares one connection and
+            # cache_pubs_for_type uses an explicit transaction for each completed query.
+            for completed_task in asyncio.as_completed(pending_stop_tasks):
+                _, query_results = await completed_task
+                for stop_name, place_type, pubs, error in query_results:
+                    if error is not None:
+                        logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
+                        places_api_error = True
+                        continue
+                    pubs_by_stop_raw[stop_name].extend(pubs)
+                    try:
+                        await cache_pubs_for_type(
+                            db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
+                        )
+                completed_stops += 1
+                registry.update(search_id, current=completed_stops)
+        finally:
+            for pending_stop_task in pending_stop_tasks:
+                if not pending_stop_task.done():
+                    pending_stop_task.cancel()
+            if pending_stop_tasks:
+                await asyncio.gather(*pending_stop_tasks, return_exceptions=True)
 
         # Filter by opening hours and deduplicate
         seen_place_ids: set[str] = set()

@@ -586,6 +586,77 @@ async def test_venue_progress_advances_when_each_stop_group_finishes(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_registry_shutdown_cancels_pending_venue_stop_tasks(monkeypatch):
+    """Registry shutdown leaves no live venue request running after its parent search ends."""
+    session = await create_session(app.state.db, "Test", "P1")
+    registry = app.state.search_registry
+    app.state.stop_geo = pl.DataFrame(
+        {
+            "name": ["A", "B", "C", "D", "E", "F"],
+            "lat": [50.00, 50.01, 50.02, 50.03, 50.04, 50.05],
+            "lon": [14.00, 14.01, 14.02, 14.03, 14.04, 14.05],
+        }
+    )
+    monkeypatch.setattr(
+        search_router, "get_optimal_stop_pairs", lambda *args, **kwargs: list("ABCDEF")
+    )
+    monkeypatch.setattr(
+        search_router,
+        "get_actual_time_optimal_stop_pairs",
+        lambda *args, **kwargs: _six_stop_results(),
+    )
+    release_queries = asyncio.Event()
+    query_started = asyncio.Event()
+    active_queries = 0
+    cancelled_queries = 0
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        nonlocal active_queries, cancelled_queries
+        active_queries += 1
+        query_started.set()
+        try:
+            await release_queries.wait()
+        except asyncio.CancelledError:
+            cancelled_queries += 1
+            raise
+        finally:
+            active_queries -= 1
+        return []
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    search_id = "shutdown-search"
+    registry.create(search_id, session["code"])
+    registry.start(
+        search_id,
+        search_router._run_search(
+            type("Request", (), {"app": app})(),
+            session["code"],
+            search_id,
+            "2026-08-10",
+            "20:00",
+            "2026-08-10",
+            "23:00",
+            "minimize-worst-case",
+            "round-trip",
+            [("A", "A"), ("B", "B")],
+            ["P1", "P2"],
+            [],
+            ["pub", "cafe"],
+        ),
+    )
+    await asyncio.wait_for(query_started.wait(), timeout=1)
+
+    try:
+        await registry.shutdown()
+        await asyncio.sleep(0)
+        assert active_queries == 0
+        assert cancelled_queries > 0
+    finally:
+        release_queries.set()
+        await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
 async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
     """Stops outside focused discovery explain why they have no venue status."""
     session = await create_session(app.state.db, "Test", "P1")
