@@ -11,9 +11,12 @@ function createHarness() {
     const mapListeners = new Map();
     let mapRemoveCount = 0;
     let cancelledFrames = 0;
+    let failSizeRead = false;
 
     const context = {
-        clearRect() {},
+        clearRect() {
+            canvasOperations.push({ type: "clear" });
+        },
         setTransform() {},
         fillRect(x, y, width, height) {
             canvasOperations.push({
@@ -40,6 +43,7 @@ function createHarness() {
         parentNode: null,
         style: {},
         width: 0,
+        hidden: false,
         getContext() {
             return context;
         },
@@ -88,6 +92,10 @@ function createHarness() {
             return { overlayPane };
         },
         getSize() {
+            if (failSizeRead) {
+                failSizeRead = false;
+                throw new Error("forced canvas redraw failure");
+            }
             return { x: 4, y: 1 };
         },
         latLngToContainerPoint([lat, lon]) {
@@ -173,6 +181,9 @@ function createHarness() {
         },
         get mapRemoveCount() {
             return mapRemoveCount;
+        },
+        failNextSizeRead() {
+            failSizeRead = true;
         },
         requestAnimationFrame(callback) {
             frameQueue.push(callback);
@@ -266,6 +277,45 @@ test("map movement coalesces redraws and destroy cleans up once", async () => {
     assert.equal(harness.cancelledFrames, 1);
     assert.equal(harness.mapRemoveCount, 1);
     assert.equal(harness.canvas.parentNode, null);
+});
+
+test("redraw errors hide stale field pixels without changing markers and later redraw restores them", async () => {
+    const harness = createHarness();
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => payload }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+        stops: [{ name: "Ranked", lat: 0.5, lon: 1.5 }],
+        venues: [{ name: "Venue", lat: 0.5, lon: 2.5 }],
+    });
+    harness.runFrame();
+    assert.equal(harness.canvas.hidden, false);
+
+    const rankedLayers = [...harness.createdGroups[1].layers];
+    const venueLayers = [...harness.createdGroups[2].layers];
+    const clearsAfterSuccess = harness.canvasOperations.filter(({ type }) => type === "clear").length;
+    const redraw = harness.mapListeners.get("move zoom resize");
+    harness.failNextSizeRead();
+    redraw();
+    harness.runFrame();
+
+    assert.equal(harness.events.at(-1).type, "reachability:error");
+    assert.equal(harness.events.at(-1).detail.message, "forced canvas redraw failure");
+    assert.equal(harness.canvas.hidden, true);
+    assert.equal(
+        harness.canvasOperations.filter(({ type }) => type === "clear").length,
+        clearsAfterSuccess + 1,
+    );
+    assert.deepEqual(harness.createdGroups[1].layers, rankedLayers);
+    assert.deepEqual(harness.createdGroups[2].layers, venueLayers);
+
+    redraw();
+    harness.runFrame();
+    assert.equal(harness.canvas.hidden, false);
+    assert.deepEqual(harness.createdGroups[1].layers, rankedLayers);
+    assert.deepEqual(harness.createdGroups[2].layers, venueLayers);
 });
 
 test("reachability fetch errors emit a safe event and preserve ranked and venue markers", async () => {

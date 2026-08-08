@@ -272,9 +272,19 @@ export class ReachabilityMapController {
             try {
                 this.drawField();
             } catch (error) {
+                this.hideField();
                 dispatchReachabilityError(this.root, error);
             }
         });
+    }
+
+    hideField() {
+        this.canvas.hidden = true;
+        try {
+            this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        } catch (_) {
+            // Hiding the canvas still prevents stale field pixels from being shown.
+        }
     }
 
     drawField() {
@@ -301,7 +311,10 @@ export class ReachabilityMapController {
             this.map.containerPointToLayerPoint([0, 0]),
         );
         this.context.clearRect(0, 0, width, height);
-        if (observedPoints.length === 0) return;
+        if (observedPoints.length === 0) {
+            this.canvas.hidden = true;
+            return;
+        }
 
         const grid = interpolateGrid(observedPoints, width, height);
         const minX = Math.min(...observedPoints.map((point) => point.x));
@@ -330,6 +343,7 @@ export class ReachabilityMapController {
             this.context.fill();
         }
         this.context.globalAlpha = 1;
+        this.canvas.hidden = false;
     }
 
     lilacColor() {
