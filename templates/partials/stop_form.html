@@ -5,26 +5,26 @@
       class="stop-form">
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
     <div class="stop-form-row">
-        <div class="stop-form-name">
-            <strong>{{ participant.name }}</strong>
-            <label class="stop-form-return">
-                <input type="checkbox" name="same_start_end" value="true"
-                    {% if participant.same_start_end %}checked{% endif %}
-                    data-same-start-end>
-                return
-            </label>
-        </div>
         <label data-field>
-            From
+            Start
             <input type="text" name="start_stop" placeholder="Tap to select stop..."
-                value="{{ participant.start_stop }}" readonly data-stop-input>
+                value="{{ participant.start_stop }}" readonly data-stop-input
+                data-participant-name="{{ participant.name }}" data-stop-direction="starting from">
         </label>
         <label data-field>
-            To
+            End
             <input type="text" name="end_stop" placeholder="Tap to select stop..."
                 value="{{ participant.end_stop }}" readonly data-stop-input
+                data-participant-name="{{ participant.name }}" data-stop-direction="returning to"
                 {% if participant.same_start_end %}disabled{% endif %}>
         </label>
-        <span class="stop-save-status htmx-indicator" role="status" aria-live="polite">Saving…</span>
+        <label class="stop-form-return">
+            <input type="checkbox" name="same_start_end" value="true"
+                {% if participant.same_start_end %}checked{% endif %}
+                data-same-start-end>
+            Return to the same stop
+        </label>
+        <span class="stop-save-status save-state htmx-indicator" role="status" aria-live="polite">saving</span>
+        {% if participant.start_stop %}<span class="save-state save-state--saved">saved</span>{% endif %}
     </div>
 </form>

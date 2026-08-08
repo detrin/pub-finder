@@ -103,9 +103,9 @@ async def test_session_page_autosaves_valid_stop_selections():
         )
         assert form["hx-sync"] == "this:replace"
         assert not form.has_attr("hx-indicator")
-        status = form.select_one(".stop-save-status.htmx-indicator")
+        status = form.select_one(".save-state.htmx-indicator")
         assert status is not None
-        assert status.get_text(strip=True) == "Saving…"
+        assert status.get_text(strip=True) == "saving"
         assert status["role"] == "status"
         assert status["aria-live"] == "polite"
     assert ">Save<" not in page.text

@@ -68,6 +68,22 @@ async def test_direct_invite_names_the_session_and_requires_only_name():
 
 
 @pytest.mark.asyncio
+async def test_session_workspace_exposes_autosave_and_dialog_hooks():
+    """The session page keeps its HTMX workspace and native dialog hooks."""
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}")
+
+    assert 'class="session-workspace"' in response.text
+    assert "data-stop-dialog" in response.text
+    assert "data-remove-dialog" in response.text
+    assert 'aria-live="polite"' in response.text
+    assert "Find somewhere" in response.text
+
+
+@pytest.mark.asyncio
 async def test_shell_routes_use_meet_somewhere_titles():
     session = await create_session(app.state.db, "Friday drinks", "Daniel")
     expected_titles = {

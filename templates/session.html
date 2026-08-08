@@ -3,115 +3,125 @@
 {% block title %}{{ session.name }} - Meet Somewhere{% endblock %}
 
 {% block content %}
-<div class="session-heading" data-session-code="{{ session.code }}" data-session-name="{{ session.name }}">
-    <div class="session-heading__title">
-        <span class="session-heading__eyebrow">Session</span>
-        <h1 class="session-heading__name">{{ session.name }}</h1>
-    </div>
-    <button class="session-heading__share" id="copy-invite-link" aria-label="Copy invite link"
-        data-invite-url="/session/join?code={{ session.code }}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <span class="session-heading__share-label">Invite</span>
-        <span class="session-heading__share-copied">Copied!</span>
-    </button>
-</div>
-
-<div id="all-stops-data" hidden data-stops='{{ all_stops | tojson }}'></div>
-
-<dialog id="stop-picker-dialog" class="stop-picker">
-    <form method="dialog" class="stop-picker__form">
-        <header class="stop-picker__header">
-            <h4 class="stop-picker__title">Select a stop</h4>
-            <button type="submit" class="stop-picker__close" aria-label="Close" value="cancel">&times;</button>
-        </header>
-        <input type="search" class="stop-picker__search" placeholder="Type to filter stops..." autocomplete="off" autofocus>
-        <ul class="stop-picker__list"></ul>
-    </form>
-</dialog>
-
-{% include "partials/session_participants.html" %}
-
-<article class="card">
-    <h4>Search for a Meeting Point</h4>
-    <form hx-post="/session/{{ session.code }}/search" hx-target="#results-section" hx-swap="innerHTML" hx-indicator="#search-btn">
-        <div class="row">
-            <div class="col-2">
-                <label data-field>
-                    Departure date
-                    <input type="date" name="departure_date" value="{{ default_date }}"
-                        min="{{ today }}" max="{{ max_date }}">
-                </label>
-            </div>
-            <div class="col-2">
-                <label data-field>
-                    Departure time
-                    <input type="time" name="departure_time" value="{{ default_departure }}">
-                </label>
-            </div>
-            <div class="col-2">
-                <label data-field>
-                    Return date
-                    <input type="date" name="return_date" value="{{ default_return_date }}"
-                        min="{{ today }}" max="{{ max_date }}">
-                </label>
-            </div>
-            <div class="col-2">
-                <label data-field>
-                    Return time
-                    <input type="time" name="return_time" value="{{ default_return }}">
-                </label>
-            </div>
+<div class="session-workspace" data-session-workspace data-session-code="{{ session.code }}" data-session-name="{{ session.name }}" data-stops='{{ all_stops | tojson }}'>
+    <header class="session-heading">
+        <div class="session-heading__title">
+            <span class="session-heading__eyebrow">Plan</span>
+            <h1 class="session-heading__name">{{ session.name }}</h1>
         </div>
-        <div class="row search-options-row" style="margin-top: 0.5rem;">
-            <div class="col-2">
-                <div data-field>
-                    <label>Method</label>
-                    <select name="method" aria-label="Optimization method">
-                        <option value="minimize-worst-case">Minimize longest travel</option>
-                        <option value="minimize-total">Minimize total travel</option>
-                    </select>
+        <button class="session-heading__share" type="button" data-invite-copy aria-label="Copy invite link"
+            data-invite-url="/session/join?code={{ session.code }}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <span>Invite</span>
+        </button>
+    </header>
+
+    <div class="session-workspace__layout">
+        {% include "partials/session_participants.html" %}
+
+        <section class="plan-panel" aria-labelledby="plan-settings-title">
+            <header>
+                <span class="panel-label">Shared plan</span>
+                <h2 id="plan-settings-title">When and what</h2>
+            </header>
+            <form hx-post="/session/{{ session.code }}/search" hx-target="#results-section" hx-swap="innerHTML" hx-indicator="#search-btn">
+                <div class="plan-panel__dates">
+                    <label data-field>
+                        Departure date
+                        <input type="date" name="departure_date" value="{{ default_date }}"
+                            min="{{ today }}" max="{{ max_date }}">
+                    </label>
+                    <label data-field>
+                        Departure time
+                        <input type="time" name="departure_time" value="{{ default_departure }}">
+                    </label>
+                    <label data-field>
+                        Return date
+                        <input type="date" name="return_date" value="{{ default_return_date }}"
+                            min="{{ today }}" max="{{ max_date }}">
+                    </label>
+                    <label data-field>
+                        Return time
+                        <input type="time" name="return_time" value="{{ default_return }}">
+                    </label>
                 </div>
-            </div>
-            <div class="col-2">
-                <div data-field>
-                    <label>Optimize</label>
-                    <select name="direction" aria-label="Optimization direction">
-                        <option value="round-trip">Round trip</option>
-                        <option value="there-only">There only</option>
-                        <option value="back-only">Back only</option>
-                    </select>
-                </div>
-            </div>
-            <div class="col-3">
-                <div data-field>
-                    <label>Place types</label>
-                    <div class="place-type-checks">
+                <fieldset class="occasion-fieldset">
+                    <legend>Occasion</legend>
+                    <div class="occasion-presets" role="group" aria-label="Occasion presets">
+                        <button type="button" data-occasion="drinks">Drinks</button>
+                        <button type="button" data-occasion="coffee">Coffee</button>
+                        <button type="button" data-occasion="food">Food</button>
+                        <button type="button" data-occasion="anything">Anything</button>
+                    </div>
+                    <div class="place-type-checks" data-place-type-checks>
                         <label class="place-type-check"><input type="checkbox" name="place_types" value="pub" checked> Pubs</label>
                         <label class="place-type-check"><input type="checkbox" name="place_types" value="bar" checked> Bars</label>
                         <label class="place-type-check"><input type="checkbox" name="place_types" value="cafe" checked> Cafes</label>
                         <label class="place-type-check"><input type="checkbox" name="place_types" value="restaurant"> Restaurants</label>
                     </div>
+                </fieldset>
+                <div class="plan-panel__choices">
+                    <label data-field>
+                        Method
+                        <select name="method" aria-label="Optimization method">
+                            <option value="minimize-worst-case">Minimize longest journey</option>
+                            <option value="minimize-total">Minimize total journey</option>
+                        </select>
+                    </label>
+                    <label data-field>
+                        Direction
+                        <select name="direction" aria-label="Optimization direction">
+                            <option value="round-trip">Round trip</option>
+                            <option value="there-only">There only</option>
+                            <option value="back-only">Back only</option>
+                        </select>
+                    </label>
                 </div>
+                <button type="submit" id="search-btn" class="plan-panel__submit">
+                    <span class="htmx-indicator">Searching</span>
+                    <span class="search-label">Find somewhere</span>
+                </button>
+            </form>
+        </section>
+    </div>
+</div>
+
+<dialog data-stop-dialog class="stop-picker" aria-labelledby="stop-picker-title">
+    <form method="dialog" class="stop-picker__form" novalidate>
+        <header class="stop-picker__header">
+            <div>
+                <p class="panel-label" data-stop-picker-context>Choose a stop</p>
+                <h2 id="stop-picker-title" class="stop-picker__title">Select a stop</h2>
             </div>
-            <div class="col-1">
-                <label data-field>
-                    <span style="visibility: hidden;">&nbsp;</span>
-                    <button type="submit" id="search-btn" style="width: 100%;">
-                        <span class="htmx-indicator">Searching...</span>
-                        <span class="search-label">Search</span>
-                    </button>
-                </label>
-            </div>
+            <button type="submit" class="stop-picker__close" aria-label="Close" value="cancel">&times;</button>
+        </header>
+        <input type="search" class="stop-picker__search" placeholder="Filter stops" autocomplete="off">
+        <ul class="stop-picker__list" role="listbox" aria-label="Stops"></ul>
+    </form>
+</dialog>
+
+<dialog data-remove-dialog class="remove-dialog" aria-labelledby="remove-participant-title">
+    <form method="post" hx-post="/session/{{ session.code }}/remove-participant" hx-target="#session-participants-inner" hx-swap="innerHTML" data-remove-form>
+        <h2 id="remove-participant-title">Remove participant?</h2>
+        <p>Remove <strong data-remove-participant-name></strong> and their selected stops.</p>
+        <input type="hidden" name="participant_id" data-remove-participant-id>
+        <div class="dialog-actions">
+            <button type="button" class="outline" data-dialog-cancel>Cancel</button>
+            <button type="submit">Remove participant</button>
         </div>
     </form>
-</article>
+</dialog>
 
 <div id="results-section"></div>
 
 <p id="share-results-link" style="display: none; text-align: center; margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.6;">
     <a href="/session/{{ session.code }}/results" target="_blank">Share results link</a>
 </p>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/session.js?v=1"></script>
 {% endblock %}
