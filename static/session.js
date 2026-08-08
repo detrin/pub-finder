@@ -28,6 +28,7 @@ function bindStopPicker(root) {
     let activeParticipantId = null;
     let activeFieldName = null;
     let activeInvoker = null;
+    let pendingFocus = null;
 
     function resolveActiveInput() {
         if (activeParticipantId && activeFieldName) {
@@ -61,6 +62,10 @@ function bindStopPicker(root) {
         if (input) {
             input.value = stop;
             input.dispatchEvent(new Event("change", { bubbles: true }));
+            pendingFocus = {
+                participantId: activeParticipantId,
+                fieldName: activeFieldName,
+            };
         }
         dialog.close();
     }
@@ -142,12 +147,27 @@ function bindStopPicker(root) {
         if (event.target === dialog) dialog.close();
     });
     dialog.addEventListener("close", () => {
-        const invoker = activeInvoker;
+        const focusTarget = resolveActiveInput();
         activeInput = null;
         activeParticipantId = null;
         activeFieldName = null;
         activeInvoker = null;
-        if (invoker?.isConnected) invoker.focus();
+        if (focusTarget?.isConnected) focusTarget.focus();
+    });
+    document.addEventListener("htmx:afterSwap", (event) => {
+        if (!pendingFocus || !root.contains(event.detail.target)) return;
+        const participantId = pendingFocus.participantId;
+        const fieldName = pendingFocus.fieldName;
+        pendingFocus = null;
+        const forms = root.querySelectorAll("form.stop-form");
+        for (const form of forms) {
+            if (form.querySelector("[name=participant_id]")?.value !== participantId) continue;
+            const input = form.querySelector(`[name=${fieldName}]`);
+            if (input && !input.disabled) {
+                window.requestAnimationFrame(() => input.focus());
+            }
+            break;
+        }
     });
 }
 
@@ -167,6 +187,22 @@ function bindRemoveConfirmation(root) {
     const name = dialog.querySelector("[data-remove-participant-name]");
     const id = dialog.querySelector("[data-remove-participant-id]");
     let invoker = null;
+    let pendingRemovalId = null;
+
+    function findRemovalControl(participantId) {
+        return [...root.querySelectorAll("[data-remove-participant]")].find(
+            (button) => button.dataset.participantId === participantId
+        );
+    }
+
+    function restoreRemovalFocus() {
+        const sameParticipant = findRemovalControl(pendingRemovalId);
+        const nextControl = sameParticipant
+            || root.querySelector("[data-remove-participant]")
+            || root.querySelector(".add-participant-form input");
+        pendingRemovalId = null;
+        if (nextControl?.isConnected) nextControl.focus();
+    }
 
     root.addEventListener("click", (event) => {
         const button = event.target.closest("[data-remove-participant]");
@@ -177,9 +213,15 @@ function bindRemoveConfirmation(root) {
         dialog.showModal();
     });
     dialog.querySelector("[data-dialog-cancel]").addEventListener("click", () => dialog.close());
-    form.addEventListener("htmx:afterRequest", () => dialog.close());
+    form.addEventListener("submit", () => {
+        pendingRemovalId = id.value;
+    });
+    form.addEventListener("htmx:afterRequest", () => {
+        dialog.close();
+        window.setTimeout(restoreRemovalFocus, 0);
+    });
     dialog.addEventListener("close", () => {
-        if (invoker?.isConnected) invoker.focus();
+        if (!pendingRemovalId && invoker?.isConnected) invoker.focus();
         invoker = null;
     });
 }
@@ -199,10 +241,46 @@ function bindOccasionPresets(root) {
         root.querySelectorAll("input[name=place_types]").forEach((input) => {
             input.checked = types.includes(input.value);
         });
-        root.querySelectorAll("[data-occasion]").forEach((preset) => {
-            preset.setAttribute("aria-pressed", String(preset === button));
-        });
+        syncOccasionPresets(root, presets);
     });
+    root.addEventListener("change", (event) => {
+        if (event.target.matches("input[name=place_types]")) syncOccasionPresets(root, presets);
+    });
+    syncOccasionPresets(root, presets);
+}
+
+function syncOccasionPresets(root, presets) {
+    const selected = [...root.querySelectorAll("input[name=place_types]")]
+        .filter((input) => input.checked)
+        .map((input) => input.value)
+        .sort();
+    root.querySelectorAll("[data-occasion]").forEach((button) => {
+        const types = [...presets[button.dataset.occasion]].sort();
+        button.setAttribute("aria-pressed", String(
+            types.length === selected.length && types.every((type, index) => type === selected[index])
+        ));
+    });
+}
+
+function updateReadiness(root) {
+    const submit = root.querySelector("[data-search-submit]");
+    const status = root.querySelector("[data-session-readiness]");
+    if (!submit || !status) return;
+    const incomplete = [...root.querySelectorAll("form.stop-form")].find((form) => {
+        const start = form.querySelector("[name=start_stop]")?.value.trim();
+        const end = form.querySelector("[name=end_stop]")?.value.trim();
+        const same = form.querySelector("[data-same-start-end]")?.checked;
+        return !start || (!same && !end);
+    });
+    if (!incomplete) {
+        submit.disabled = false;
+        status.textContent = "Everyone is ready.";
+        return;
+    }
+    const start = incomplete.querySelector("[name=start_stop]")?.value.trim();
+    const name = incomplete.querySelector("[data-participant-name]")?.dataset.participantName || "A participant";
+    submit.disabled = true;
+    status.textContent = start ? `${name} needs an end stop.` : `${name} needs start and end stops.`;
 }
 
 function normalize(value) {
@@ -227,6 +305,13 @@ export function initSessionUi() {
     bindReturnCheckboxes(root);
     bindRemoveConfirmation(root);
     bindOccasionPresets(root);
+    updateReadiness(root);
+    document.addEventListener("htmx:afterSwap", (event) => {
+        if (root.contains(event.detail.target)) updateReadiness(root);
+    });
+    document.addEventListener("htmx:sseMessage", (event) => {
+        if (root.contains(event.detail.elt)) updateReadiness(root);
+    });
 }
 
 if (document.readyState === "loading") {

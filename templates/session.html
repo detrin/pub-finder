@@ -3,6 +3,16 @@
 {% block title %}{{ session.name }} - Meet Somewhere{% endblock %}
 
 {% block content %}
+{% set readiness = namespace(missing_name='', missing_detail='') %}
+{% for participant in participants %}
+    {% if not readiness.missing_name and not participant.start_stop %}
+        {% set readiness.missing_name = participant.name %}
+        {% set readiness.missing_detail = 'start and end stops' %}
+    {% elif not readiness.missing_name and not participant.same_start_end and not participant.end_stop %}
+        {% set readiness.missing_name = participant.name %}
+        {% set readiness.missing_detail = 'an end stop' %}
+    {% endif %}
+{% endfor %}
 <div class="session-workspace" data-session-workspace data-session-code="{{ session.code }}" data-session-name="{{ session.name }}" data-stops='{{ all_stops | tojson }}'>
     <header class="session-heading">
         <div class="session-heading__title">
@@ -51,10 +61,10 @@
                 <fieldset class="occasion-fieldset">
                     <legend>Occasion</legend>
                     <div class="occasion-presets" role="group" aria-label="Occasion presets">
-                        <button type="button" data-occasion="drinks">Drinks</button>
-                        <button type="button" data-occasion="coffee">Coffee</button>
-                        <button type="button" data-occasion="food">Food</button>
-                        <button type="button" data-occasion="anything">Anything</button>
+                        <button type="button" data-occasion="drinks" aria-pressed="false">Drinks</button>
+                        <button type="button" data-occasion="coffee" aria-pressed="false">Coffee</button>
+                        <button type="button" data-occasion="food" aria-pressed="false">Food</button>
+                        <button type="button" data-occasion="anything" aria-pressed="false">Anything</button>
                     </div>
                     <div class="place-type-checks" data-place-type-checks>
                         <label class="place-type-check"><input type="checkbox" name="place_types" value="pub" checked> Pubs</label>
@@ -80,10 +90,11 @@
                         </select>
                     </label>
                 </div>
-                <button type="submit" id="search-btn" class="plan-panel__submit">
+                <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.missing_name %} disabled{% endif %}>
                     <span class="htmx-indicator">Searching</span>
                     <span class="search-label">Find somewhere</span>
                 </button>
+                <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.missing_name %}{{ readiness.missing_name }} needs {{ readiness.missing_detail }}.{% else %}Everyone is ready.{% endif %}</p>
             </form>
         </section>
     </div>

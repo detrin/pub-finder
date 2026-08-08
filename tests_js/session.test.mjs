@@ -1,25 +1,262 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("session UI exposes a stable participant colour and an idempotent initializer", async () => {
-    const root = {
+let moduleNumber = 0;
+
+async function loadSessionModule(document, window = {}) {
+    globalThis.document = document;
+    globalThis.window = {
+        location: { origin: "https://meet.example" },
+        requestAnimationFrame(callback) { callback(); },
+        setTimeout(callback) { callback(); },
+        ...window,
+    };
+    return import(new URL(`../static/session.js?test=${moduleNumber++}`, import.meta.url));
+}
+
+function eventTarget(properties = {}) {
+    return {
         dataset: {},
-        addEventListener() {},
+        isConnected: true,
+        addEventListener(name, handler) { (this.events ??= {})[name] = [...(this.events[name] ?? []), handler]; },
+        closest(selector) { return selector === this.selector ? this : null; },
+        focus() { this.focusCount = (this.focusCount || 0) + 1; },
+        setAttribute(name, value) { this.attributes ??= {}; this.attributes[name] = value; },
+        ...properties,
+    };
+}
+
+function fire(target, name, event = {}) {
+    for (const handler of target.events?.[name] ?? []) handler(event);
+}
+
+function createDocument(root, dialogs = {}) {
+    const events = {};
+    return {
+        readyState: "complete",
+        events,
+        addEventListener(name, handler) { (events[name] ??= []).push(handler); },
+        querySelector(selector) {
+            if (selector === "[data-session-workspace]") return root;
+            return dialogs[selector] ?? null;
+        },
+        createElement() { return eventTarget(); },
+        createTextNode(text) { return { textContent: text }; },
+    };
+}
+
+function emit(document, name, detail) {
+    for (const handler of document.events[name] ?? []) handler({ detail });
+}
+
+test("session UI exposes a stable participant colour and idempotent initializer", async () => {
+    const root = eventTarget({
         querySelector() { return null; },
         querySelectorAll() { return []; },
-    };
-    globalThis.document = {
-        querySelector(selector) {
-            return selector === "[data-session-workspace]" ? root : null;
-        },
-    };
-
-    const module = await import(new URL("../static/session.js", import.meta.url));
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    const module = await loadSessionModule(document);
 
     assert.equal(module.participantColor(0), "#ff6658");
     assert.equal(module.participantColor(6), "#ff6658");
     assert.equal(module.participantColor(-1), "#dff0ff");
     module.initSessionUi();
-    module.initSessionUi();
     assert.equal(root.dataset.bound, "true");
+});
+
+test("readiness updates after an HTMX participant swap", async () => {
+    const start = eventTarget({ value: "", selector: "[data-participant-name]", dataset: { participantName: "Daniel" } });
+    const end = eventTarget({ value: "", selector: "[name=end_stop]" });
+    const same = eventTarget({ checked: false, selector: "[data-same-start-end]" });
+    const form = {
+        querySelector(selector) {
+            return { "[name=start_stop]": start, "[name=end_stop]": end, "[data-same-start-end]": same }[selector] ?? null;
+        },
+    };
+    const submit = eventTarget({ disabled: true });
+    const status = eventTarget({ textContent: "Daniel needs start and end stops." });
+    const root = eventTarget({
+        querySelector(selector) {
+            return { "[data-search-submit]": submit, "[data-session-readiness]": status }[selector] ?? null;
+        },
+        querySelectorAll(selector) { return selector === "form.stop-form" ? [form] : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+
+    start.value = "Anděl";
+    end.value = "Florenc";
+    emit(document, "htmx:afterSwap", { target: root });
+
+    assert.equal(submit.disabled, false);
+    assert.equal(status.textContent, "Everyone is ready.");
+});
+
+test("same-stop changes disable the end field before autosave", async () => {
+    const end = eventTarget({ disabled: false, selector: "[name=end_stop]" });
+    const form = { querySelector(selector) { return selector === "[name=end_stop]" ? end : null; } };
+    const checkbox = eventTarget({
+        checked: true,
+        selector: "[data-same-start-end]",
+        matches() { return false; },
+        closest(selector) { return selector === "form" ? form : (selector === "[data-same-start-end]" ? this : null); },
+    });
+    const root = eventTarget({
+        querySelector() { return null; }, querySelectorAll() { return []; }, contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+    fire(root, "change", { target: checkbox });
+    assert.equal(end.disabled, true);
+});
+
+test("occasion presets update source checkboxes and resync after manual changes", async () => {
+    const inputs = ["pub", "bar", "cafe", "restaurant"].map((value) => eventTarget({ value, checked: false }));
+    const drinks = eventTarget({ dataset: { occasion: "drinks" }, selector: "[data-occasion]" });
+    const coffee = eventTarget({ dataset: { occasion: "coffee" }, selector: "[data-occasion]" });
+    const food = eventTarget({ dataset: { occasion: "food" }, selector: "[data-occasion]" });
+    const anything = eventTarget({ dataset: { occasion: "anything" }, selector: "[data-occasion]" });
+    const root = eventTarget({
+        querySelector() { return null; },
+        querySelectorAll(selector) {
+            if (selector === "input[name=place_types]") return inputs;
+            if (selector === "[data-occasion]") return [drinks, coffee, food, anything];
+            return [];
+        },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+    fire(root, "click", { target: drinks });
+    assert.deepEqual(inputs.filter((input) => input.checked).map((input) => input.value), ["pub", "bar"]);
+    assert.equal(drinks.attributes["aria-pressed"], "true");
+
+    inputs[1].checked = false;
+    fire(root, "change", { target: { closest() { return null; }, matches(selector) { return selector === "input[name=place_types]"; } } });
+    assert.equal(drinks.attributes["aria-pressed"], "false");
+});
+
+test("stop selection retargets the replacement field and restores focus after swap", async () => {
+    let forms = [];
+    const search = eventTarget({ value: "" });
+    const list = eventTarget({
+        replaceChildren(...children) { this.children = children; },
+        querySelectorAll(selector) { return selector === ".stop-picker__item" ? this.children ?? [] : []; },
+    });
+    const dialog = eventTarget({
+        querySelector(selector) { return { ".stop-picker__search": search, ".stop-picker__list": list, "[data-stop-picker-context]": eventTarget() }[selector] ?? null; },
+        showModal() { this.open = true; },
+        close() { this.open = false; fire(this, "close"); },
+    });
+    const original = eventTarget({ name: "start_stop", value: "", selector: "[data-stop-input]" });
+    const replacement = eventTarget({ name: "start_stop", value: "", selector: "[name=start_stop]" });
+    let changes = 0;
+    original.dispatchEvent = (event) => { assert.equal(event.type, "change"); changes += 1; };
+    function participantForm(input) {
+        const id = eventTarget({ value: "1" });
+        return {
+            querySelector(selector) {
+                return { "[name=participant_id]": id, "[name=start_stop]": input }[selector] ?? null;
+            },
+        };
+    }
+    const originalForm = participantForm(original);
+    original.closest = (selector) => selector === "form" ? originalForm : (selector === "[data-stop-input]" ? original : null);
+    forms = [originalForm];
+    const root = eventTarget({
+        dataset: { stops: '["Muzeum"]' },
+        querySelector() { return null; },
+        querySelectorAll(selector) { return selector === "form.stop-form" ? forms : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root, { "[data-stop-dialog]": dialog });
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: original, preventDefault() {} });
+    fire(list.children[0], "click");
+    original.isConnected = false;
+    replacement.value = "Muzeum";
+    forms = [participantForm(replacement)];
+    emit(document, "htmx:afterSwap", { target: root });
+
+    assert.equal(replacement.value, "Muzeum");
+    assert.equal(changes, 1);
+    assert.equal(replacement.focusCount, 1);
+});
+
+test("an SSE message does not close an open stop picker", async () => {
+    const search = eventTarget({ value: "" });
+    const list = eventTarget({ replaceChildren(...children) { this.children = children; }, querySelectorAll() { return []; } });
+    const dialog = eventTarget({
+        querySelector(selector) { return { ".stop-picker__search": search, ".stop-picker__list": list, "[data-stop-picker-context]": eventTarget() }[selector] ?? null; },
+        showModal() { this.open = true; },
+        close() { this.open = false; fire(this, "close"); },
+    });
+    const input = eventTarget({ name: "start_stop", selector: "[data-stop-input]" });
+    const form = { querySelector(selector) { return selector === "[name=participant_id]" ? eventTarget({ value: "1" }) : null; } };
+    input.closest = (selector) => selector === "form" ? form : (selector === "[data-stop-input]" ? input : null);
+    const root = eventTarget({
+        dataset: { stops: '["Muzeum"]' }, querySelector() { return null; }, querySelectorAll(selector) { return selector === "form.stop-form" ? [form] : []; }, contains() { return true; },
+    });
+    const document = createDocument(root, { "[data-stop-dialog]": dialog });
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: input, preventDefault() {} });
+    emit(document, "htmx:sseMessage", { elt: root });
+
+    assert.equal(dialog.open, true);
+    assert.equal(search.focusCount, 1);
+});
+
+test("removal confirmation names the participant and focuses a stable replacement control", async () => {
+    let controls = [];
+    const form = eventTarget();
+    const name = eventTarget({ textContent: "" });
+    const id = eventTarget({ value: "" });
+    const cancel = eventTarget();
+    const dialog = eventTarget({
+        querySelector(selector) {
+            return {
+                "[data-remove-form]": form,
+                "[data-remove-participant-name]": name,
+                "[data-remove-participant-id]": id,
+                "[data-dialog-cancel]": cancel,
+            }[selector] ?? null;
+        },
+        showModal() { this.open = true; },
+        close() { this.open = false; fire(this, "close"); },
+    });
+    const remove = eventTarget({
+        selector: "[data-remove-participant]",
+        dataset: { participantId: "1", participantName: "Daniel" },
+    });
+    const nextRemove = eventTarget({
+        selector: "[data-remove-participant]",
+        dataset: { participantId: "2", participantName: "Petra" },
+    });
+    controls = [remove];
+    const root = eventTarget({
+        querySelector(selector) {
+            if (selector === "[data-remove-participant]") return controls[0] ?? null;
+            return selector === ".add-participant-form input" ? eventTarget() : null;
+        },
+        querySelectorAll(selector) { return selector === "[data-remove-participant]" ? controls : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root, { "[data-remove-dialog]": dialog });
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: remove });
+    assert.equal(dialog.open, true);
+    assert.equal(name.textContent, "Daniel");
+    assert.equal(id.value, "1");
+
+    fire(form, "submit");
+    controls = [nextRemove];
+    fire(form, "htmx:afterRequest");
+
+    assert.equal(dialog.open, false);
+    assert.equal(nextRemove.focusCount, 1);
 });
