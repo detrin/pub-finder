@@ -79,7 +79,7 @@ function bindMobileViews(root) {
 function bindReachabilityControls(root) {
     root.querySelectorAll("[data-participant-id]").forEach((button) => {
         button.addEventListener("click", () => {
-            if (activeRoot !== root) return;
+            if (activeRoot !== root || root.dataset.reachabilityUnavailable === "true") return;
             const rawId = button.dataset.participantId;
             const participantId = rawId === ""
                 ? null
@@ -94,7 +94,7 @@ function bindReachabilityControls(root) {
     const threshold = root.querySelector("[data-threshold]");
     const output = root.querySelector("[data-threshold-value]");
     threshold?.addEventListener("input", () => {
-        if (activeRoot !== root) return;
+        if (activeRoot !== root || root.dataset.reachabilityUnavailable === "true") return;
         const minutes = Number(threshold.value);
         if (!Number.isFinite(minutes)) return;
         if (output) output.textContent = `${minutes} min`;
@@ -122,6 +122,10 @@ function synchronizeController(root) {
 function showReachabilityError(root) {
     const message = root.querySelector("[data-reachability-error]");
     if (message) message.hidden = false;
+    root.dataset.reachabilityUnavailable = "true";
+    root.querySelectorAll("[data-participant-id], [data-threshold]").forEach((control) => {
+        control.disabled = true;
+    });
 }
 
 function updateVenueMarkers(target) {

@@ -80,7 +80,7 @@ test("readiness updates after an SSE participant swap", async () => {
         querySelector(selector) {
             return { "[data-search-submit]": submit, "[data-session-readiness]": status }[selector] ?? null;
         },
-        querySelectorAll(selector) { return selector === "form.stop-form" ? [form] : []; },
+        querySelectorAll(selector) { return selector === "form.stop-form" ? [form, form] : []; },
         contains() { return true; },
     });
     const document = createDocument(root);
@@ -92,6 +92,20 @@ test("readiness updates after an SSE participant swap", async () => {
 
     assert.equal(submit.disabled, false);
     assert.equal(status.textContent, "Everyone is ready.");
+});
+
+test("readiness requires two participants after a participant swap", async () => {
+    const submit = eventTarget({ disabled: false });
+    const status = eventTarget({ textContent: "Everyone is ready." });
+    const root = eventTarget({
+        querySelector(selector) { return { "[data-search-submit]": submit, "[data-session-readiness]": status }[selector] ?? null; },
+        querySelectorAll(selector) { return selector === "form.stop-form" ? [{}] : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+    assert.equal(submit.disabled, true);
+    assert.equal(status.textContent, "Add one more participant.");
 });
 
 test("same-stop changes disable the end field before autosave", async () => {
@@ -120,7 +134,7 @@ test("same-stop changes disable the end field before autosave", async () => {
 test("SSE participant swaps wait for autosave and focused form inputs", async () => {
     const input = eventTarget({ tagName: "INPUT" });
     const request = {};
-    const participantStream = eventTarget({ id: "session-participants" });
+    const participantStream = eventTarget({ id: "session-participants", contains(candidate) { return candidate === input; } });
     const root = eventTarget({
         querySelector(selector) {
             return selector === "#session-participants" ? participantStream : null;
@@ -185,6 +199,39 @@ test("search progress SSE messages remain independent from participant editing",
     }
 
     assert.equal(prevented, 0);
+});
+
+test("participant SSE defers only participant edits then refreshes after focus leaves", async () => {
+    const participantInput = eventTarget({ tagName: "INPUT" });
+    const planInput = eventTarget({ tagName: "INPUT" });
+    const participantStream = eventTarget({ contains(candidate) { return candidate === participantInput; } });
+    const root = eventTarget({
+        dataset: { sessionCode: "code" },
+        querySelector(selector) { return selector === "#session-participants" ? participantStream : null; },
+        querySelectorAll() { return []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    const requests = [];
+    globalThis.htmx = { ajax(...args) { requests.push(args); } };
+    document.activeElement = planInput;
+    await loadSessionModule(document);
+    let prevented = 0;
+    emit(document, "htmx:sseBeforeMessage", { type: "participants" }, {
+        target: participantStream, preventDefault() { prevented += 1; },
+    });
+    assert.equal(prevented, 0);
+
+    document.activeElement = participantInput;
+    emit(document, "htmx:sseBeforeMessage", { type: "participants" }, {
+        target: participantStream, preventDefault() { prevented += 1; },
+    });
+    assert.equal(prevented, 1);
+    document.activeElement = null;
+    emit(document, "focusout", {});
+    assert.deepEqual(requests[0], ["GET", "/session/code/participants", {
+        target: "#session-participants-inner", swap: "innerHTML",
+    }]);
 });
 
 test("occasion presets update source checkboxes and resync after manual changes", async () => {

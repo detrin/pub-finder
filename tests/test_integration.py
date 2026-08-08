@@ -255,7 +255,7 @@ async def test_search_requires_two_participants():
             },
         )
     assert resp.status_code == 200
-    assert "At least 2 participants" in resp.text
+    assert "Add one more participant" in resp.text
 
 
 async def _wait_for_search(search_id, session_code, timeout=10):

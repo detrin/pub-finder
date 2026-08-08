@@ -10,7 +10,14 @@ import pytest_asyncio
 from httpx import ASGITransport
 
 from backend.app import app
-from backend.db import create_session, init_db, save_search_results
+from backend.db import (
+    begin_search,
+    create_session,
+    get_search_results,
+    init_db,
+    save_search_results,
+    update_search_results_if_current,
+)
 
 
 def saved_result_fixture():
@@ -139,6 +146,40 @@ async def test_session_workspace_exposes_autosave_and_dialog_hooks():
 
 
 @pytest.mark.asyncio
+async def test_session_search_requires_two_participants():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}")
+    assert 'data-search-submit disabled' in response.text
+    assert "Add one more participant." in response.text
+
+
+@pytest.mark.asyncio
+async def test_stale_venue_expansion_cannot_overwrite_a_new_search_generation():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    data = saved_result_fixture()
+    data["search_id"] = "old"
+    await save_search_results(app.state.db, session["code"], data)
+    saved = await get_search_results(app.state.db, session["code"])
+    assert saved is not None
+    await begin_search(app.state.db, session["code"], "new")
+    data["pubs_by_stop"]["B"] = [{"name": "Stale venue"}]
+
+    updated = await update_search_results_if_current(
+        app.state.db,
+        session["code"],
+        data,
+        search_id="old",
+        created_at=saved["created_at"],
+    )
+    current = await get_search_results(app.state.db, session["code"])
+
+    assert not updated
+    assert current is not None
+    assert current["data"]["pubs_by_stop"]["B"] == []
+
+
+@pytest.mark.asyncio
 async def test_session_dialogs_have_labels_and_live_regions():
     session = await create_session(app.state.db, "Test", "Daniel")
     async with httpx.AsyncClient(
@@ -204,7 +245,7 @@ async def test_session_workspace_disables_search_until_every_participant_has_sto
     assert "data-session-readiness" in response.text
     assert "data-search-submit" in response.text
     assert "data-search-submit disabled" in response.text
-    assert "Daniel needs start and end stops." in response.text
+    assert "Add one more participant." in response.text
 
 
 @pytest.mark.asyncio
@@ -225,6 +266,24 @@ async def test_saved_results_render_split_workspace_and_reachability_url():
     assert "data-participants=" in response.text
     assert "Longest journey" in response.text
     assert "Approximate from typical transit times" in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "label"),
+    [
+        ("minimize-worst-case", "Minimize longest journey"),
+        ("minimize-total", "Minimize total journey"),
+    ],
+)
+async def test_saved_results_render_the_persisted_search_method(method, label):
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    data = saved_result_fixture()
+    data["search_method"] = method
+    await save_search_results(app.state.db, session["code"], data)
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}/results")
+    assert label in response.text
 
 
 @pytest.mark.asyncio

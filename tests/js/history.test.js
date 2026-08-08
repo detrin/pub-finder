@@ -38,3 +38,27 @@ test("history module remembers the current plan and renders recent plans on load
     assert.equal(historyRoot.children[0].href, "/session/friday-crew");
     assert.equal(historyRoot.children[0].textContent, "Friday crew");
 });
+
+test("history migrates legacy pubfinder sessions once without replacing current history", async () => {
+    const store = new Map([
+        ["pubfinder_sessions", JSON.stringify([
+            { code: "old", name: "Old plan" }, { code: "old", name: "Duplicate" }, { code: "bad" },
+        ])],
+        ["meet_somewhere_recent_sessions", JSON.stringify([{ code: "new", name: "New plan" }])],
+    ]);
+    globalThis.localStorage = {
+        getItem(key) { return store.get(key) ?? null; },
+        setItem(key, value) { store.set(key, value); },
+        removeItem(key) { store.delete(key); },
+    };
+    globalThis.document = {
+        readyState: "complete",
+        querySelector() { return null; },
+        createElement() { return { href: "", textContent: "" }; },
+    };
+    await import(new URL(`../../static/history.js?test=${Math.random()}`, import.meta.url));
+    assert.deepEqual(JSON.parse(store.get("meet_somewhere_recent_sessions")), [
+        { code: "new", name: "New plan" }, { code: "old", name: "Old plan" },
+    ]);
+    assert.equal(store.has("pubfinder_sessions"), false);
+});

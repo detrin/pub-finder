@@ -1,4 +1,5 @@
 const KEY = "meet_somewhere_recent_sessions";
+const LEGACY_KEY = "pubfinder_sessions";
 const LIMIT = 5;
 
 function validSession(value) {
@@ -17,6 +18,31 @@ function getSessions() {
         return Array.isArray(stored) ? stored.filter(validSession).slice(0, LIMIT) : [];
     } catch (_) {
         return [];
+    }
+}
+
+function migrateLegacySessions() {
+    let legacy = [];
+    try {
+        const stored = JSON.parse(localStorage.getItem(LEGACY_KEY) || "[]");
+        legacy = Array.isArray(stored) ? stored.filter(validSession) : [];
+    } catch (_) {
+        legacy = [];
+    }
+    if (!legacy.length) return;
+    const current = getSessions();
+    const seen = new Set(current.map((item) => item.code));
+    const migrated = legacy.filter((item) => {
+        if (seen.has(item.code)) return false;
+        seen.add(item.code);
+        return true;
+    });
+    const merged = [...current, ...migrated].slice(0, LIMIT);
+    try {
+        localStorage.setItem(KEY, JSON.stringify(merged));
+        localStorage.removeItem(LEGACY_KEY);
+    } catch (_) {
+        // A failed migration is harmless and can be retried on a later load.
     }
 }
 
@@ -50,6 +76,7 @@ export function renderRecentSessions() {
 }
 
 export function initSessionHistory() {
+    migrateLegacySessions();
     const session = document.querySelector("[data-session-code]");
     if (session) {
         rememberSession({

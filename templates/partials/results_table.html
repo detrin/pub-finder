@@ -6,6 +6,7 @@
 {% elif results is not none %}
 {% set snapshot = participant_snapshot | default([], true) %}
 {% set direction = search_direction | default("round-trip", true) %}
+{% set method = search_method | default("minimize-worst-case", true) %}
 {% set ns = namespace(participants=[]) %}
 {% for col in results.columns %}
     {% if col.startswith("To (") %}
@@ -15,7 +16,7 @@
 
 <section class="results-workspace"
          data-results-root="true"
-         data-reachability-url="/session/{{ session_code }}/reachability"
+         data-reachability-url="/session/{{ session_code }}/reachability{% if search_id %}?version={{ search_id }}{% endif %}"
          data-selected-rank="1"
          data-mobile-view="map">
     <div class="results-mobile-views" aria-label="Results view">
@@ -30,9 +31,9 @@
             <div class="reach-controls__heading">
                 <div>
                     <p class="control-eyebrow">Reachability layer</p>
-                    <h2>Longest journey</h2>
+                    <h2>{{ "Total journey time" if method == "minimize-total" else "Longest journey" }}</h2>
                 </div>
-                <span class="method-label">Minimize longest journey</span>
+                <span class="method-label">{{ "Minimize total journey" if method == "minimize-total" else "Minimize longest journey" }}</span>
             </div>
 
             <div class="participant-tabs" data-participant-tabs role="group"

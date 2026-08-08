@@ -14,11 +14,13 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
 from backend.db import (
+    begin_search,
     get_participants,
     get_search_results,
     get_session,
     save_search_results,
-    update_search_results,
+    save_search_results_if_active,
+    update_search_results_if_current,
 )
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 from backend.places import (
@@ -230,7 +232,7 @@ async def search(
             request,
             "partials/results_table.html",
             {
-                "error": "At least 2 participants must have selected their stops.",
+                "error": "Add one more participant, then choose their stops.",
                 "results": None,
             },
         )
@@ -257,6 +259,7 @@ async def search(
     registry.prune()
     selected_place_type_labels = _selected_place_type_labels(place_types)
     registry.create(search_id, code, place_type_labels=selected_place_type_labels)
+    await begin_search(db, code, search_id)
     registry.start(
         search_id,
         _run_search(
@@ -515,25 +518,33 @@ async def _run_search(
         # Save results
         results_rows = df_results.rows(named=True)
         results_columns = df_results.columns
-        await save_search_results(
-            db,
-            code,
-            {
-                "rows": results_rows,
-                "columns": results_columns,
-                "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
-                "pub_search_stop_names": pub_search_stop_names,
-                "place_types": unique_place_types,
-                "departure_datetime": departure_datetime.isoformat(),
-                "return_datetime": return_datetime.isoformat(),
-                "stops_geo": stop_geo_data,
-                "pubs_flat": pubs_flat,
-                "participants_geo": participants_geo,
-                "search_direction": direction,
-                "participant_snapshot": participant_snapshot,
-                "warning": warning,
-            },
-        )
+        is_current = getattr(registry, "is_current", lambda _id, _code: True)
+        if not is_current(search_id, code):
+            return
+        data = {
+            "rows": results_rows,
+            "columns": results_columns,
+            "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
+            "pub_search_stop_names": pub_search_stop_names,
+            "place_types": unique_place_types,
+            "departure_datetime": departure_datetime.isoformat(),
+            "return_datetime": return_datetime.isoformat(),
+            "stops_geo": stop_geo_data,
+            "pubs_flat": pubs_flat,
+            "participants_geo": participants_geo,
+            "search_direction": direction,
+            "participant_snapshot": participant_snapshot,
+            "search_id": search_id,
+            "search_method": method,
+            "warning": warning,
+        }
+        if hasattr(registry, "is_current"):
+            saved = await save_search_results_if_active(db, code, search_id, data)
+        else:
+            await save_search_results(db, code, data)
+            saved = True
+        if not saved:
+            return
 
         result_html = templates.get_template("partials/results_table.html").render(
             request=request,
@@ -547,10 +558,13 @@ async def _run_search(
             participant_snapshot=participant_snapshot,
             participant_snapshot_json=json.dumps(participant_snapshot),
             search_direction=direction,
+            search_method=method,
+            search_id=search_id,
             warning=warning,
         )
 
-        registry.update(search_id, done=True, result_html=result_html)
+        if is_current(search_id, code):
+            registry.update(search_id, done=True, result_html=result_html)
 
     except Exception as e:
         logger.error("Search failed: %s", e, exc_info=True)
@@ -559,7 +573,8 @@ async def _run_search(
             error=f"Search failed: {e}",
             results=None,
         )
-        registry.update(search_id, done=True, result_html=error_html)
+        if getattr(registry, "is_current", lambda _id, _code: True)(search_id, code):
+            registry.update(search_id, done=True, result_html=error_html)
 
 
 @router.get("/session/{code}/search-progress/{search_id}")
@@ -689,6 +704,10 @@ async def load_venues_for_stop(
         if saved is None:
             raise HTTPException(status_code=404, detail="Search results not found")
         data = saved["data"]
+        original_search_id = data.get("search_id", "")
+        if not isinstance(original_search_id, str):
+            raise HTTPException(status_code=422, detail="Saved search version is invalid")
+        original_created_at = saved["created_at"]
         ranked_stops = {
             row.get("Target Stop") for row in data.get("rows", []) if row.get("Target Stop")
         }
@@ -821,7 +840,17 @@ async def load_venues_for_stop(
         searched_stops.append(stop_name)
         data["pub_search_stop_names"] = searched_stops
         data["pubs_flat"] = _pubs_flat_from_saved(pubs_by_stop)
-        await update_search_results(db, code, data)
+        updated = await update_search_results_if_current(
+            db,
+            code,
+            data,
+            search_id=original_search_id,
+            created_at=original_created_at,
+        )
+        if not updated:
+            return _render_venue_suggestions(
+                request, code, stop_name, [], searched=False, state="stale"
+            )
 
         return _render_venue_suggestions(
             request,
@@ -873,6 +902,8 @@ async def results_page(request: Request, code: str):
             "participant_snapshot": data.get("participant_snapshot", []),
             "participant_snapshot_json": json.dumps(data.get("participant_snapshot", [])),
             "search_direction": data.get("search_direction", "round-trip"),
+            "search_method": data.get("search_method", "minimize-worst-case"),
+            "search_id": data.get("search_id", ""),
             "warning": data.get("warning"),
             "created_at": saved["created_at"],
         },

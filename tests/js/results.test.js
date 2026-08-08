@@ -283,6 +283,27 @@ test("rendered reachability warning is revealed on a reachability error", async 
     assert.equal(fixture.error.hidden, false);
 });
 
+test("reachability failure makes participant controls safe no-ops", async () => {
+    const assigned = fakeController();
+    let participantAttempts = 0;
+    assigned.setParticipant = () => {
+        participantAttempts += 1;
+        throw new RangeError("no reachability payload");
+    };
+    const { module } = await loadResultsModule(async () => assigned);
+    const fixture = makeRoot();
+    await module.initResultsUi(fixture.root);
+    fixture.map.dispatch("reachability:error");
+
+    fixture.daniel.dispatch("click");
+    fixture.threshold.value = "50";
+    fixture.threshold.dispatch("input");
+
+    assert.equal(fixture.root.dataset.reachabilityUnavailable, "true");
+    assert.equal(participantAttempts, 1);
+    assert.equal(assigned.thresholdCalls.length, 0);
+});
+
 test("state changed while map creation is pending is synchronized after assignment", async () => {
     const creation = deferred();
     const { module } = await loadResultsModule(() => creation.promise);

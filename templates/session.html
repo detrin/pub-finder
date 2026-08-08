@@ -3,7 +3,7 @@
 {% block title %}{{ session.name }} - Meet Somewhere{% endblock %}
 
 {% block content %}
-{% set readiness = namespace(missing_name='', missing_detail='') %}
+{% set readiness = namespace(missing_name='', missing_detail='', needs_participant=participants | length < 2) %}
 {% for participant in participants %}
     {% if not readiness.missing_name and not participant.start_stop %}
         {% set readiness.missing_name = participant.name %}
@@ -90,11 +90,11 @@
                         </select>
                     </label>
                 </div>
-                <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.missing_name %} disabled{% endif %}>
+                <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.needs_participant or readiness.missing_name %} disabled{% endif %}>
                     <span class="htmx-indicator">Searching</span>
                     <span class="search-label">Find somewhere</span>
                 </button>
-                <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.missing_name %}{{ readiness.missing_name }} needs {{ readiness.missing_detail }}.{% else %}Everyone is ready.{% endif %}</p>
+                <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.needs_participant %}Add one more participant.{% elif readiness.missing_name %}{{ readiness.missing_name }} needs {{ readiness.missing_detail }}.{% else %}Everyone is ready.{% endif %}</p>
             </form>
         </section>
     </div>

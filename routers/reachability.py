@@ -31,8 +31,8 @@ def _validate_snapshot(value: Any) -> list[dict[str, Any]]:
     return participants
 
 
-def _etag(session_code: str, created_at: str, direction: str) -> str:
-    identity = f"{session_code}\0{created_at}\0{direction}".encode()
+def _etag(session_code: str, created_at: str, direction: str, search_id: str) -> str:
+    identity = f"{session_code}\0{created_at}\0{direction}\0{search_id}".encode()
     return f'"{hashlib.sha256(identity).hexdigest()}"'
 
 
@@ -47,7 +47,7 @@ def _if_none_match_matches(header: str | None, etag: str) -> bool:
 
 
 @router.get("/session/{code}/reachability")
-async def reachability(request: Request, code: str) -> Response:
+async def reachability(request: Request, code: str, version: str | None = None) -> Response:
     db = request.app.state.db
     if await get_session(db, code) is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -63,8 +63,13 @@ async def reachability(request: Request, code: str) -> Response:
     if not isinstance(direction, str) or direction not in VALID_DIRECTIONS:
         raise HTTPException(status_code=422, detail="Saved search direction is invalid")
     participants = _validate_snapshot(data.get("participant_snapshot"))
+    search_id = data.get("search_id", "")
+    if not isinstance(search_id, str):
+        raise HTTPException(status_code=422, detail="Saved search version is invalid")
+    if version is not None and version != search_id:
+        raise HTTPException(status_code=409, detail="Search results have been replaced")
 
-    etag = _etag(code, saved["created_at"], direction)
+    etag = _etag(code, saved["created_at"], direction, search_id)
     headers = {"Cache-Control": _CACHE_CONTROL, "ETag": etag}
     if _if_none_match_matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers=headers)

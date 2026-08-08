@@ -410,3 +410,24 @@ async def test_reachability_etag_changes_when_saved_direction_changes():
 
     assert changed.status_code == 200
     assert changed.headers["etag"] != first.headers["etag"]
+
+
+@pytest.mark.asyncio
+async def test_reachability_version_rejects_an_old_result_payload_after_rerun():
+    session = await create_session(app.state.db, "Test", "P1")
+    participant = (await get_participants(app.state.db, session["code"]))[0]
+    first = saved_payload(participant["id"])
+    first["search_id"] = "first-search"
+    second = saved_payload(participant["id"], direction="back-only")
+    second["search_id"] = "second-search"
+    await save_search_results(app.state.db, session["code"], first)
+    await save_search_results(app.state.db, session["code"], second)
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        stale = await client.get(f"/session/{session['code']}/reachability?version=first-search")
+        current = await client.get(f"/session/{session['code']}/reachability?version=second-search")
+
+    assert stale.status_code == 409
+    assert current.status_code == 200

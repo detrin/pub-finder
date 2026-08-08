@@ -20,6 +20,7 @@ class SearchProgress:
     total: int
     place_type_labels: tuple[str, ...]
     done: bool
+    cancelled: bool
     result_html: str | None
     updated_at: float
 
@@ -37,6 +38,7 @@ class SearchRegistry:
         self._progress: dict[str, SearchProgress] = {}
         self._progress_lock = Lock()
         self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._active_searches: dict[str, str] = {}
         self._worker_pool = ThreadPoolExecutor(thread_name_prefix="pub-finder-search")
         self._worker_futures: set[Future[Any]] = set()
         self._worker_lock = Lock()
@@ -59,17 +61,37 @@ class SearchRegistry:
             total=0,
             place_type_labels=place_type_labels,
             done=False,
+            cancelled=False,
             result_html=None,
             updated_at=self._clock(),
         )
         with self._progress_lock:
+            previous_id = self._active_searches.get(session_code)
+            if previous_id and previous_id != search_id:
+                previous = self._progress.get(previous_id)
+                if previous is not None:
+                    self._progress[previous_id] = replace(
+                        previous,
+                        done=True,
+                        cancelled=True,
+                        result_html=None,
+                        updated_at=self._clock(),
+                    )
+                previous_task = self._tasks.get(previous_id)
+                if previous_task is not None and not previous_task.done():
+                    previous_task.cancel()
             self._progress[search_id] = progress
+            self._active_searches[session_code] = search_id
         return replace(progress)
+
+    def is_current(self, search_id: str, session_code: str) -> bool:
+        with self._progress_lock:
+            return self._active_searches.get(session_code) == search_id and search_id in self._progress
 
     def update(self, search_id: str, **changes: Any) -> bool:
         with self._progress_lock:
             progress = self._progress.get(search_id)
-            if progress is None:
+            if progress is None or progress.cancelled:
                 return False
             self._progress[search_id] = replace(
                 progress,

@@ -15,7 +15,8 @@ async def init_db(db: aiosqlite.Connection):
             code TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL DEFAULT '',
             creator_name TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            active_search_id TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS participants (
@@ -88,6 +89,13 @@ async def init_db(db: aiosqlite.Connection):
         await db.execute("SELECT primary_type FROM pub_cache LIMIT 1")
     except Exception:
         await db.execute("ALTER TABLE pub_cache ADD COLUMN primary_type TEXT DEFAULT ''")
+        await db.commit()
+
+    # Migration: search supersession token for pre-existing session databases.
+    try:
+        await db.execute("SELECT active_search_id FROM sessions LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE sessions ADD COLUMN active_search_id TEXT NOT NULL DEFAULT ''")
         await db.commit()
 
 
@@ -226,6 +234,31 @@ async def save_search_results(db: aiosqlite.Connection, session_code: str, resul
     await db.commit()
 
 
+async def begin_search(db: aiosqlite.Connection, session_code: str, search_id: str) -> bool:
+    result = await db.execute(
+        "UPDATE sessions SET active_search_id = ? WHERE code = ?", (search_id, session_code)
+    )
+    await db.commit()
+    return result.rowcount > 0
+
+
+async def save_search_results_if_active(
+    db: aiosqlite.Connection, session_code: str, search_id: str, results_data: dict
+) -> bool:
+    """Persist only if this search is still the session's active generation."""
+    import json
+
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.execute(
+        "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) "
+        "SELECT ?, ?, ? WHERE EXISTS ("
+        "SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?) ",
+        (session_code, json.dumps(results_data, default=str), now, session_code, search_id),
+    )
+    await db.commit()
+    return result.rowcount > 0
+
+
 async def update_search_results(db: aiosqlite.Connection, session_code: str, results_data: dict):
     """Update persisted search data without changing when the search was run."""
     import json
@@ -235,6 +268,28 @@ async def update_search_results(db: aiosqlite.Connection, session_code: str, res
         (json.dumps(results_data, default=str), session_code),
     )
     await db.commit()
+
+
+async def update_search_results_if_current(
+    db: aiosqlite.Connection,
+    session_code: str,
+    results_data: dict,
+    *,
+    search_id: str,
+    created_at: str,
+) -> bool:
+    """Update an expansion only if it still belongs to the search that started it."""
+    import json
+
+    result = await db.execute(
+        "UPDATE search_results SET results_json = ? "
+        "WHERE session_code = ? AND created_at = ? "
+        "AND COALESCE(json_extract(results_json, '$.search_id'), '') = ? "
+        "AND EXISTS (SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?)",
+        (json.dumps(results_data, default=str), session_code, created_at, search_id, session_code, search_id),
+    )
+    await db.commit()
+    return result.rowcount > 0
 
 
 async def get_search_results(db: aiosqlite.Connection, session_code: str) -> Optional[dict]:

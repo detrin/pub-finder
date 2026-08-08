@@ -36,6 +36,22 @@ async def test_registry_tracks_and_releases_completed_task():
     assert registry.task_count == 0
 
 
+@pytest.mark.asyncio
+async def test_newer_search_supersedes_and_cancels_the_older_session_search():
+    registry = SearchRegistry()
+    registry.create("old", "session-1")
+    old_task = registry.start("old", asyncio.Event().wait())
+    registry.create("new", "session-1")
+
+    await asyncio.sleep(0)
+
+    old = registry.get("old", "session-1")
+    assert old is not None and old.done and old.cancelled
+    assert old_task.cancelled()
+    assert registry.is_current("new", "session-1")
+    assert not registry.is_current("old", "session-1")
+
+
 def test_registry_rejects_progress_access_from_another_session():
     registry = SearchRegistry()
     registry.create("search-1", "session-1")

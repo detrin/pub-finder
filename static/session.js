@@ -207,7 +207,26 @@ function bindReturnCheckboxes(root) {
 function bindSseProtection(root) {
     const participantStream = root.querySelector("#session-participants");
     const pendingRequests = new Set();
+    let deferred = false;
     const requestKey = (event) => event.detail?.xhr ?? event.detail?.elt;
+
+    function focusedParticipantInput() {
+        const active = document.activeElement;
+        return active?.tagName === "INPUT" && participantStream?.contains?.(active);
+    }
+
+    function refreshDeferred() {
+        if (!deferred || pendingRequests.size || focusedParticipantInput()) return;
+        deferred = false;
+        const code = root.dataset.sessionCode;
+        const htmx = globalThis.htmx;
+        if (code && htmx?.ajax) {
+            htmx.ajax("GET", `/session/${encodeURIComponent(code)}/participants`, {
+                target: "#session-participants-inner",
+                swap: "innerHTML",
+            });
+        }
+    }
 
     document.addEventListener("htmx:beforeRequest", (event) => {
         if (root.contains(event.detail?.elt)) pendingRequests.add(requestKey(event));
@@ -215,14 +234,17 @@ function bindSseProtection(root) {
     for (const eventName of ["htmx:afterRequest", "htmx:responseError", "htmx:sendError"]) {
         document.addEventListener(eventName, (event) => {
             pendingRequests.delete(requestKey(event));
+            refreshDeferred();
         });
     }
     document.addEventListener("htmx:sseBeforeMessage", (event) => {
         if (event.target !== participantStream) return;
-        const focusedInput = document.activeElement?.tagName === "INPUT"
-            && root.contains(document.activeElement);
-        if (pendingRequests.size || focusedInput) event.preventDefault();
+        if (pendingRequests.size || focusedParticipantInput()) {
+            deferred = true;
+            event.preventDefault();
+        }
     });
+    document.addEventListener("focusout", () => window.setTimeout(refreshDeferred, 0));
 }
 
 function bindRemoveConfirmation(root) {
@@ -311,7 +333,13 @@ function updateReadiness(root) {
     const submit = root.querySelector("[data-search-submit]");
     const status = root.querySelector("[data-session-readiness]");
     if (!submit || !status) return;
-    const incomplete = [...root.querySelectorAll("form.stop-form")].find((form) => {
+    const forms = [...root.querySelectorAll("form.stop-form")];
+    if (forms.length < 2) {
+        submit.disabled = true;
+        status.textContent = "Add one more participant.";
+        return;
+    }
+    const incomplete = forms.find((form) => {
         const start = form.querySelector("[name=start_stop]")?.value.trim();
         const end = form.querySelector("[name=end_stop]")?.value.trim();
         const same = form.querySelector("[data-same-start-end]")?.checked;
