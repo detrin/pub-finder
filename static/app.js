@@ -1,4 +1,5 @@
 import { initThemeToggle } from "/static/theme.js";
+import { rememberSession, renderRecentSessions } from "/static/history.js";
 
 initThemeToggle();
 
@@ -365,49 +366,13 @@ document.addEventListener("change", function (event) {
     document.addEventListener("click", onStopInputClick);
 })();
 
-// ── Session history (localStorage) ──────────────────────────
-
-function saveSessionToHistory(code, name) {
-    if (!code) return;
-    var history = JSON.parse(localStorage.getItem("pubfinder_sessions") || "[]");
-    // Remove existing entry for this code
-    history = history.filter(function (s) { return s.code !== code; });
-    // Add to front
-    history.unshift({ code: code, name: name || code, ts: Date.now() });
-    // Keep last 10
-    history = history.slice(0, 10);
-    localStorage.setItem("pubfinder_sessions", JSON.stringify(history));
-}
-
-function renderSessionHistory() {
-    var container = document.getElementById("session-history");
-    if (!container) return;
-    var history = JSON.parse(localStorage.getItem("pubfinder_sessions") || "[]");
-    if (history.length === 0) {
-        container.style.display = "none";
-        return;
-    }
-    container.style.display = "";
-    var list = container.querySelector(".session-history-list");
-    list.innerHTML = "";
-    history.forEach(function (s) {
-        var li = document.createElement("li");
-        var a = document.createElement("a");
-        a.href = "/session/" + s.code;
-        a.textContent = s.name;
-        li.appendChild(a);
-        list.appendChild(li);
-    });
-}
-
-// Auto-save current session if on session page
 (function () {
     var sessionEl = document.querySelector("[data-session-code]");
     if (sessionEl) {
-        saveSessionToHistory(
-            sessionEl.dataset.sessionCode,
-            sessionEl.dataset.sessionName
-        );
+        rememberSession({
+            code: sessionEl.dataset.sessionCode,
+            name: sessionEl.dataset.sessionName,
+        });
     }
-    renderSessionHistory();
+    renderRecentSessions();
 })();

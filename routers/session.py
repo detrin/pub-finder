@@ -76,11 +76,19 @@ async def create(
 
 @router.get("/join")
 async def join(request: Request, code: str, name: str = ""):
+    db = request.app.state.db
     if not name.strip():
-        return templates.TemplateResponse(request, "join.html", {"code": code})
+        session = await get_session(db, code)
+        if session is None:
+            return RedirectResponse(url="/?error=session_not_found", status_code=303)
+        participants = await get_participants(db, code)
+        return templates.TemplateResponse(
+            request,
+            "join.html",
+            {"code": code, "session": session, "participants": participants},
+        )
     if _is_rate_limited(request):
         return RedirectResponse(url="/?error=rate_limited", status_code=303)
-    db = request.app.state.db
     result = await join_session(db, code, name.strip()[:MAX_NAME_LENGTH])
     if result is None:
         return RedirectResponse(url="/?error=session_not_found", status_code=303)

@@ -3,23 +3,28 @@
 {% block title %}Join Session - Meet Somewhere{% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>Join Session</h1>
-    <p>Enter your name to join session <strong>{{ code }}</strong></p>
-</div>
-
-<div class="row">
-    <div class="col-4 offset-4">
-        <article class="card">
-            <form action="/session/join" method="get">
-                <input type="hidden" name="code" value="{{ code }}">
-                <label data-field>
-                    Your Name
-                    <input type="text" name="name" required placeholder="Enter your name" autofocus>
-                </label>
-                <button type="submit">Join Session</button>
-            </form>
-        </article>
+<section class="invite-page" aria-labelledby="invite-title">
+    <div>
+        <span class="sticker">Invitation</span>
+        <h1 id="invite-title">You’re invited to {{ session.name }}.</h1>
+        <p>No account required. Names and selected stops are visible to the group.</p>
     </div>
-</div>
+
+    {% if participants %}
+    <ul class="invite-participants" aria-label="People already in this plan">
+        {% for participant in participants %}
+        <li title="{{ participant.name }}">{{ participant.name | first | upper }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form class="invite-page__form" action="/session/join" method="get">
+        <input type="hidden" name="code" value="{{ code }}">
+        <label data-field>
+            Your name
+            <input type="text" name="name" required placeholder="Daniel" autofocus>
+        </label>
+        <button type="submit">Join plan</button>
+    </form>
+</section>
 {% endblock %}

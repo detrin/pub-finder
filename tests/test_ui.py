@@ -38,6 +38,36 @@ async def test_home_uses_meet_somewhere_shell():
 
 
 @pytest.mark.asyncio
+async def test_home_has_one_primary_start_form_and_secondary_join_path():
+    """Catch a regression to the competing create and join card layout."""
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    assert "Pick a place that works for everyone." in response.text
+    assert 'name="session_name"' in response.text
+    assert 'name="creator_name"' in response.text
+    assert 'data-join-disclosure' in response.text
+    assert 'data-session-history' in response.text
+
+
+@pytest.mark.asyncio
+async def test_direct_invite_names_the_session_and_requires_only_name():
+    """Catch an invite page that omits its plan name or asks for setup fields."""
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/join?code={session['code']}")
+
+    assert "You’re invited to Friday crew." in response.text
+    assert 'name="code"' in response.text
+    assert 'name="name"' in response.text
+    assert 'name="session_name"' not in response.text
+
+
+@pytest.mark.asyncio
 async def test_shell_routes_use_meet_somewhere_titles():
     session = await create_session(app.state.db, "Friday drinks", "Daniel")
     expected_titles = {
@@ -99,6 +129,63 @@ if (button.attributes["aria-label"] !== "Use dark theme") {
 
     result = subprocess.run(
         ["node", "--input-type=module", "--eval", script, theme_module],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_recent_session_storage_recovers_from_bad_data_and_uses_safe_link_text():
+    """Catch unbounded or unsafe recent-session rendering from local storage."""
+    history_module = Path("static/history.js").resolve().as_uri()
+    script = """
+const store = new Map([["meet_somewhere_recent_sessions", "not-json"]]);
+const root = {
+  hidden: true,
+  children: [],
+  replaceChildren(...children) { this.children = children; },
+};
+globalThis.localStorage = {
+  getItem(key) { return store.get(key) ?? null; },
+  setItem(key, value) { store.set(key, value); },
+};
+globalThis.document = {
+  querySelector(selector) {
+    return selector === "[data-session-history]" ? root : null;
+  },
+  createElement(tag) {
+    if (tag !== "a") throw new Error(`Unexpected element: ${tag}`);
+    return { href: "", textContent: "" };
+  },
+};
+const { rememberSession, renderRecentSessions } = await import(process.argv[1]);
+for (const code of ["a", "b", "c", "d", "e", "f"]) {
+  rememberSession({ code, name: `Plan ${code}` });
+}
+const saved = JSON.parse(store.get("meet_somewhere_recent_sessions"));
+if (saved.length !== 5 || saved[0].code !== "f" || saved[4].code !== "b") {
+  throw new Error(`Unexpected bounded history: ${JSON.stringify(saved)}`);
+}
+store.set(
+  "meet_somewhere_recent_sessions",
+  JSON.stringify([{ code: "safe code", name: "<img src=x>" }, null, { code: 7, name: "bad" }]),
+);
+renderRecentSessions();
+if (root.hidden || root.children.length !== 1) {
+  throw new Error("Expected one valid recent session link");
+}
+if (root.children[0].textContent !== "<img src=x>") {
+  throw new Error("Recent session name was not rendered as text");
+}
+if (root.children[0].href !== "/session/safe%20code") {
+  throw new Error(`Unexpected recent session link: ${root.children[0].href}`);
+}
+"""
+
+    result = subprocess.run(
+        ["node", "--input-type=module", "--eval", script, history_module],
         check=False,
         capture_output=True,
         text=True,

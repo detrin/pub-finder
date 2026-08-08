@@ -1,55 +1,60 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="hero">
-    <h1>Find the best pub to meet</h1>
-    <p>No more arguing about where to meet. We crunch Prague's entire transit network to find the fairest pub.</p>
-</div>
-
-<div class="row">
-    <div class="col-6">
-        <article class="card">
-            <header>
-                <h3>Create a Session</h3>
-            </header>
-            <p>Start a new session and invite your friends.</p>
-            <form hx-post="/session/create" hx-target="body">
-                <label data-field>
-                    Session Name
-                    <input type="text" name="session_name" required placeholder="e.g. Friday drinks">
-                </label>
-                <label data-field>
-                    Your Name
-                    <input type="text" name="creator_name" required placeholder="Enter your name">
-                </label>
-                <button type="submit">Create</button>
-            </form>
-        </article>
+<section class="home-hero">
+    <div class="home-hero__copy">
+        <span class="sticker">Made for Prague</span>
+        <h1>Pick a place that works for everyone.</h1>
+        <p>Add people, choose a time, and rank meeting points using Prague public transport times.</p>
     </div>
-
-    <div class="col-6">
-        <article class="card">
-            <header>
-                <h3>Join a Session</h3>
-            </header>
-            <p>Enter a session code to join your friends.</p>
-            <form action="/session/join" method="get">
-                <label data-field>
-                    Session Code
-                    <input type="text" name="code" required placeholder="e.g. a1b2c3d4">
-                </label>
-                <label data-field>
-                    Your Name
-                    <input type="text" name="name" required placeholder="Enter your name">
-                </label>
-                <button type="submit" class="outline">Join</button>
-            </form>
-        </article>
+    <div class="home-preview" aria-label="Three routes meeting at Náměstí Míru">
+        <svg viewBox="0 0 440 270" role="img" aria-hidden="true">
+            <path class="home-preview__line home-preview__line--blue" d="M35 55C115 65 150 125 226 140S324 141 399 207" />
+            <path class="home-preview__line home-preview__line--coral" d="M40 220C110 201 145 157 226 140S320 104 399 56" />
+            <path class="home-preview__line home-preview__line--yellow" d="M222 28C226 76 227 103 226 140S223 193 221 241" />
+            <circle class="home-preview__person" cx="35" cy="55" r="13" />
+            <circle class="home-preview__person" cx="40" cy="220" r="13" />
+            <circle class="home-preview__person" cx="222" cy="28" r="13" />
+            <circle class="home-preview__meet" cx="226" cy="140" r="20" />
+            <text x="226" y="146" text-anchor="middle">1</text>
+            <text class="home-preview__label" x="226" y="181" text-anchor="middle">Náměstí Míru</text>
+            <text class="home-preview__time" x="35" y="29" text-anchor="middle">18 min</text>
+            <text class="home-preview__time" x="40" y="254" text-anchor="middle">24 min</text>
+            <text class="home-preview__time" x="253" y="29">21 min</text>
+        </svg>
     </div>
-</div>
+</section>
 
-<div id="session-history" style="display: none;">
-    <h3>Recent Sessions</h3>
-    <ul class="session-history-list"></ul>
-</div>
+<section class="start-plan" aria-labelledby="start-plan-title">
+    <h2 id="start-plan-title">Start a plan</h2>
+    <form hx-post="/session/create" hx-target="body">
+        <label data-field>
+            Plan name
+            <input type="text" name="session_name" required placeholder="Friday drinks">
+        </label>
+        <label data-field>
+            Your name
+            <input type="text" name="creator_name" required placeholder="Daniel">
+        </label>
+        <button type="submit">Start planning</button>
+    </form>
+</section>
+
+<details class="join-plan" data-join-disclosure>
+    <summary>Join with a code</summary>
+    <form action="/session/join" method="get">
+        <label data-field>
+            Plan code
+            <input type="text" name="code" required placeholder="a1b2c3d4">
+        </label>
+        <label data-field>
+            Your name
+            <input type="text" name="name" required placeholder="Daniel">
+        </label>
+        <button type="submit" class="outline">Join plan</button>
+    </form>
+</details>
+
+<h2 id="recent-plans-title" class="visually-hidden">Recent plans</h2>
+<section hidden data-session-history aria-labelledby="recent-plans-title" aria-label="Recent plans"></section>
 {% endblock %}
