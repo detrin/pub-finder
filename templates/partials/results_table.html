@@ -81,66 +81,9 @@
         </div>
     </details>
 
-    {% if stop_name in pub_search_stop_names %}
-    {% if pubs %}
-    <div class="pubs-section">
-        <h4 class="pubs-heading">Nearby Pubs
-            <span class="pubs-count">{{ pubs | length }}</span>
-        </h4>
-        <div class="pub-pills">
-            {% for pub in pubs[:3] %}
-            <div class="pub-pill-row">
-                <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
-                   class="pub-pill">
-                    <span class="pub-pill-name">{{ pub.name }}</span>
-                    {% if pub.rating is not none and pub.rating_count is not none %}
-                    <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
-                        {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
-                    </span>
-                    {% endif %}
-                </a>
-                <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
-                   target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
-                    walk
-                </a>
-            </div>
-            {% endfor %}
-        </div>
-        {% if pubs | length > 3 %}
-        <details class="pubs-more">
-            <summary>Show {{ pubs | length - 3 }} more</summary>
-            <div class="pub-pills">
-                {% for pub in pubs[3:] %}
-                <div class="pub-pill-row">
-                    <a href="{{ pub.google_maps_url }}" target="_blank" rel="noopener"
-                       class="pub-pill">
-                        <span class="pub-pill-name">{{ pub.name }}</span>
-                        {% if pub.rating is not none and pub.rating_count is not none %}
-                        <span class="pub-pill-rating" title="{{ "%.1f" | format(pub.rating) }}/5 from {{ "{:,}".format(pub.rating_count) }} reviews">
-                            {{ "%.1f" | format(pub.rating) }}★ ({{ "{:,}".format(pub.rating_count) }})
-                        </span>
-                        {% endif %}
-                    </a>
-                    <a href="https://www.google.com/maps/dir/?api=1&origin={{ stop_name }},Prague&destination={{ pub.lat }},{{ pub.lon }}&travelmode=walking"
-                       target="_blank" rel="noopener" class="pub-walk-link" title="Walking directions">
-                        walk
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-        </details>
-        {% endif %}
-    </div>
-    {% else %}
-    <div class="pubs-section">
-        <p class="pubs-none"><em>No pubs found nearby</em></p>
-    </div>
-    {% endif %}
-    {% else %}
-    <div class="pubs-section">
-        <p class="pubs-none"><em>Pub suggestions are shown for the top 5 meeting points</em></p>
-    </div>
-    {% endif %}
+    {% with searched=(stop_name in pub_search_stop_names), venue_error=none, map_update=false %}
+        {% include "partials/venue_suggestions.html" %}
+    {% endwith %}
 </article>
 {% endfor %}
 

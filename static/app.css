@@ -634,6 +634,22 @@ nav[data-topnav] strong {
     margin: 0;
 }
 
+.venue-load-form {
+    display: inline-block;
+    margin: 0.55rem 0 0;
+}
+
+.venue-load-form button {
+    margin: 0;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+.venue-load-form .htmx-request .venue-load-label,
+.venue-load-form button.htmx-request .venue-load-label {
+    display: none;
+}
+
 /* Stop picker dialog */
 .stop-picker {
     width: min(480px, calc(100vw - 2rem));

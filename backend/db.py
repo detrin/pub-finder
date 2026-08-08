@@ -226,6 +226,17 @@ async def save_search_results(db: aiosqlite.Connection, session_code: str, resul
     await db.commit()
 
 
+async def update_search_results(db: aiosqlite.Connection, session_code: str, results_data: dict):
+    """Update persisted search data without changing when the search was run."""
+    import json
+
+    await db.execute(
+        "UPDATE search_results SET results_json = ? WHERE session_code = ?",
+        (json.dumps(results_data, default=str), session_code),
+    )
+    await db.commit()
+
+
 async def get_search_results(db: aiosqlite.Connection, session_code: str) -> Optional[dict]:
     """Get saved search results."""
     import json

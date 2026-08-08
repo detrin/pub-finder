@@ -354,6 +354,11 @@ async def test_search_queries_each_type_for_only_five_stops(monkeypatch):
     assert len(calls) == 15
     assert {call[0] for call in calls} == {50.00, 50.01, 50.02, 50.03, 50.04}
     assert {call[2] for call in calls} == {"pub", "bar", "cafe"}
+    saved = await get_search_results(app.state.db, session["code"])
+    assert saved is not None
+    assert saved["data"]["place_types"] == ["pub", "bar", "cafe"]
+    assert saved["data"]["departure_datetime"] == "2026-08-10T20:00:00"
+    assert saved["data"]["return_datetime"] == "2026-08-10T23:00:00"
 
 
 @pytest.mark.asyncio
@@ -454,7 +459,139 @@ async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
 
     sixth_result = response.text.split("<h3>F</h3>", 1)[1].split("</article>", 1)[0]
     assert "Pub suggestions are shown for the top 5 meeting points" in sixth_result
+    assert f'hx-post="/session/{session["code"]}/venues"' in sixth_result
+    assert 'name="stop_name" value="F"' in sixth_result
     assert "No pubs found nearby" not in sixth_result
+
+
+@pytest.mark.asyncio
+async def test_on_demand_venues_fetches_selected_types_filters_orders_caches_and_persists(
+    monkeypatch,
+):
+    """A lower-ranked stop can be expanded once, then served from persisted cache."""
+    session = await create_session(app.state.db, "Test", "P1")
+    app.state.stop_geo = pl.DataFrame(
+        {"name": ["A", "F"], "lat": [50.0, 50.05], "lon": [14.0, 14.05]}
+    )
+    base_pub = {
+        "lat": 50.051,
+        "lon": 14.051,
+        "price_level": None,
+        "google_maps_url": "https://example.com/venue",
+        "opening_hours": None,
+        "primary_type": "cafe",
+    }
+    await save_search_results(
+        app.state.db,
+        session["code"],
+        {
+            "rows": [
+                {"Target Stop": name, "Worst Case Minutes": 10, "Total Minutes": 20}
+                for name in ["A", "B", "C", "D", "E", "F"]
+            ],
+            "pubs_by_stop": {name: [] for name in ["A", "B", "C", "D", "E"]},
+            "pub_search_stop_names": ["A", "B", "C", "D", "E"],
+            "place_types": ["cafe"],
+            "departure_datetime": "2026-08-10T20:00:00",
+            "return_datetime": "2026-08-10T23:00:00",
+            "stops_geo": [],
+            "pubs_flat": [],
+            "participants_geo": [],
+            "warning": None,
+        },
+    )
+    original_saved = await get_search_results(app.state.db, session["code"])
+    assert original_saved is not None
+    calls = []
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        calls.append((lat, lon, place_type, radius))
+        return [
+            {
+                **base_pub,
+                "place_id": "tiny-perfect",
+                "name": "Tiny Perfect",
+                "rating": 5.0,
+                "rating_count": 1,
+            },
+            {
+                **base_pub,
+                "place_id": "established",
+                "name": "Established Cafe",
+                "rating": 4.2,
+                "rating_count": 100,
+            },
+            {
+                **base_pub,
+                "place_id": "closes-early",
+                "name": "Closes Early",
+                "rating": 4.9,
+                "rating_count": 500,
+                "opening_hours": [
+                    {
+                        "open": {"day": 1, "hour": 18, "minute": 0},
+                        "close": {"day": 1, "hour": 21, "minute": 0},
+                    }
+                ],
+            },
+        ]
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{session['code']}/venues", data={"stop_name": "F"}
+        )
+        cached_response = await client.post(
+            f"/session/{session['code']}/venues", data={"stop_name": "F"}
+        )
+
+    assert response.status_code == 200
+    assert response.text.index("Established Cafe") < response.text.index("Tiny Perfect")
+    assert "Closes Early" not in response.text
+    assert len(calls) == 1
+    assert cached_response.status_code == 200
+    assert "Established Cafe" in cached_response.text
+
+    saved = await get_search_results(app.state.db, session["code"])
+    assert saved is not None
+    assert saved["created_at"] == original_saved["created_at"]
+    assert saved["data"]["pub_search_stop_names"] == ["A", "B", "C", "D", "E", "F"]
+    assert [pub["place_id"] for pub in saved["data"]["pubs_by_stop"]["F"]] == [
+        "established",
+        "tiny-perfect",
+    ]
+    assert [pub["stop"] for pub in saved["data"]["pubs_flat"]] == ["F", "F"]
+
+
+@pytest.mark.asyncio
+async def test_on_demand_venues_rejects_stop_outside_saved_results(monkeypatch):
+    """The session-scoped endpoint cannot query arbitrary stop names."""
+    session = await create_session(app.state.db, "Test", "P1")
+    await save_search_results(
+        app.state.db,
+        session["code"],
+        {
+            "rows": [{"Target Stop": "A", "Worst Case Minutes": 10, "Total Minutes": 20}],
+            "pubs_by_stop": {"A": []},
+            "pub_search_stop_names": ["A"],
+            "stops_geo": [],
+            "pubs_flat": [],
+            "participants_geo": [],
+            "warning": None,
+        },
+    )
+    live_search = AsyncMock(return_value=[])
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", live_search)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{session['code']}/venues", data={"stop_name": "Not in results"}
+        )
+
+    assert response.status_code == 404
+    live_search.assert_not_awaited()
 
 
 @pytest.mark.asyncio

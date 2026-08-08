@@ -7,12 +7,18 @@ from collections import defaultdict
 from datetime import datetime
 
 import polars as pl
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
-from backend.db import get_participants, get_search_results, get_session, save_search_results
+from backend.db import (
+    get_participants,
+    get_search_results,
+    get_session,
+    save_search_results,
+    update_search_results,
+)
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 from backend.places import (
     cache_pubs_for_type,
@@ -27,8 +33,12 @@ logger = logging.getLogger(__name__)
 
 # Simple per-session rate limiter: max 3 searches per 60 seconds
 _search_timestamps: dict[str, list[float]] = defaultdict(list)
+_venue_expansion_timestamps: dict[str, list[float]] = defaultdict(list)
+_venue_expansion_locks: dict[str, asyncio.Lock] = {}
 SEARCH_RATE_LIMIT = 3
 SEARCH_RATE_WINDOW = 60  # seconds
+VENUE_EXPANSION_RATE_LIMIT = 3
+VENUE_EXPANSION_RATE_WINDOW = 60
 PUB_DISCOVERY_STOP_LIMIT = 5
 PLACES_CONCURRENCY_LIMIT = 4
 PLACES_SEARCH_RADIUS_METERS = 500
@@ -42,6 +52,21 @@ def _is_rate_limited(session_code: str) -> bool:
     if len(_search_timestamps[session_code]) >= SEARCH_RATE_LIMIT:
         return True
     _search_timestamps[session_code].append(now)
+    return False
+
+
+def _is_venue_expansion_rate_limited(session_code: str) -> bool:
+    """Limit uncached venue expansions per session to bound Google API spend."""
+    now = _time.monotonic()
+    recent = [
+        timestamp
+        for timestamp in _venue_expansion_timestamps[session_code]
+        if now - timestamp < VENUE_EXPANSION_RATE_WINDOW
+    ]
+    _venue_expansion_timestamps[session_code] = recent
+    if len(recent) >= VENUE_EXPANSION_RATE_LIMIT:
+        return True
+    recent.append(now)
     return False
 
 
@@ -358,6 +383,9 @@ async def _run_search(
                 "columns": results_columns,
                 "pubs_by_stop": {k: v for k, v in pubs_by_stop.items()},
                 "pub_search_stop_names": pub_search_stop_names,
+                "place_types": unique_place_types,
+                "departure_datetime": departure_datetime.isoformat(),
+                "return_datetime": return_datetime.isoformat(),
                 "stops_geo": stop_geo_data,
                 "pubs_flat": pubs_flat,
                 "participants_geo": participants_geo,
@@ -371,6 +399,7 @@ async def _run_search(
             results=df_results,
             pubs_by_stop=pubs_by_stop,
             pub_search_stop_names=set(pub_search_stop_names),
+            session_code=code,
             stops_json=json.dumps(stop_geo_data),
             pubs_json=json.dumps(pubs_flat),
             participants_json=json.dumps(participants_geo),
@@ -441,6 +470,224 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+def _pubs_flat_from_saved(pubs_by_stop: dict[str, list[dict]]) -> list[dict]:
+    """Build the map marker payload from the persisted venue lists."""
+    return [
+        {
+            "stop": stop_name,
+            "name": pub["name"],
+            "lat": pub["lat"],
+            "lon": pub["lon"],
+            "rating": pub.get("rating"),
+            "rating_count": pub.get("rating_count"),
+            "url": pub.get("google_maps_url", ""),
+        }
+        for stop_name, pubs in pubs_by_stop.items()
+        for pub in pubs
+    ]
+
+
+def _render_venue_suggestions(
+    request: Request,
+    code: str,
+    stop_name: str,
+    pubs: list[dict],
+    *,
+    searched: bool,
+    error: str | None = None,
+    saved_data: dict | None = None,
+) -> HTMLResponse:
+    context = {
+        "session_code": code,
+        "stop_name": stop_name,
+        "pubs": pubs,
+        "searched": searched,
+        "venue_error": error,
+        "map_update": saved_data is not None,
+    }
+    if saved_data is not None:
+        context.update(
+            {
+                "stops_json": json.dumps(saved_data.get("stops_geo", [])),
+                "pubs_json": json.dumps(saved_data.get("pubs_flat", [])),
+                "participants_json": json.dumps(saved_data.get("participants_geo", [])),
+            }
+        )
+    return templates.TemplateResponse(request, "partials/venue_suggestions.html", context)
+
+
+def _stop_coordinates(request: Request, data: dict, stop_name: str) -> tuple[float, float] | None:
+    for stop in data.get("stops_geo", []):
+        if stop.get("name") == stop_name:
+            return float(stop["lat"]), float(stop["lon"])
+
+    geo_row = request.app.state.stop_geo.filter(pl.col("name") == stop_name)
+    if len(geo_row) == 0:
+        return None
+    return float(geo_row["lat"][0]), float(geo_row["lon"][0])
+
+
+@router.post("/session/{code}/venues", response_class=HTMLResponse)
+async def load_venues_for_stop(
+    request: Request,
+    code: str,
+    stop_name: str = Form(..., max_length=200),
+):
+    """Load and persist venue suggestions for one ranked stop on demand."""
+    db = request.app.state.db
+    if await get_session(db, code) is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    lock = _venue_expansion_locks.setdefault(code, asyncio.Lock())
+    async with lock:
+        saved = await get_search_results(db, code)
+        if saved is None:
+            raise HTTPException(status_code=404, detail="Search results not found")
+        data = saved["data"]
+        ranked_stops = {
+            row.get("Target Stop") for row in data.get("rows", []) if row.get("Target Stop")
+        }
+        if stop_name not in ranked_stops:
+            raise HTTPException(status_code=404, detail="Stop not found in these results")
+
+        pubs_by_stop = data.setdefault("pubs_by_stop", {})
+        searched_stops = data.get("pub_search_stop_names")
+        if searched_stops is None:
+            searched_stops = list(pubs_by_stop)
+        if stop_name in searched_stops:
+            return _render_venue_suggestions(
+                request,
+                code,
+                stop_name,
+                pubs_by_stop.get(stop_name, []),
+                searched=True,
+            )
+
+        coordinates = _stop_coordinates(request, data, stop_name)
+        if coordinates is None:
+            return _render_venue_suggestions(
+                request,
+                code,
+                stop_name,
+                [],
+                searched=False,
+                error="Venue suggestions are unavailable for this stop.",
+            )
+        lat, lon = coordinates
+
+        valid_types = {"pub", "bar", "cafe", "restaurant"}
+        saved_place_types = data.get("place_types") or ["pub", "bar", "cafe"]
+        place_types = list(
+            dict.fromkeys(place_type for place_type in saved_place_types if place_type in valid_types)
+        ) or ["pub", "bar", "cafe"]
+
+        pubs_raw = []
+        missing_types = []
+        for place_type in place_types:
+            cached = await get_cached_pubs_for_type(
+                db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
+            )
+            if cached is None:
+                missing_types.append(place_type)
+            else:
+                pubs_raw.extend(cached)
+
+        if missing_types and _is_venue_expansion_rate_limited(code):
+            return _render_venue_suggestions(
+                request,
+                code,
+                stop_name,
+                [],
+                searched=False,
+                error="Too many venue lookups. Please wait a minute and try again.",
+            )
+
+        semaphore = asyncio.Semaphore(PLACES_CONCURRENCY_LIMIT)
+
+        async def fetch(place_type: str):
+            try:
+                async with semaphore:
+                    pubs = await search_pubs_near_stop(
+                        lat,
+                        lon,
+                        place_type,
+                        radius=PLACES_SEARCH_RADIUS_METERS,
+                    )
+                return place_type, pubs, None
+            except Exception as exc:
+                return place_type, [], exc
+
+        fetch_results = await asyncio.gather(*(fetch(place_type) for place_type in missing_types))
+        had_error = False
+        for place_type, pubs, error in fetch_results:
+            if error is not None:
+                logger.warning(
+                    "On-demand Places API error for %s (%s): %s", stop_name, place_type, error
+                )
+                had_error = True
+                continue
+            pubs_raw.extend(pubs)
+            try:
+                await cache_pubs_for_type(
+                    db,
+                    stop_name,
+                    place_type,
+                    PLACES_SEARCH_RADIUS_METERS,
+                    pubs,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Could not cache on-demand Places response for %s (%s): %s",
+                    stop_name,
+                    place_type,
+                    exc,
+                )
+
+        if had_error:
+            return _render_venue_suggestions(
+                request,
+                code,
+                stop_name,
+                [],
+                searched=False,
+                error="Venue suggestions could not be loaded. Please try again.",
+            )
+
+        departure_value = data.get("departure_datetime")
+        return_value = data.get("return_datetime")
+        departure_datetime = datetime.fromisoformat(departure_value) if departure_value else None
+        return_datetime = datetime.fromisoformat(return_value) if return_value else None
+        used_place_ids = {
+            pub.get("place_id")
+            for existing_stop, pubs in pubs_by_stop.items()
+            if existing_stop != stop_name
+            for pub in pubs
+        }
+        pubs = []
+        for pub in order_pubs_for_stop(pubs_raw, lat, lon):
+            if pub.get("place_id") in used_place_ids:
+                continue
+            if departure_datetime and return_datetime:
+                if not is_open_during(pub, departure_datetime, return_datetime):
+                    continue
+            pubs.append(pub)
+
+        pubs_by_stop[stop_name] = pubs
+        searched_stops.append(stop_name)
+        data["pub_search_stop_names"] = searched_stops
+        data["pubs_flat"] = _pubs_flat_from_saved(pubs_by_stop)
+        await update_search_results(db, code, data)
+
+        return _render_venue_suggestions(
+            request,
+            code,
+            stop_name,
+            pubs,
+            searched=True,
+            saved_data=data,
+        )
+
+
 @router.get("/session/{code}/results", response_class=HTMLResponse)
 async def results_page(request: Request, code: str):
     """Shareable results page — shows the last search results for a session."""
@@ -475,6 +722,7 @@ async def results_page(request: Request, code: str):
             "results": df_results,
             "pubs_by_stop": data["pubs_by_stop"],
             "pub_search_stop_names": set(pub_search_stop_names),
+            "session_code": code,
             "stops_json": json.dumps(data["stops_geo"]),
             "pubs_json": json.dumps(data["pubs_flat"]),
             "participants_json": json.dumps(data["participants_geo"]),
