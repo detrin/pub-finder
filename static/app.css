@@ -471,6 +471,43 @@ textarea {
     padding: 0.55rem 0.7rem;
 }
 
+select {
+    appearance: none;
+    padding-right: 3.25rem;
+    background-color: var(--paper);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--accent-ink) 50%),
+        linear-gradient(135deg, var(--accent-ink) 50%, transparent 50%),
+        linear-gradient(
+            to right,
+            transparent calc(100% - 2.6rem),
+            var(--ink) calc(100% - 2.6rem),
+            var(--ink) calc(100% - 2.45rem),
+            var(--yellow) calc(100% - 2.45rem)
+        );
+    background-position:
+        calc(100% - 1.2rem) calc(50% - 0.1rem),
+        calc(100% - 0.85rem) calc(50% - 0.1rem),
+        0 0;
+    background-repeat: no-repeat;
+    background-size: 0.4rem 0.4rem, 0.4rem 0.4rem, 100% 100%;
+    box-shadow: var(--control-shadow);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+select:hover {
+    background-color: var(--sky-surface);
+}
+
+select:disabled {
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 button {
     padding: 0.5rem 0.85rem;
     background: var(--coral);
@@ -1598,7 +1635,10 @@ input[data-stop-input]:not(:disabled) {
 
 /* Results */
 #results-section {
+    width: min(1360px, calc(100vw - 2rem));
     margin-top: 2rem;
+    margin-left: 50%;
+    transform: translateX(-50%);
 }
 
 /* Results workspace */
