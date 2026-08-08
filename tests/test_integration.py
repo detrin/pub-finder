@@ -458,6 +458,44 @@ async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_legacy_saved_results_keep_existing_pub_suggestions():
+    """Saved results created before focused discovery still show their venues."""
+    session = await create_session(app.state.db, "Test", "P1")
+    await save_search_results(
+        app.state.db,
+        session["code"],
+        {
+            "rows": [{"Target Stop": "A", "Worst Case Minutes": 10, "Total Minutes": 20}],
+            "pubs_by_stop": {
+                "A": [
+                    {
+                        "place_id": "legacy-pub",
+                        "name": "Legacy Pub",
+                        "lat": 50.08,
+                        "lon": 14.42,
+                        "rating": 4.5,
+                        "rating_count": 42,
+                        "google_maps_url": "https://example.com/legacy-pub",
+                    }
+                ]
+            },
+            "stops_geo": [],
+            "pubs_flat": [],
+            "participants_geo": [],
+            "warning": None,
+        },
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}/results")
+
+    assert response.status_code == 200
+    assert "Legacy Pub" in response.text
+    assert "Pub suggestions are shown for the top 5 meeting points" not in response.text
+
+
+@pytest.mark.asyncio
 async def test_search_success_returns_progress():
     """Search returns a progress bar that connects via SSE."""
     transport = ASGITransport(app=app)

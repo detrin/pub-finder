@@ -462,6 +462,9 @@ async def results_page(request: Request, code: str):
 
     data = saved["data"]
     df_results = pl.DataFrame(data["rows"])
+    pub_search_stop_names = data.get("pub_search_stop_names")
+    if pub_search_stop_names is None:
+        pub_search_stop_names = df_results["Target Stop"].head(PUB_DISCOVERY_STOP_LIMIT).to_list()
 
     return templates.TemplateResponse(
         request,
@@ -471,7 +474,7 @@ async def results_page(request: Request, code: str):
             "has_results": True,
             "results": df_results,
             "pubs_by_stop": data["pubs_by_stop"],
-            "pub_search_stop_names": set(data.get("pub_search_stop_names", [])),
+            "pub_search_stop_names": set(pub_search_stop_names),
             "stops_json": json.dumps(data["stops_geo"]),
             "pubs_json": json.dumps(data["pubs_flat"]),
             "participants_json": json.dumps(data["participants_geo"]),
