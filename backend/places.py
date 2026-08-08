@@ -320,8 +320,7 @@ async def cache_pubs_for_type(
                 ),
             )
         await db.execute(
-            "DELETE FROM pub_cache_matches "
-            "WHERE stop_name = ? AND place_type = ? AND radius = ?",
+            "DELETE FROM pub_cache_matches WHERE stop_name = ? AND place_type = ? AND radius = ?",
             (stop_name, place_type, radius),
         )
         await db.executemany(
