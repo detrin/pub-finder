@@ -11,7 +11,8 @@
     {% endif %}
     <div class="participant-list">
         {% for p in participants %}
-        <article class="participant-row" style="--participant-color: {{ p.id | participant_color }}">
+        {% set participant_color_value = p.id | participant_color %}
+        <article class="participant-row" style="--participant-color: {{ participant_color_value }}; --participant-ink: {{ participant_color_value | participant_text_color }}">
             <div class="participant-row__heading">
                 <span class="participant-initial" aria-hidden="true">{{ p.name[:1] | upper }}</span>
                 <h3>{{ p.name }}</h3>

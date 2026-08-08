@@ -28,7 +28,7 @@ from backend.places import (
     order_pubs_for_stop,
     search_pubs_near_stop,
 )
-from backend.reachability import participant_color
+from backend.reachability import participant_color, participant_text_color
 from backend.utils import get_total_minutes_with_retries, validate_date_time
 
 logger = logging.getLogger(__name__)
@@ -184,6 +184,7 @@ def _render_progress_update_html(
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["participant_text_color"] = participant_text_color
 
 
 @router.post("/session/{code}/search", response_class=HTMLResponse)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -7,11 +8,37 @@ import polars as pl
 
 VALID_DIRECTIONS = {"there-only", "back-only", "round-trip"}
 PARTICIPANT_PALETTE = ("#ff6658", "#dff0ff", "#ffd447", "#4dc694", "#2458df", "#b9a8ff")
+_DARK_PARTICIPANT_TEXT = "#17191C"
+_LIGHT_PARTICIPANT_TEXT = "#F4F2EB"
 
 
 def participant_color(participant_id: int) -> str:
     """Return the stable UI colour assigned to a participant ID."""
     return PARTICIPANT_PALETTE[abs(int(participant_id or 0)) % len(PARTICIPANT_PALETTE)]
+
+
+def participant_text_color(background: str) -> str:
+    """Return the higher-contrast text colour for a participant colour."""
+    if not isinstance(background, str) or re.fullmatch(r"#[0-9a-fA-F]{6}", background) is None:
+        return _DARK_PARTICIPANT_TEXT
+
+    def luminance(color: str) -> float:
+        channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+        linear = [
+            channel / 12.92
+            if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    background_luminance = luminance(background)
+
+    def contrast(color: str) -> float:
+        brighter, darker = sorted((luminance(color), background_luminance), reverse=True)
+        return (brighter + 0.05) / (darker + 0.05)
+
+    return max((_DARK_PARTICIPANT_TEXT, _LIGHT_PARTICIPANT_TEXT), key=contrast)
 
 
 def _geo_frame(stop_geo: pl.DataFrame) -> pl.DataFrame:

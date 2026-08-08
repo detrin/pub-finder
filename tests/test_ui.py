@@ -1,4 +1,5 @@
 import base64
+import re
 import subprocess
 from pathlib import Path
 
@@ -412,6 +413,63 @@ async def test_mobile_compact_controls_have_44px_minimum_width():
     mobile_css = response.text.split("@media (max-width: 720px)", maxsplit=1)[1]
     assert "button," in mobile_css
     assert "min-width: 44px;" in mobile_css
+
+
+def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
+    """Catch dark-theme ink leaking onto light accent surfaces."""
+    css = Path("static/app.css").read_text()
+
+    def luminance(value: str) -> float:
+        channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+        linear = [
+            channel / 12.92
+            if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    def contrast(foreground: str, background: str) -> float:
+        values = sorted((luminance(foreground), luminance(background)), reverse=True)
+        return (values[0] + 0.05) / (values[1] + 0.05)
+
+    for background in ("#FF7869", "#FFE071", "#6FD5A7", "#B7DDED"):
+        assert contrast("#17191C", background) >= 4.5
+
+    def declarations(selector: str) -> str:
+        matches = list(re.finditer(rf"(?m)^[ \t]*{re.escape(selector)} \{{", css))
+        assert matches, selector
+        start = matches[-1].start()
+        opening = css.index("{", start)
+        return css[opening + 1 : css.index("}", opening)]
+
+    accent_ink_selectors = (
+        ".system-message--warning",
+        ".system-message--warning h2,\n.system-message--warning p",
+        ".system-message__action",
+        ".system-message__action:hover",
+        "button.outline",
+        ".ranked-stop--selected",
+        ".ranked-stop--selected .ranked-stop__toggle",
+        ".venue-action",
+        '.results-mobile-views button[aria-pressed="true"]',
+        ".sticker",
+        ".home-preview .home-preview__meet + text",
+        ".invite-participants li",
+        ".workspace-error",
+        ".participant-remove:hover",
+        '.occasion-presets button[aria-pressed="true"]',
+        ".stop-picker__close",
+        ".stop-picker__item:hover,\n.stop-picker__item:focus-visible",
+        ".badge-ready",
+        ".badge-waiting",
+        ".rank-badge--gold",
+    )
+    for selector in accent_ink_selectors:
+        assert "color: var(--accent-ink);" in declarations(selector), selector
+
+    for selector in ('.participant-tabs button[aria-pressed="true"]', ".participant-initial"):
+        assert "color: var(--participant-ink, var(--accent-ink));" in declarations(selector)
 
 
 def test_theme_toggle_announces_the_action_for_the_initial_theme():

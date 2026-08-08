@@ -20,7 +20,7 @@ from backend.db import (
     join_session,
     remove_participant,
 )
-from backend.reachability import participant_color
+from backend.reachability import participant_color, participant_text_color
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ _MAX_SSE_PER_SESSION = 10
 
 
 templates.env.filters["participant_color"] = participant_color
+templates.env.filters["participant_text_color"] = participant_text_color
 
 
 def _get_client_ip(request: Request) -> str:

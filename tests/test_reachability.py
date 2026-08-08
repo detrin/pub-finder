@@ -7,6 +7,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport
 
+import backend.reachability as reachability
 from backend.app import app
 from backend.db import (
     add_participant_stops,
@@ -187,6 +188,32 @@ def test_invalid_direction_is_rejected():
 )
 def test_participant_color_matches_the_session_palette(participant_id: int, expected: str):
     assert participant_color(participant_id) == expected
+
+
+def test_participant_text_color_meets_normal_text_contrast_for_the_palette():
+    text_color = getattr(reachability, "participant_text_color", None)
+    assert callable(text_color), "participant_text_color is not implemented"
+
+    def luminance(value: str) -> float:
+        channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+        linear = [
+            channel / 12.92
+            if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    def contrast(foreground: str, background: str) -> float:
+        values = sorted((luminance(foreground), luminance(background)), reverse=True)
+        return (values[0] + 0.05) / (values[1] + 0.05)
+
+    choices = [text_color(color) for color in reachability.PARTICIPANT_PALETTE]
+    assert choices == ["#17191C"] * 4 + ["#F4F2EB", "#17191C"]
+    assert all(
+        contrast(foreground, background) >= 4.5
+        for foreground, background in zip(choices, reachability.PARTICIPANT_PALETTE, strict=True)
+    )
 
 
 def saved_payload(participant_id: int, *, direction: str = "there-only") -> dict:

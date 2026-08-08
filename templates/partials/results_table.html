@@ -41,7 +41,7 @@
                 {% for participant in snapshot %}
                 <button type="button" data-participant-id="{{ participant.id }}"
                         aria-pressed="false"
-                        style="--participant-color: {{ participant.color | e }}">
+                        style="--participant-color: {{ participant.color | e }}; --participant-ink: {{ participant.color | participant_text_color }}">
                     {{ participant.name }}
                 </button>
                 {% endfor %}
