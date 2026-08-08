@@ -370,7 +370,7 @@ async def _run_search(
 
         warning = None
         if places_api_error:
-            warning = "Google Places API limit reached — pub data may be incomplete for some stops."
+            warning = "Google Places API limit reached; pub data may be incomplete for some stops."
 
         # Save results
         results_rows = df_results.rows(named=True)
@@ -435,7 +435,7 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
             progress = registry.get(search_id, code)
 
             if progress is None:
-                # Search already completed and results were delivered — close silently
+                # Search already completed and results were delivered; close silently
                 break
 
             if progress.done:
@@ -690,7 +690,7 @@ async def load_venues_for_stop(
 
 @router.get("/session/{code}/results", response_class=HTMLResponse)
 async def results_page(request: Request, code: str):
-    """Shareable results page — shows the last search results for a session."""
+    """Shareable results page showing the last search results for a session."""
     db = request.app.state.db
     session = await get_session(db, code)
     if session is None:

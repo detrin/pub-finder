@@ -55,7 +55,7 @@ def run(
     waiting_num_tasks=10,
     num_processes=30,
 ):
-    """Core manager logic — callable from CLI."""
+    """Core manager logic, callable from CLI."""
     num_tasks_options = [5000, 10000, 25000, 50000]
     bandit = EpsilonDecreasingBandit(
         arms=num_tasks_options,

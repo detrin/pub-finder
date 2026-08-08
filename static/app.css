@@ -280,7 +280,7 @@ nav[data-topnav] strong {
     to { transform: rotate(360deg); }
 }
 
-/* Progress bar — plain, oat-style */
+/* Progress bar, plain oat-style */
 .progress-box {
     padding: 1.5rem 0 !important;
     max-width: 500px !important;
@@ -1024,7 +1024,7 @@ footer {
         font-size: 1.4rem;
     }
 
-    /* Stop form — stack vertically */
+    /* Stop form, stack vertically */
     .stop-form-row {
         flex-direction: column;
         align-items: stretch;
@@ -1047,7 +1047,7 @@ footer {
         align-self: stretch;
     }
 
-    /* Search form — tighter spacing */
+    /* Search form, tighter spacing */
     .search-options-row {
         flex-direction: column !important;
         align-items: stretch !important;

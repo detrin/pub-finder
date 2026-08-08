@@ -433,7 +433,7 @@ async def test_one_type_failure_keeps_other_results(monkeypatch):
     saved = await get_search_results(app.state.db, session["code"])
     assert (
         saved["data"]["warning"]
-        == "Google Places API limit reached — pub data may be incomplete for some stops."
+        == "Google Places API limit reached; pub data may be incomplete for some stops."
     )
     assert [pub["primary_type"] for pub in saved["data"]["pubs_by_stop"]["A"]] == ["pub", "pub"]
     assert len(calls) == 15
