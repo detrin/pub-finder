@@ -1,10 +1,11 @@
 import aiosqlite
 import pytest
 import pytest_asyncio
+from bs4 import BeautifulSoup
 from httpx import ASGITransport, AsyncClient
 
 from backend.app import app
-from backend.db import create_session, get_participants, init_db
+from backend.db import create_session, get_participants, init_db, join_session
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -75,21 +76,50 @@ async def test_session_page():
 
 @pytest.mark.asyncio
 async def test_session_page_autosaves_valid_stop_selections():
+    session = await create_session(app.state.db, "Test Session", "Daniel")
+    await join_session(app.state.db, session["code"], "Petra")
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        create_resp = await client.post(
-            "/session/create",
-            data={"session_name": "Test Session", "creator_name": "Daniel"},
-            follow_redirects=False,
-        )
-        page = await client.get(create_resp.headers["location"], follow_redirects=True)
+        page = await client.get(f"/session/{session['code']}")
 
-    assert (
-        'hx-trigger="change from:[data-stop-input], change from:[data-same-start-end]"'
-        in page.text
-    )
-    assert "Saving…" in page.text
+    soup = BeautifulSoup(page.text, "html.parser")
+    stop_forms = soup.select("form.stop-form")
+    assert len(stop_forms) == 2
+    for form in stop_forms:
+        assert form["hx-trigger"] == (
+            "change target:[data-stop-input], change target:[data-same-start-end]"
+        )
+        assert form["hx-sync"] == "this:replace"
+        assert not form.has_attr("hx-indicator")
+        status = form.select_one(".stop-save-status.htmx-indicator")
+        assert status is not None
+        assert status.get_text(strip=True) == "Saving…"
+        assert status["role"] == "status"
+        assert status["aria-live"] == "polite"
     assert ">Save<" not in page.text
+
+
+@pytest.mark.asyncio
+async def test_update_stops_persists_disabled_return_when_stops_are_equal():
+    session = await create_session(app.state.db, "Test Session", "Daniel")
+    participant = (await get_participants(app.state.db, session["code"]))[0]
+    app.state.all_stops = ["Anděl"]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{session['code']}/stops",
+            data={
+                "participant_id": participant["id"],
+                "start_stop": "Anděl",
+                "end_stop": "Anděl",
+            },
+        )
+
+    assert response.status_code == 200
+    saved = (await get_participants(app.state.db, session["code"]))[0]
+    assert saved["same_start_end"] is False
 
 
 @pytest.mark.asyncio

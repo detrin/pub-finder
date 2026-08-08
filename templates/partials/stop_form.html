@@ -1,7 +1,8 @@
 <form hx-post="/session/{{ session_code }}/stops"
-      hx-trigger="change from:[data-stop-input], change from:[data-same-start-end]"
+      hx-trigger="change target:[data-stop-input], change target:[data-same-start-end]"
+      hx-sync="this:replace"
       hx-target="#session-participants-inner" hx-swap="innerHTML"
-      hx-indicator="find .stop-save-status" class="stop-form">
+      class="stop-form">
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
     <div class="stop-form-row">
         <div class="stop-form-name">

@@ -202,12 +202,13 @@ async def add_participant_stops(
     participant_id: int,
     start_stop: str,
     end_stop: str,
+    same_start_end: bool | None = None,
 ) -> bool:
-    same = 1 if start_stop == end_stop else 0
+    same = start_stop == end_stop if same_start_end is None else same_start_end
     result = await db.execute(
         "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? "
         "WHERE id = ? AND session_code = ?",
-        (start_stop, end_stop, same, participant_id, session_code),
+        (start_stop, end_stop, int(same), participant_id, session_code),
     )
     await db.commit()
     return result.rowcount > 0

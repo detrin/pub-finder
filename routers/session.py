@@ -166,7 +166,14 @@ async def update_stops(
             },
         )
 
-    updated = await add_participant_stops(db, code, participant_id, start_stop, end_stop)
+    updated = await add_participant_stops(
+        db,
+        code,
+        participant_id,
+        start_stop,
+        end_stop,
+        same_start_end=same_start_end,
+    )
     participants = await get_participants(db, code)
     return templates.TemplateResponse(
         request,
