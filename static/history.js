@@ -14,7 +14,7 @@ function validSession(value) {
 function getSessions() {
     try {
         const stored = JSON.parse(localStorage.getItem(KEY) || "[]");
-        return Array.isArray(stored) ? stored.filter(validSession) : [];
+        return Array.isArray(stored) ? stored.filter(validSession).slice(0, LIMIT) : [];
     } catch (_) {
         return [];
     }

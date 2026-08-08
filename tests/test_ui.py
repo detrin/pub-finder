@@ -170,17 +170,29 @@ if (saved.length !== 5 || saved[0].code !== "f" || saved[4].code !== "b") {
 }
 store.set(
   "meet_somewhere_recent_sessions",
-  JSON.stringify([{ code: "safe code", name: "<img src=x>" }, null, { code: 7, name: "bad" }]),
+  JSON.stringify([
+    { code: "safe code", name: "<img src=x>" },
+    { code: "two", name: "Plan two" },
+    { code: "three", name: "Plan three" },
+    { code: "four", name: "Plan four" },
+    { code: "five", name: "Plan five" },
+    { code: "six", name: "Plan six" },
+    null,
+    { code: 7, name: "bad" },
+  ]),
 );
 renderRecentSessions();
-if (root.hidden || root.children.length !== 1) {
-  throw new Error("Expected one valid recent session link");
+if (root.hidden || root.children.length !== 5) {
+  throw new Error("Expected five valid recent session links");
 }
 if (root.children[0].textContent !== "<img src=x>") {
   throw new Error("Recent session name was not rendered as text");
 }
 if (root.children[0].href !== "/session/safe%20code") {
   throw new Error(`Unexpected recent session link: ${root.children[0].href}`);
+}
+if (root.children[4].href !== "/session/five") {
+  throw new Error(`Expected existing history to be capped: ${root.children[4].href}`);
 }
 """
 
