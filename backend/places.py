@@ -141,10 +141,16 @@ def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
 async def search_pubs_near_stop(
     lat: float,
     lon: float,
-    place_type: str,
+    place_type: Optional[str] = None,
     radius: int = 500,
+    place_types: Optional[list[str]] = None,
 ) -> list[dict]:
-    """Search Google Places API for one place type near coordinates."""
+    """Search Google Places API, retaining the route's legacy combined-type call."""
+    is_single_type_search = place_type is not None
+    included_types = [place_type] if is_single_type_search else place_types
+    if included_types is None:
+        included_types = ["bar", "pub", "cafe"]
+
     url = "https://places.googleapis.com/v1/places:searchNearby"
     headers = {
         "Content-Type": "application/json",
@@ -156,9 +162,8 @@ async def search_pubs_near_stop(
         ),
     }
     body = {
-        "includedTypes": [place_type],
+        "includedTypes": included_types,
         "maxResultCount": 20,
-        "rankPreference": "DISTANCE",
         "locationRestriction": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lon},
@@ -166,10 +171,14 @@ async def search_pubs_near_stop(
             }
         },
     }
+    if is_single_type_search:
+        body["rankPreference"] = "DISTANCE"
+
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(url, json=body, headers=headers)
         resp.raise_for_status()
-        return order_pubs_for_stop(parse_places_response(resp.json()), lat, lon)
+        pubs = parse_places_response(resp.json())
+        return order_pubs_for_stop(pubs, lat, lon) if is_single_type_search else pubs
 
 
 async def get_cached_pubs(

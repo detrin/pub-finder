@@ -180,6 +180,18 @@ async def test_nearby_search_uses_one_type_and_distance_ranking(monkeypatch):
     assert captured["json"]["rankPreference"] == "DISTANCE"
 
 
+@pytest.mark.asyncio
+async def test_nearby_search_supports_legacy_combined_type_keyword(monkeypatch):
+    """The existing route must keep working until it migrates to one-type calls."""
+    captured = {}
+    monkeypatch.setattr("backend.places.httpx.AsyncClient", fake_client(captured, {"places": []}))
+
+    await search_pubs_near_stop(50.08, 14.43, place_types=["bar", "pub", "cafe"])
+
+    assert captured["json"]["includedTypes"] == ["bar", "pub", "cafe"]
+    assert "rankPreference" not in captured["json"]
+
+
 def test_order_pubs_for_stop_deduplicates_and_breaks_distance_ties():
     """Unordered duplicate results would produce unstable venue suggestions."""
     pubs = [
