@@ -1,4 +1,19 @@
 const palette = ["#ff6658", "#dff0ff", "#ffd447", "#4dc694", "#2458df", "#b9a8ff"];
+const dialogInvokers = new WeakMap();
+
+export function showModalWithFocusReturn(dialog, invoker) {
+    dialog.returnValue = "";
+    dialogInvokers.set(dialog, invoker);
+    dialog.showModal();
+}
+
+export function restoreDialogFocus(dialog, shouldFocus = true) {
+    const invoker = dialogInvokers.get(dialog);
+    dialogInvokers.delete(dialog);
+    if (!shouldFocus || !invoker?.isConnected) return false;
+    invoker.focus();
+    return true;
+}
 
 export function participantColor(id) {
     return palette[Math.abs(Number(id) || 0) % palette.length];
@@ -102,7 +117,7 @@ function bindStopPicker(root) {
         context.textContent = `${input.dataset.participantName || "Participant"} · ${input.dataset.stopDirection || ""}`;
         searchInput.value = "";
         render("");
-        dialog.showModal();
+        showModalWithFocusReturn(dialog, activeInvoker);
         searchInput.focus();
     }
 
@@ -150,11 +165,12 @@ function bindStopPicker(root) {
     });
     dialog.addEventListener("close", () => {
         const focusTarget = resolveActiveInput();
+        const restoredInvoker = restoreDialogFocus(dialog);
         activeInput = null;
         activeParticipantId = null;
         activeFieldName = null;
         activeInvoker = null;
-        if (focusTarget?.isConnected) focusTarget.focus();
+        if (!restoredInvoker && focusTarget?.isConnected) focusTarget.focus();
     });
     document.addEventListener("htmx:beforeRequest", (event) => {
         if (pendingFocus && event.detail.elt === pendingFocus.sourceForm) {
@@ -218,7 +234,7 @@ function bindRemoveConfirmation(root) {
         invoker = button;
         name.textContent = button.dataset.participantName || "this participant";
         id.value = button.dataset.participantId || "";
-        dialog.showModal();
+        showModalWithFocusReturn(dialog, invoker);
     });
     dialog.querySelector("[data-dialog-cancel]").addEventListener("click", () => dialog.close());
     form.addEventListener("submit", () => {
@@ -229,7 +245,7 @@ function bindRemoveConfirmation(root) {
         window.setTimeout(restoreRemovalFocus, 0);
     });
     dialog.addEventListener("close", () => {
-        if (!pendingRemovalId && invoker?.isConnected) invoker.focus();
+        restoreDialogFocus(dialog, !pendingRemovalId);
         invoker = null;
     });
 }

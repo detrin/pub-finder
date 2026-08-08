@@ -33,6 +33,10 @@
     --lilac: #B9A8FF;
     --muted: #686D71;
     --surface: var(--paper);
+    --accent-ink: #17191C;
+    --sky-surface: var(--sky);
+    --map-control-surface: #FFFEFA;
+    --iframe-surround: var(--surface);
     --font-display: "Bricolage Grotesque", system-ui, sans-serif;
     --font-mono: "DM Mono", ui-monospace, monospace;
     --frame-shadow: 4px 4px 0 var(--ink);
@@ -51,6 +55,9 @@
     --sky: #B7DDED;
     --yellow: #FFE071;
     --blue: #6F9CFF;
+    --sky-surface: #242A31;
+    --map-control-surface: #1C1D21;
+    --iframe-surround: #1C1D21;
 }
 
 *,
@@ -60,12 +67,16 @@
 }
 
 html {
+    max-width: 100%;
+    overflow-x: clip;
     background: var(--paper);
 }
 
 body {
+    max-width: 100%;
     min-width: 320px;
     margin: 0;
+    overflow-x: clip;
     color: var(--ink);
     background: var(--paper);
     font-family: var(--font-display);
@@ -202,7 +213,7 @@ a:hover {
     gap: 0.45rem;
     padding: 1rem;
     border: 2px solid var(--ink);
-    background: var(--sky);
+    background: var(--sky-surface);
     box-shadow: var(--control-shadow);
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -281,7 +292,7 @@ a:hover {
 .feedback-intro {
     margin-bottom: 1.5rem;
     padding: 1rem;
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .feedback-intro p:last-child {
@@ -289,11 +300,16 @@ a:hover {
 }
 
 .external-form-frame {
+    max-width: 100%;
     overflow: hidden;
+    background: var(--iframe-surround);
 }
 
 .external-form-frame iframe {
     display: block;
+    max-width: 100%;
+    background: #FFFFFF;
+    color-scheme: light;
 }
 
 .system-message {
@@ -303,11 +319,17 @@ a:hover {
 }
 
 .system-message--empty {
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .system-message--warning {
     background: var(--yellow);
+    color: var(--accent-ink);
+}
+
+.system-message--warning h2,
+.system-message--warning p {
+    color: var(--accent-ink);
 }
 
 .system-message--error {
@@ -453,6 +475,7 @@ button {
     padding: 0.5rem 0.85rem;
     background: var(--coral);
     box-shadow: var(--control-shadow);
+    color: var(--accent-ink);
     cursor: pointer;
     font-family: var(--font-mono);
     font-size: 0.8rem;
@@ -466,9 +489,10 @@ button:hover {
 
 button.outline {
     background: var(--sky);
+    color: var(--accent-ink);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     .site-nav__inner,
     .container {
         width: min(100% - 1.25rem, 1120px);
@@ -547,8 +571,15 @@ button.outline {
         transition-duration: 0.01ms !important;
     }
 
-    .reachability-field {
-        transition: none;
+    .home-preview__line {
+        animation: none !important;
+        stroke-dasharray: none;
+        stroke-dashoffset: 0;
+    }
+
+    .reachability-field,
+    .results-workspace[data-mobile-view="map"] .ranked-stop--selected {
+        transition: none !important;
     }
 }
 
@@ -843,7 +874,7 @@ nav[data-topnav] strong {
 .progress-box {
     padding: 1.25rem;
     border: 2px solid var(--ink);
-    background: var(--sky);
+    background: var(--sky-surface);
     box-shadow: var(--control-shadow);
 }
 
@@ -1533,7 +1564,31 @@ input[data-stop-input]:not(:disabled) {
 }
 
 [data-theme="dark"] #map .leaflet-control-attribution {
-    color: #17191C;
+    color: var(--ink);
+}
+
+#map .leaflet-bar a,
+#map .leaflet-control-layers,
+#map .leaflet-popup-content-wrapper,
+#map .leaflet-popup-tip {
+    border-color: var(--ink);
+    background: var(--map-control-surface);
+    color: var(--ink);
+}
+
+#map .leaflet-bar a:hover,
+#map .leaflet-bar a:focus-visible {
+    background: var(--sky-surface);
+    color: var(--ink);
+}
+
+#map .leaflet-control-attribution {
+    background: color-mix(in srgb, var(--map-control-surface) 88%, transparent);
+    color: var(--ink);
+}
+
+#map .leaflet-control-attribution a {
+    color: var(--blue);
 }
 
 .map-card {
@@ -1552,6 +1607,7 @@ input[data-stop-input]:not(:disabled) {
     display: grid;
     grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
     min-height: min(760px, calc(100vh - 150px));
+    min-height: min(760px, calc(100dvh - 150px));
     overflow: clip;
     border: 2px solid var(--ink);
     border-radius: var(--frame-radius);
@@ -1561,6 +1617,7 @@ input[data-stop-input]:not(:disabled) {
 
 .results-rail {
     max-height: min(760px, calc(100vh - 150px));
+    max-height: min(760px, calc(100dvh - 150px));
     overflow-y: auto;
     border-right: 2px solid var(--ink);
     background: var(--paper);
@@ -1572,7 +1629,7 @@ input[data-stop-input]:not(:disabled) {
     z-index: 2;
     padding: 1rem;
     border-bottom: 2px solid var(--ink);
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .reach-controls__heading {
@@ -1623,6 +1680,9 @@ input[data-stop-input]:not(:disabled) {
     margin: 1rem 0;
     padding: 0.2rem 0.2rem 0.4rem;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
 }
 
 .participant-tabs button {
@@ -1633,6 +1693,7 @@ input[data-stop-input]:not(:disabled) {
     border-radius: 999px;
     background: var(--paper);
     box-shadow: none;
+    color: var(--ink);
 }
 
 .participant-tabs button[aria-pressed="true"] {
@@ -1812,6 +1873,9 @@ input[data-stop-input]:not(:disabled) {
     gap: 0.4rem;
     padding: 0 1rem 0.8rem;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
 }
 
 .participant-time-chip {
@@ -1844,12 +1908,14 @@ input[data-stop-input]:not(:disabled) {
 .travel-times {
     overflow-x: auto;
     flex-wrap: nowrap;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .travel-chip {
     flex: 0 0 auto;
     border: 1px solid var(--ink);
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .venue-suggestions {
@@ -1915,7 +1981,7 @@ input[data-stop-input]:not(:disabled) {
 .venue-state {
     padding: 0.75rem;
     border: 1.5px solid var(--ink);
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .venue-state--error {
@@ -1931,6 +1997,7 @@ input[data-stop-input]:not(:disabled) {
 .venue-action {
     margin-top: 0.75rem;
     background: var(--sky);
+    color: var(--accent-ink);
 }
 
 .results-map-panel {
@@ -1943,6 +2010,7 @@ input[data-stop-input]:not(:disabled) {
 
 .results-map-panel #map {
     height: min(650px, calc(100vh - 230px));
+    height: min(650px, calc(100dvh - 230px));
     min-height: 480px;
     border: 2px solid var(--ink);
     border-radius: 0;
@@ -2019,6 +2087,7 @@ input[data-stop-input]:not(:disabled) {
         border-radius: 0;
         background: var(--paper);
         box-shadow: none;
+        color: var(--ink);
     }
 
     .results-mobile-views button[aria-pressed="true"] {
@@ -2079,12 +2148,14 @@ input[data-stop-input]:not(:disabled) {
     }
 
     .results-workspace[data-mobile-view="map"] .ranked-stop--selected {
-        display: block;
         max-height: min(48vh, 430px);
+        display: block;
+        max-height: min(48dvh, 430px);
         overflow-y: auto;
         border: 2px solid var(--ink);
         box-shadow: 4px 4px 0 var(--ink);
         pointer-events: auto;
+        transition: max-height 180ms ease, transform 180ms ease;
     }
 
     .ranked-stop__toggle,
@@ -2100,6 +2171,12 @@ input[data-stop-input]:not(:disabled) {
         min-height: 44px;
         display: inline-flex;
         align-items: center;
+    }
+
+    #map .leaflet-bar a {
+        width: 44px;
+        height: 44px;
+        line-height: 44px;
     }
 }
 
@@ -2197,7 +2274,7 @@ input[data-stop-input]:not(:disabled) {
     width: 100%;
     border: 2px solid var(--ink);
     border-radius: var(--frame-radius);
-    background: var(--sky);
+    background: var(--sky-surface);
     box-shadow: var(--frame-shadow);
 }
 
@@ -2212,6 +2289,16 @@ input[data-stop-input]:not(:disabled) {
     stroke: var(--ink);
     stroke-linecap: round;
     stroke-width: 12;
+    stroke-dasharray: 650;
+    stroke-dashoffset: 650;
+    animation: route-converge 560ms ease-out forwards;
+}
+
+.home-preview__line--coral { animation-delay: 90ms; }
+.home-preview__line--yellow { animation-delay: 180ms; }
+
+@keyframes route-converge {
+    to { stroke-dashoffset: 0; }
 }
 
 .home-preview__line--blue { stroke: var(--blue); }
@@ -2311,7 +2398,7 @@ input[data-stop-input]:not(:disabled) {
     gap: 0.75rem;
     align-items: end;
     padding: 1rem;
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .join-plan button.outline {
@@ -2333,7 +2420,7 @@ input[data-stop-input]:not(:disabled) {
     padding: 0.45rem 0.7rem;
     border: 2px solid var(--ink);
     border-radius: 7px;
-    background: var(--sky);
+    background: var(--sky-surface);
     box-shadow: 2px 2px 0 var(--ink);
     color: var(--ink);
     font-family: var(--font-mono);
@@ -2419,7 +2506,7 @@ input[data-stop-input]:not(:disabled) {
     position: sticky;
     top: 1rem;
     padding: clamp(1rem, 3vw, 1.5rem);
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .participants-panel > header,
@@ -2450,7 +2537,7 @@ input[data-stop-input]:not(:disabled) {
     padding: 0.6rem 0.75rem;
     border: 2px solid var(--ink);
     background: var(--yellow);
-    color: var(--ink);
+    color: var(--accent-ink);
     font-family: var(--font-mono);
     font-size: 0.78rem;
 }
@@ -2618,10 +2705,12 @@ input[data-stop-input]:not(:disabled) {
     padding: 0.35rem 0.65rem;
     background: var(--paper);
     box-shadow: 2px 2px 0 var(--ink);
+    color: var(--ink);
 }
 
 .occasion-presets button[aria-pressed="true"] {
     background: var(--yellow);
+    color: var(--accent-ink);
 }
 
 .place-type-checks {
@@ -2654,6 +2743,7 @@ input[data-stop-input]:not(:disabled) {
 .remove-dialog {
     width: min(520px, calc(100vw - 2rem));
     max-height: min(680px, calc(100vh - 2rem));
+    max-height: min(680px, calc(100dvh - 2rem));
     margin: auto;
     padding: 0;
     border: 2px solid var(--ink);
@@ -2671,6 +2761,7 @@ input[data-stop-input]:not(:disabled) {
 .stop-picker__form {
     display: flex;
     max-height: min(680px, calc(100vh - 2rem));
+    max-height: min(680px, calc(100dvh - 2rem));
     flex-direction: column;
     margin: 0;
 }
@@ -2703,7 +2794,7 @@ input[data-stop-input]:not(:disabled) {
     border: 0;
     border-bottom: 2px solid var(--ink);
     border-radius: 0;
-    background: var(--sky);
+    background: var(--sky-surface);
 }
 
 .stop-picker__list {
@@ -2724,6 +2815,7 @@ input[data-stop-input]:not(:disabled) {
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    color: var(--ink);
     text-align: left;
 }
 
@@ -2758,7 +2850,7 @@ input[data-stop-input]:not(:disabled) {
     gap: 0.65rem;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
     .session-workspace__layout {
         grid-template-columns: 1fr;
     }
@@ -2769,12 +2861,24 @@ input[data-stop-input]:not(:disabled) {
 
     .stop-picker {
         width: 100%;
+        max-height: min(80vh, 680px);
         max-height: min(80dvh, 680px);
         margin: auto 0 0;
+        padding-bottom: env(safe-area-inset-bottom);
         border-right: 0;
         border-bottom: 0;
         border-left: 0;
         border-radius: 12px 12px 0 0;
+    }
+
+    .stop-picker__form {
+        max-height: min(80vh, 680px);
+        max-height: min(80dvh, 680px);
+    }
+
+    .stop-picker__list {
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
     }
 }
 
@@ -2798,9 +2902,15 @@ input[data-stop-input]:not(:disabled) {
     .dialog-actions button {
         width: 100%;
     }
+
+    .remove-dialog {
+        max-height: calc(100vh - 1rem);
+        max-height: calc(100dvh - 1rem);
+        margin-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
     .technical-page {
         grid-template-columns: 1fr;
         gap: 1.5rem;
@@ -3030,10 +3140,10 @@ footer {
         padding: 1.5rem 0;
     }
 
-    /* Theme toggle smaller on mobile */
+    /* Keep the compact theme icon inside a full touch target. */
     .theme-toggle {
-        width: 24px;
-        height: 24px;
+        width: 44px;
+        height: 44px;
     }
 
     .theme-toggle svg {

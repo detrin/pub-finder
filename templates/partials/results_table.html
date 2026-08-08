@@ -19,11 +19,13 @@
          data-selected-rank="1"
          data-mobile-view="map">
     <div class="results-mobile-views" aria-label="Results view">
-        <button type="button" data-mobile-view-target="map" aria-pressed="true">Map</button>
-        <button type="button" data-mobile-view-target="list" aria-pressed="false">List</button>
+        <button type="button" data-mobile-view-target="map" aria-pressed="true"
+                aria-controls="results-map-panel">Map</button>
+        <button type="button" data-mobile-view-target="list" aria-pressed="false"
+                aria-controls="results-ranked-stops">List</button>
     </div>
 
-    <aside class="results-rail" aria-label="Ranked meeting points">
+    <aside id="results-ranked-stops" class="results-rail" aria-label="Ranked meeting points">
         <section class="reach-controls" aria-label="Reachability layer">
             <div class="reach-controls__heading">
                 <div>
@@ -144,7 +146,7 @@
         </div>
     </aside>
 
-    <section class="results-map-panel" aria-label="Meeting point map">
+    <section id="results-map-panel" class="results-map-panel" aria-label="Meeting point map">
         <div id="map" data-results-map></div>
         <div class="map-caption">
             <p class="map-source">Approximate from typical transit times</p>

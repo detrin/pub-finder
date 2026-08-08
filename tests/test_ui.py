@@ -135,6 +135,61 @@ async def test_session_workspace_exposes_autosave_and_dialog_hooks():
 
 
 @pytest.mark.asyncio
+async def test_session_dialogs_have_labels_and_live_regions():
+    session = await create_session(app.state.db, "Test", "Daniel")
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}")
+
+    assert 'aria-labelledby="stop-picker-title"' in response.text
+    assert 'aria-labelledby="remove-participant-title"' in response.text
+    assert 'role="status"' in response.text
+    assert 'aria-live="polite"' in response.text
+
+
+def test_dialog_focus_restoration_only_targets_a_connected_invoker():
+    """Catch dialogs losing focus or focusing controls removed by an HTMX swap."""
+    session_module = Path("static/session.js").resolve().as_uri()
+    script = """
+globalThis.document = {
+  readyState: "loading",
+  addEventListener() {},
+};
+const { restoreDialogFocus, showModalWithFocusReturn } = await import(process.argv[1]);
+let focusCount = 0;
+const invoker = {
+  isConnected: true,
+  focus() { focusCount += 1; },
+};
+const dialog = {
+  returnValue: "stale",
+  showModalCount: 0,
+  showModal() { this.showModalCount += 1; },
+};
+showModalWithFocusReturn(dialog, invoker);
+if (dialog.returnValue !== "" || dialog.showModalCount !== 1) {
+  throw new Error("Dialog did not reset its return value before opening");
+}
+restoreDialogFocus(dialog);
+if (focusCount !== 1) throw new Error(`Expected one focus restoration, got ${focusCount}`);
+showModalWithFocusReturn(dialog, invoker);
+invoker.isConnected = false;
+restoreDialogFocus(dialog);
+if (focusCount !== 1) throw new Error("A detached invoker received focus");
+"""
+
+    result = subprocess.run(
+        ["node", "--input-type=module", "--eval", script, session_module],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.asyncio
 async def test_session_workspace_disables_search_until_every_participant_has_stops():
     session = await create_session(app.state.db, "Friday crew", "Daniel")
     async with httpx.AsyncClient(
@@ -354,7 +409,7 @@ async def test_mobile_compact_controls_have_44px_minimum_width():
         response = await client.get("/static/app.css")
 
     assert response.status_code == 200
-    mobile_css = response.text.split("@media (max-width: 640px)", maxsplit=1)[1]
+    mobile_css = response.text.split("@media (max-width: 720px)", maxsplit=1)[1]
     assert "button," in mobile_css
     assert "min-width: 44px;" in mobile_css
 
