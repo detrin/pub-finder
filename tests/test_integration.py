@@ -353,6 +353,46 @@ async def test_search_queries_each_type_for_only_five_stops(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_duplicate_place_types_do_not_repeat_cache_or_live_queries(monkeypatch):
+    """Duplicate submitted venue types keep their first position but run once per stop."""
+    session = await create_session(app.state.db, "Test", "P1")
+    cache_reads = []
+    cache_writes = []
+    live_calls = []
+
+    async def fake_get_cached(db, stop_name, place_type, radius=500):
+        cache_reads.append((stop_name, place_type, radius))
+        return None
+
+    async def fake_cache(db, stop_name, place_type, radius, pubs):
+        cache_writes.append((stop_name, place_type, radius))
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        live_calls.append((lat, place_type, radius))
+        return []
+
+    monkeypatch.setattr(search_router, "get_cached_pubs_for_type", fake_get_cached)
+    monkeypatch.setattr(search_router, "cache_pubs_for_type", fake_cache)
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+
+    await _run_direct_search(
+        monkeypatch, session["code"], ["pub", "bar", "pub", "cafe", "bar"]
+    )
+
+    expected_queries = {
+        (stop_name, place_type)
+        for stop_name in ["A", "B", "C", "D", "E"]
+        for place_type in ["pub", "bar", "cafe"]
+    }
+    assert {(stop_name, place_type) for stop_name, place_type, _ in cache_reads} == expected_queries
+    assert {(stop_name, place_type) for stop_name, place_type, _ in cache_writes} == expected_queries
+    assert len(cache_reads) == len(expected_queries)
+    assert len(cache_writes) == len(expected_queries)
+    assert len(live_calls) == len(expected_queries)
+    assert [place_type for _, place_type, _ in live_calls[:3]] == ["pub", "bar", "cafe"]
+
+
+@pytest.mark.asyncio
 async def test_one_type_failure_keeps_other_results(monkeypatch):
     """A failed type query neither cancels peers nor hides their venue results."""
     session = await create_session(app.state.db, "Test", "P1")

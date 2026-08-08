@@ -234,11 +234,14 @@ async def _run_search(
         pubs_by_stop_raw = {stop_name: [] for stop_name in pub_search_stop_names}
         places_api_error = False
         pending_queries = []
+        # Form validation has already limited these values to supported types. Preserve
+        # the submitted order while ensuring each stop/type coverage is checked once.
+        unique_place_types = list(dict.fromkeys(place_types))
 
         # Check coverage per stop and type before scheduling only cache misses. An empty
         # cached response is meaningful coverage, so distinguish it from a cache miss.
         for stop_name, lat, lon in searchable_stops:
-            for place_type in place_types:
+            for place_type in unique_place_types:
                 cached = await get_cached_pubs_for_type(
                     db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
                 )
