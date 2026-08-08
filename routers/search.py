@@ -27,6 +27,7 @@ from backend.places import (
     order_pubs_for_stop,
     search_pubs_near_stop,
 )
+from backend.reachability import participant_color
 from backend.utils import get_total_minutes_with_retries, validate_date_time
 
 logger = logging.getLogger(__name__)
@@ -389,6 +390,17 @@ async def _run_search(
                 "stops_geo": stop_geo_data,
                 "pubs_flat": pubs_flat,
                 "participants_geo": participants_geo,
+                "search_direction": direction,
+                "participant_snapshot": [
+                    {
+                        "id": participant["id"],
+                        "name": participant["name"],
+                        "color": participant_color(participant["id"]),
+                        "start_stop": start,
+                        "end_stop": end,
+                    }
+                    for participant, (start, end) in zip(active_participants, stop_pairs)
+                ],
                 "warning": warning,
             },
         )

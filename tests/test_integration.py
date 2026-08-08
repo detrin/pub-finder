@@ -760,6 +760,23 @@ async def test_search_results_saved_to_db():
         saved = await get_search_results(app.state.db, code)
         assert saved is not None
         assert len(saved["data"]["rows"]) > 0
+        assert saved["data"]["search_direction"] == "round-trip"
+        assert saved["data"]["participant_snapshot"] == [
+            {
+                "id": 1,
+                "name": "P1",
+                "color": "#dff0ff",
+                "start_stop": "A",
+                "end_stop": "A",
+            },
+            {
+                "id": 2,
+                "name": "P2",
+                "color": "#ffd447",
+                "start_stop": "B",
+                "end_stop": "B",
+            },
+        ]
 
         # Check shareable results page loads
         results_page = await client.get(f"/session/{code}/results")

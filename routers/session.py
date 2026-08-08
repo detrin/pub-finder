@@ -20,6 +20,7 @@ from backend.db import (
     join_session,
     remove_participant,
 )
+from backend.reachability import participant_color
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,6 @@ templates = Jinja2Templates(directory="templates")
 
 MAX_NAME_LENGTH = 50
 MAX_PARTICIPANTS = 20
-PARTICIPANT_PALETTE = ["#ff6658", "#dff0ff", "#ffd447", "#4dc694", "#2458df", "#b9a8ff"]
 
 # Rate limiting: max actions per IP per window
 _rate_timestamps: dict[str, list[float]] = defaultdict(list)
@@ -38,11 +38,6 @@ _RATE_WINDOW = 60  # seconds
 # SSE connection tracking per session
 _sse_connections: dict[str, int] = defaultdict(int)
 _MAX_SSE_PER_SESSION = 10
-
-
-def participant_color(participant_id: int) -> str:
-    """Return the stable UI colour assigned to a participant ID."""
-    return PARTICIPANT_PALETTE[abs(int(participant_id or 0)) % len(PARTICIPANT_PALETTE)]
 
 
 templates.env.filters["participant_color"] = participant_color
