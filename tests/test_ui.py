@@ -570,6 +570,10 @@ async def test_how_it_works_uses_verified_dataset_facts():
     assert "precomputed typical times" in response.text
     assert "live DPP" in response.text
     assert "1,463" not in response.text
+    content = BeautifulSoup(response.text, "html.parser").select_one(".technical-page__content")
+    assert content is not None
+    assert content.find("a", href="https://github.com/detrin/pub-finder") is None
+    assert "Source:" not in content.get_text()
 
 
 @pytest.mark.asyncio
