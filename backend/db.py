@@ -70,6 +70,14 @@ async def init_db(db: aiosqlite.Connection):
             UNIQUE(session_code)
         );
 
+        CREATE TABLE IF NOT EXISTS analytics_users (
+            user_id TEXT PRIMARY KEY,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            last_seen_date TEXT NOT NULL,
+            visit_count INTEGER NOT NULL DEFAULT 1
+        );
+
         CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_code);
         CREATE INDEX IF NOT EXISTS idx_pub_cache_stop ON pub_cache(stop_name, cached_at);
         CREATE INDEX IF NOT EXISTS idx_pub_cache_queries_fresh
@@ -313,6 +321,14 @@ async def get_search_results(db: aiosqlite.Connection, session_code: str) -> Opt
     if row is None:
         return None
     return {"data": json.loads(row[0]), "created_at": row[1]}
+
+
+async def get_visit_count(db: aiosqlite.Connection, user_id: str) -> int:
+    async with db.execute(
+        "SELECT visit_count FROM analytics_users WHERE user_id = ?", (user_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    return row[0] if row else 1
 
 
 async def cleanup_old_sessions(db: aiosqlite.Connection, max_age_days: int = 30):

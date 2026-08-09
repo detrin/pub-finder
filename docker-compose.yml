@@ -11,6 +11,8 @@ services:
     environment:
       - GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY:-}
       - DATABASE_PATH=/app/data/pub_finder.db
+      - GA4_MEASUREMENT_ID=${GA4_MEASUREMENT_ID:-}
+      - GA4_API_SECRET=${GA4_API_SECRET:-}
     volumes:
       - pub-finder-data:/app/data
     healthcheck:
