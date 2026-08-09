@@ -150,6 +150,21 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
 
 
 @pytest.mark.asyncio
+async def test_right_preview_time_is_above_its_endpoint():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    time_label = next(text.parent for text in page.find_all(string="21 min"))
+    endpoint = page.find("circle", {"class": "home-preview__person", "cx": "388"})
+
+    assert endpoint is not None
+    assert float(time_label["y"]) < float(endpoint["cy"])
+
+
+@pytest.mark.asyncio
 async def test_direct_invite_names_the_session_and_requires_only_name():
     """Catch an invite page that omits its plan name or asks for setup fields."""
     session = await create_session(app.state.db, "Friday crew", "Daniel")
