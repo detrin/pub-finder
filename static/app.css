@@ -1912,12 +1912,10 @@ input[data-stop-input]:not(:disabled) {
 
 .participant-time-strip {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     padding: 0 1rem 0.8rem;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
 }
 
 .participant-time-chip {

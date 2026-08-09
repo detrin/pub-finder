@@ -471,6 +471,14 @@ def test_each_persons_journey_details_use_a_separate_row():
     assert "overflow-x: visible;" in travel_times
 
 
+def test_ranked_stop_participant_summaries_wrap_without_clipping():
+    css = Path("static/app.css").read_text()
+    time_strip = css.split(".participant-time-strip {", 1)[1].split("}", 1)[0]
+
+    assert "flex-wrap: wrap;" in time_strip
+    assert "overflow-x: visible;" in time_strip
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
