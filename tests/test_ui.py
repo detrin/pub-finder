@@ -527,10 +527,10 @@ def test_results_map_explains_every_marker_type():
     template = Path("templates/partials/results_table.html").read_text()
 
     assert 'class="map-marker-legend"' in template
-    assert "Best meeting stop" in template
-    assert "Other ranked stop" in template
+    assert "Selected meeting stop" in template
+    assert "Other ranked meeting stop" in template
     assert "Nearby place" in template
-    assert "Participant stop" in template
+    assert "Participant start/end stops" in template
 
 
 @pytest.mark.asyncio

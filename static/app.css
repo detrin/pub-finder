@@ -2138,7 +2138,7 @@ input[data-stop-input]:not(:disabled) {
 }
 
 .map-marker-legend__dot--person {
-    background: linear-gradient(135deg, var(--yellow) 0 50%, var(--blue) 50% 100%);
+    background: conic-gradient(#ff6658 0 60deg, #dff0ff 60deg 120deg, #ffd447 120deg 180deg, #4dc694 180deg 240deg, #2458df 240deg 300deg, #b9a8ff 300deg 360deg);
 }
 
 .map-source {
