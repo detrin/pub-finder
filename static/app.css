@@ -145,11 +145,15 @@ a:hover {
 }
 
 .site-nav__menu {
-    margin-left: auto;
+    display: none;
 }
 
 .site-nav__menu summary {
     display: none;
+}
+
+.site-nav__links--desktop {
+    margin-left: auto;
 }
 
 .site-nav__links {
@@ -543,7 +547,9 @@ button.outline {
     }
 
     .site-nav__menu {
+        display: block;
         position: relative;
+        margin-left: auto;
     }
 
     button,
@@ -562,6 +568,10 @@ button.outline {
     }
 
     .site-nav__links {
+        display: none;
+    }
+
+    .site-nav__links--desktop {
         display: none;
     }
 

@@ -540,6 +540,25 @@ async def test_footer_does_not_link_to_the_private_repository():
 
 
 @pytest.mark.asyncio
+async def test_desktop_navigation_uses_a_non_disclosure_link_group():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    desktop_links = page.select(".site-nav__links--desktop a")
+
+    assert [link.get_text(strip=True) for link in desktop_links] == [
+        "Home",
+        "How it works",
+        "Feedback",
+        "GitHub",
+    ]
+    assert ".site-nav__links--desktop" in Path("static/app.css").read_text()
+
+
+@pytest.mark.asyncio
 async def test_how_it_works_uses_verified_dataset_facts():
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
