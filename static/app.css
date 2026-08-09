@@ -2118,7 +2118,8 @@ input[data-stop-input]:not(:disabled) {
     }
 
     .results-workspace {
-        display: block;
+        display: flex;
+        flex-direction: column;
         min-height: calc(100vh - 120px);
         min-height: calc(100dvh - 120px);
         overflow: visible;
@@ -2127,14 +2128,7 @@ input[data-stop-input]:not(:disabled) {
     }
 
     .results-mobile-views {
-        position: sticky;
-        top: 0;
-        z-index: 1001;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        padding: 0.45rem;
-        border-bottom: 2px solid var(--ink);
-        background: var(--paper);
+        display: none;
     }
 
     .results-mobile-views button {
@@ -2152,6 +2146,7 @@ input[data-stop-input]:not(:disabled) {
     }
 
     .results-rail {
+        order: 2;
         max-height: none;
         overflow: visible;
         border-right: 0;
@@ -2162,6 +2157,7 @@ input[data-stop-input]:not(:disabled) {
     }
 
     .results-map-panel {
+        order: 1;
         position: static;
         padding: 0;
     }
@@ -2179,39 +2175,6 @@ input[data-stop-input]:not(:disabled) {
 
     .map-caption p:last-child {
         display: none;
-    }
-
-    .results-workspace[data-mobile-view="list"] .results-map-panel {
-        display: none;
-    }
-
-    .results-workspace[data-mobile-view="map"] .reach-controls,
-    .results-workspace[data-mobile-view="map"] .results-warning {
-        display: none;
-    }
-
-    .results-workspace[data-mobile-view="map"] .ranked-stops {
-        position: absolute;
-        z-index: 1000;
-        right: 0.65rem;
-        bottom: calc(0.65rem + env(safe-area-inset-bottom));
-        left: 0.65rem;
-        pointer-events: none;
-    }
-
-    .results-workspace[data-mobile-view="map"] .ranked-stop {
-        display: none;
-    }
-
-    .results-workspace[data-mobile-view="map"] .ranked-stop--selected {
-        max-height: min(48vh, 430px);
-        display: block;
-        max-height: min(48dvh, 430px);
-        overflow-y: auto;
-        border: 2px solid var(--ink);
-        box-shadow: 4px 4px 0 var(--ink);
-        pointer-events: auto;
-        transition: max-height 180ms ease, transform 180ms ease;
     }
 
     .ranked-stop__toggle,

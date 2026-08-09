@@ -489,6 +489,19 @@ def test_ranked_stop_participant_summaries_wrap_without_clipping():
     assert "overflow-x: visible;" in time_strip
 
 
+def test_mobile_results_stack_the_map_above_stop_details():
+    css = Path("static/app.css").read_text()
+    mobile_results = css.split("@media (max-width: 720px) {\n    #results-section", 1)[1].split(
+        "/* Session history */", 1
+    )[0]
+
+    assert ".results-workspace {\n        display: flex;" in mobile_results
+    assert ".results-mobile-views {\n        display: none;" in mobile_results
+    assert ".results-map-panel {\n        order: 1;" in mobile_results
+    assert ".results-rail {\n        order: 2;" in mobile_results
+    assert "position: absolute;" not in mobile_results
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
