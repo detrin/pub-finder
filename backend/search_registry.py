@@ -86,7 +86,9 @@ class SearchRegistry:
 
     def is_current(self, search_id: str, session_code: str) -> bool:
         with self._progress_lock:
-            return self._active_searches.get(session_code) == search_id and search_id in self._progress
+            return (
+                self._active_searches.get(session_code) == search_id and search_id in self._progress
+            )
 
     def update(self, search_id: str, **changes: Any) -> bool:
         with self._progress_lock:

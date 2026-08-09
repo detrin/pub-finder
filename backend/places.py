@@ -119,9 +119,9 @@ def venue_quality_score(rating: float | None, rating_count: int | None) -> float
     """Return a confidence-adjusted venue quality score."""
     if rating is None or rating_count is None or rating_count < 0:
         return None
-    return (
-        rating_count * rating + QUALITY_PRIOR_WEIGHT * QUALITY_PRIOR_RATING
-    ) / (rating_count + QUALITY_PRIOR_WEIGHT)
+    return (rating_count * rating + QUALITY_PRIOR_WEIGHT * QUALITY_PRIOR_RATING) / (
+        rating_count + QUALITY_PRIOR_WEIGHT
+    )
 
 
 def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
@@ -135,9 +135,7 @@ def order_pubs_for_stop(pubs: list[dict], lat: float, lon: float) -> list[dict]:
         ordered_pub = {
             **pub,
             "distance_m": _distance_meters(lat, lon, pub["lat"], pub["lon"]),
-            "quality_score": venue_quality_score(
-                pub.get("rating"), pub.get("rating_count")
-            ),
+            "quality_score": venue_quality_score(pub.get("rating"), pub.get("rating_count")),
         }
         pubs_with_distance.append(ordered_pub)
 

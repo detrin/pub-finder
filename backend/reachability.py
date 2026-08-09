@@ -25,9 +25,7 @@ def participant_text_color(background: str) -> str:
     def luminance(color: str) -> float:
         channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
         linear = [
-            channel / 12.92
-            if channel <= 0.04045
-            else ((channel + 0.055) / 1.055) ** 2.4
+            channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
             for channel in channels
         ]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
@@ -71,10 +69,7 @@ def _participant_frame(
         table.filter(pl.col("from") == participant["start_stop"])
         .select(
             pl.col("to").alias("name"),
-            pl.when(finite_minutes)
-            .then(pl.col("total_minutes"))
-            .otherwise(None)
-            .alias("there"),
+            pl.when(finite_minutes).then(pl.col("total_minutes")).otherwise(None).alias("there"),
         )
         .group_by("name")
         .agg(pl.col("there").min())
@@ -83,10 +78,7 @@ def _participant_frame(
         table.filter(pl.col("to") == participant["end_stop"])
         .select(
             pl.col("from").alias("name"),
-            pl.when(finite_minutes)
-            .then(pl.col("total_minutes"))
-            .otherwise(None)
-            .alias("back"),
+            pl.when(finite_minutes).then(pl.col("total_minutes")).otherwise(None).alias("back"),
         )
         .group_by("name")
         .agg(pl.col("back").min())

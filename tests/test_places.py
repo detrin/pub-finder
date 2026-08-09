@@ -70,6 +70,7 @@ def test_loaded_venue_state_preserves_rating_review_count_and_maps_link():
     assert "5,421" in html
     assert PUB["google_maps_url"] in html
 
+
 MOCK_PLACES_RESPONSE = {
     "places": [
         {

@@ -279,9 +279,8 @@ def _extract_search_id(html: str) -> str:
 
 def test_progress_copy_names_each_operation():
     """Progress rendering identifies the active search operation and its work count."""
-    assert (
-        "Select candidates from the transit matrix"
-        in search_router._render_progress_html(5, "candidates", 0, 0)
+    assert "Select candidates from the transit matrix" in search_router._render_progress_html(
+        5, "candidates", 0, 0
     )
     scraping = search_router._render_progress_html(42, "scraping", 14, 31)
     assert "Query DPP journey times" in scraping
@@ -579,7 +578,9 @@ async def test_venue_progress_advances_when_each_stop_group_finishes(monkeypatch
         index for index, (_, update) in enumerate(registry.updates) if update.get("stage") == "pubs"
     )
     venue_updates = [
-        update["current"] for _, update in registry.updates[venue_stage_index:] if "current" in update
+        update["current"]
+        for _, update in registry.updates[venue_stage_index:]
+        if "current" in update
     ]
     assert venue_updates[0] == 0
     assert venue_updates[-1] == 5
@@ -671,9 +672,7 @@ async def test_lower_ranked_stop_is_marked_unsearched(monkeypatch):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get(f"/session/{session['code']}/results")
 
-    sixth_result = response.text.split('data-result-rank="6"', 1)[1].split(
-        "</article>", 1
-    )[0]
+    sixth_result = response.text.split('data-result-rank="6"', 1)[1].split("</article>", 1)[0]
     assert "Nearby places not searched" in sixth_result
     assert f'hx-post="/session/{session["code"]}/venues"' in sixth_result
     assert 'name="stop_name" value="F"' in sixth_result
@@ -755,9 +754,7 @@ async def test_on_demand_venues_fetches_selected_types_filters_orders_caches_and
     monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            f"/session/{session['code']}/venues", data={"stop_name": "F"}
-        )
+        response = await client.post(f"/session/{session['code']}/venues", data={"stop_name": "F"})
         cached_response = await client.post(
             f"/session/{session['code']}/venues", data={"stop_name": "F"}
         )
@@ -803,9 +800,7 @@ async def test_on_demand_venue_provider_failure_returns_explicit_retry_state(mon
 
     monkeypatch.setattr(search_router, "search_pubs_near_stop", failed_search)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            f"/session/{session['code']}/venues", data={"stop_name": "A"}
-        )
+        response = await client.post(f"/session/{session['code']}/venues", data={"stop_name": "A"})
 
     assert response.status_code == 200
     assert 'data-venue-state="provider-error"' in response.text

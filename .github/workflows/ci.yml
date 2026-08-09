@@ -47,7 +47,7 @@ jobs:
         run: uv run pytest -q
 
       - name: Test browser behavior
-        run: node --test tests_js/*.test.mjs
+        run: node --test tests/js/*.test.js
 
       - name: Audit dependencies
         run: uv run pip-audit

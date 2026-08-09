@@ -419,7 +419,9 @@ async def _run_search(
                 _, query_results = await completed_task
                 for stop_name, place_type, pubs, error in query_results:
                     if error is not None:
-                        logger.warning("Places API error for %s (%s): %s", stop_name, place_type, error)
+                        logger.warning(
+                            "Places API error for %s (%s): %s", stop_name, place_type, error
+                        )
                         places_api_error = True
                         continue
                     pubs_by_stop_raw[stop_name].extend(pubs)
@@ -429,7 +431,10 @@ async def _run_search(
                         )
                     except Exception as exc:
                         logger.warning(
-                            "Could not cache Places response for %s (%s): %s", stop_name, place_type, exc
+                            "Could not cache Places response for %s (%s): %s",
+                            stop_name,
+                            place_type,
+                            exc,
                         )
                 completed_stops += 1
                 registry.update(search_id, current=completed_stops)
@@ -672,9 +677,7 @@ def _render_venue_suggestions(
             {
                 "stops_json": json.dumps(saved_data.get("stops_geo", [])),
                 "pubs_json": json.dumps(saved_data.get("pubs_flat", [])),
-                "participant_snapshot_json": json.dumps(
-                    saved_data.get("participant_snapshot", [])
-                ),
+                "participant_snapshot_json": json.dumps(saved_data.get("participant_snapshot", [])),
             }
         )
     return templates.TemplateResponse(request, "partials/venue_suggestions.html", context)
@@ -746,7 +749,9 @@ async def load_venues_for_stop(
         valid_types = {"pub", "bar", "cafe", "restaurant"}
         saved_place_types = data.get("place_types") or ["pub", "bar", "cafe"]
         place_types = list(
-            dict.fromkeys(place_type for place_type in saved_place_types if place_type in valid_types)
+            dict.fromkeys(
+                place_type for place_type in saved_place_types if place_type in valid_types
+            )
         ) or ["pub", "bar", "cafe"]
 
         pubs_raw = []

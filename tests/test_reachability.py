@@ -141,9 +141,7 @@ def test_null_and_non_finite_minutes_are_unavailable():
         }
     )
 
-    payload = build_reachability_payload(
-        sparse_matrix, geo(), [participants()[0]], "there-only"
-    )
+    payload = build_reachability_payload(sparse_matrix, geo(), [participants()[0]], "there-only")
 
     assert stop(payload, "A")["participant_minutes"] == [0.0]
     assert stop(payload, "B")["participant_minutes"] == [None]
@@ -197,9 +195,7 @@ def test_participant_text_color_meets_normal_text_contrast_for_the_palette():
     def luminance(value: str) -> float:
         channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
         linear = [
-            channel / 12.92
-            if channel <= 0.04045
-            else ((channel + 0.055) / 1.055) ** 2.4
+            channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
             for channel in channels
         ]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]

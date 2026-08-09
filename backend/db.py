@@ -95,7 +95,9 @@ async def init_db(db: aiosqlite.Connection):
     try:
         await db.execute("SELECT active_search_id FROM sessions LIMIT 1")
     except Exception:
-        await db.execute("ALTER TABLE sessions ADD COLUMN active_search_id TEXT NOT NULL DEFAULT ''")
+        await db.execute(
+            "ALTER TABLE sessions ADD COLUMN active_search_id TEXT NOT NULL DEFAULT ''"
+        )
         await db.commit()
 
 
@@ -286,7 +288,14 @@ async def update_search_results_if_current(
         "WHERE session_code = ? AND created_at = ? "
         "AND COALESCE(json_extract(results_json, '$.search_id'), '') = ? "
         "AND EXISTS (SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?)",
-        (json.dumps(results_data, default=str), session_code, created_at, search_id, session_code, search_id),
+        (
+            json.dumps(results_data, default=str),
+            session_code,
+            created_at,
+            search_id,
+            session_code,
+            search_id,
+        ),
     )
     await db.commit()
     return result.rowcount > 0

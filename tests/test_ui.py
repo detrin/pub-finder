@@ -238,9 +238,11 @@ async def test_participant_card_groups_status_and_remove_in_header_actions():
 @pytest.mark.asyncio
 async def test_session_search_requires_two_participants():
     session = await create_session(app.state.db, "Friday crew", "Daniel")
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get(f"/session/{session['code']}")
-    assert 'data-search-submit disabled' in response.text
+    assert "data-search-submit disabled" in response.text
     assert "Add one more participant." in response.text
 
 
@@ -371,7 +373,9 @@ async def test_saved_results_render_the_persisted_search_method(method, label):
     data = saved_result_fixture()
     data["search_method"] = method
     await save_search_results(app.state.db, session["code"], data)
-    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get(f"/session/{session['code']}/results")
     assert label in response.text
 
