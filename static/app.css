@@ -2385,7 +2385,6 @@ input[data-stop-input]:not(:disabled) {
     font-size: 16px;
     font-weight: 800;
     letter-spacing: 0.04em;
-    text-transform: uppercase;
 }
 
 .home-preview .home-preview__time {
