@@ -1,10 +1,12 @@
 import hashlib
+import ipaddress
 import logging
 import secrets
 from datetime import datetime, timezone
 
 import aiosqlite
 import httpx
+from starlette.requests import Request
 
 from .config import GA4_API_SECRET, GA4_MEASUREMENT_ID
 
@@ -14,6 +16,37 @@ USER_ID_COOKIE = "_uid"
 USER_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2
 
 _GA4_ENDPOINT = "https://www.google-analytics.com/mp/collect"
+_GEO_IP_ENDPOINT = "http://ip-api.com/json/{ip}"
+
+
+def get_client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    ip = forwarded.split(",")[0].strip() if forwarded else None
+    if not ip and request.client:
+        ip = request.client.host
+    return ip
+
+
+async def lookup_country(ip: str) -> str | None:
+    """Resolve a public IP to an ISO country code via ip-api.com. Never raises."""
+    try:
+        if ipaddress.ip_address(ip).is_private:
+            return None
+    except ValueError:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            resp = await client.get(
+                _GEO_IP_ENDPOINT.format(ip=ip), params={"fields": "status,countryCode"}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        logger.warning("Geo IP lookup failed for %s: %s", ip, exc)
+        return None
+    if data.get("status") != "success":
+        return None
+    return data.get("countryCode")
 
 
 def new_user_id() -> str:
@@ -66,10 +99,15 @@ async def record_visit(db: aiosqlite.Connection, user_id: str) -> tuple[bool, bo
 async def send_events(
     user_id: str,
     events: list[dict],
+    *,
+    country: str | None = None,
 ) -> None:
     """Forward events to GA4 via the Measurement Protocol. Never raises."""
     if not GA4_MEASUREMENT_ID or not GA4_API_SECRET:
         return
+    if country:
+        for event in events:
+            event["params"]["country"] = country
     payload = {"client_id": user_id, "events": events}
     try:
         async with httpx.AsyncClient(timeout=5) as client:

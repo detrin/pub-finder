@@ -75,7 +75,8 @@ async def init_db(db: aiosqlite.Connection):
             first_seen_at TEXT NOT NULL,
             last_seen_at TEXT NOT NULL,
             last_seen_date TEXT NOT NULL,
-            visit_count INTEGER NOT NULL DEFAULT 1
+            visit_count INTEGER NOT NULL DEFAULT 1,
+            country TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_code);
@@ -106,6 +107,13 @@ async def init_db(db: aiosqlite.Connection):
         await db.execute(
             "ALTER TABLE sessions ADD COLUMN active_search_id TEXT NOT NULL DEFAULT ''"
         )
+        await db.commit()
+
+    # Migration: visitor country for pre-existing analytics databases.
+    try:
+        await db.execute("SELECT country FROM analytics_users LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE analytics_users ADD COLUMN country TEXT")
         await db.commit()
 
 
@@ -329,6 +337,21 @@ async def get_visit_count(db: aiosqlite.Connection, user_id: str) -> int:
     ) as cursor:
         row = await cursor.fetchone()
     return row[0] if row else 1
+
+
+async def get_visitor_country(db: aiosqlite.Connection, user_id: str) -> Optional[str]:
+    async with db.execute(
+        "SELECT country FROM analytics_users WHERE user_id = ?", (user_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    return row[0] if row else None
+
+
+async def set_visitor_country(db: aiosqlite.Connection, user_id: str, country: str) -> None:
+    await db.execute(
+        "UPDATE analytics_users SET country = ? WHERE user_id = ?", (country, user_id)
+    )
+    await db.commit()
 
 
 async def cleanup_old_sessions(db: aiosqlite.Connection, max_age_days: int = 30):

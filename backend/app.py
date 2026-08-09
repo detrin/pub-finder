@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 
 import aiosqlite
@@ -20,6 +21,8 @@ from routers.track import router as track_router
 from .analytics import (
     USER_ID_COOKIE,
     USER_ID_COOKIE_MAX_AGE,
+    get_client_ip,
+    lookup_country,
     new_user_id,
     page_view_events,
     record_visit,
@@ -28,7 +31,7 @@ from .analytics import (
     tool_used_event,
 )
 from .config import DATABASE_PATH, HOST, PORT
-from .db import cleanup_old_sessions, init_db
+from .db import cleanup_old_sessions, get_visitor_country, init_db, set_visitor_country
 from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, reset_current_locale, set_current_locale
 from .search_registry import SearchRegistry
 
@@ -102,6 +105,13 @@ _TOOL_ROUTES = {
     ("POST", "create"): "create_session",
 }
 
+# GET routes that render a full HTML page a person actually looks at. Everything
+# else under /session/* is a partial, an SSE stream, or a JSON endpoint fetched
+# in the background and must not be counted as a page view.
+_PAGE_VIEW_ROUTES = re.compile(
+    r"^(?:/|/how-it-works|/feedback|/session/join|/session/[^/]+(?:/results)?)$"
+)
+
 
 class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Server-side GA4 tracking keyed off a single first-party user id cookie."""
@@ -120,12 +130,19 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
                     httponly=True,
                     samesite="lax",
                 )
-            asyncio.create_task(self._track(request, response, user_id))
+            asyncio.create_task(self._track(request, user_id))
 
         return response
 
     @staticmethod
-    async def _track(request: Request, response: Response, user_id: str) -> None:
+    async def _track(request: Request, user_id: str) -> None:
+        try:
+            await AnalyticsMiddleware._track_unsafe(request, user_id)
+        except Exception:
+            logger.warning("Analytics tracking failed", exc_info=True)
+
+    @staticmethod
+    async def _track_unsafe(request: Request, user_id: str) -> None:
         db = getattr(request.app.state, "db", None)
         if db is None:
             return
@@ -137,7 +154,11 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             events = tool_used_event(
                 tool_name=tool_name, session_id=session_id, session_number=session_number
             )
-        elif request.method == "GET" and "hx-request" not in request.headers:
+        elif (
+            request.method == "GET"
+            and "hx-request" not in request.headers
+            and _PAGE_VIEW_ROUTES.match(request.url.path)
+        ):
             events = page_view_events(
                 page_path=request.url.path,
                 page_title=request.url.path,
@@ -149,7 +170,15 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         else:
             return
 
-        await send_events(user_id, events)
+        country = await get_visitor_country(db, user_id)
+        if country is None:
+            ip = get_client_ip(request)
+            if ip:
+                country = await lookup_country(ip)
+                if country:
+                    await set_visitor_country(db, user_id, country)
+
+        await send_events(user_id, events, country=country)
 
 
 app = FastAPI(lifespan=lifespan)
