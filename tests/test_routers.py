@@ -47,6 +47,20 @@ async def test_language_switch_defaults_to_english_and_can_set_czech():
 
 
 @pytest.mark.asyncio
+async def test_czech_session_translates_dynamic_planning_controls():
+    session = await create_session(app.state.db, "Test Session", "Daniel")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("language", "cs")
+        response = await client.get(f"/session/{session['code']}")
+
+    assert "Hospody" in response.text
+    assert "Celá cesta" in response.text
+    assert "Everyone is ready." not in response.text
+    assert "Přidejte ještě jednoho účastníka." in response.text
+    assert ">saved<" not in response.text
+
+
+@pytest.mark.asyncio
 async def test_csp_allows_only_self_hosted_fonts_and_existing_map_assets():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")

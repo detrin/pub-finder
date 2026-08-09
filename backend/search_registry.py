@@ -23,6 +23,7 @@ class SearchProgress:
     cancelled: bool
     result_html: str | None
     updated_at: float
+    locale: str = "en"
 
 
 class SearchRegistry:
@@ -53,6 +54,7 @@ class SearchRegistry:
         search_id: str,
         session_code: str,
         place_type_labels: tuple[str, ...] = (),
+        locale: str = "en",
     ) -> SearchProgress:
         progress = SearchProgress(
             session_code=session_code,
@@ -64,6 +66,7 @@ class SearchRegistry:
             cancelled=False,
             result_html=None,
             updated_at=self._clock(),
+            locale=locale,
         )
         with self._progress_lock:
             previous_id = self._active_searches.get(session_code)

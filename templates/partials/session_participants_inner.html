@@ -18,8 +18,8 @@
                 <h3>{{ p.name }}</h3>
                 <div class="participant-row__actions">
                     <span class="participant-save-state">
-                        <span id="stop-save-status-{{ p.id }}" class="stop-save-status save-state htmx-indicator" role="status" aria-live="polite">saving</span>
-                        {% if p.start_stop %}<span class="save-state save-state--saved">saved</span>{% endif %}
+                        <span id="stop-save-status-{{ p.id }}" class="stop-save-status save-state htmx-indicator" role="status" aria-live="polite">{{ t("session.saving") }}</span>
+                        {% if p.start_stop %}<span class="save-state save-state--saved">{{ t("session.saved") }}</span>{% endif %}
                     </span>
                     {% if participants | length > 1 %}
                     <button type="button" class="participant-remove" data-remove-participant data-participant-id="{{ p.id }}" data-participant-name="{{ p.name }}" aria-label="{{ t('session.remove') }} {{ p.name }}">{{ t("session.remove") }}</button>
@@ -34,7 +34,7 @@
     </div>
     <form class="add-participant-form" hx-post="/session/{{ session.code }}/add-participant" hx-target="#session-participants-inner" hx-swap="innerHTML focus-scroll:false">
         <label class="visually-hidden" for="participant-name">{{ t("session.add_person") }}</label>
-        <input id="participant-name" type="text" name="participant_name" placeholder="Name" required>
+        <input id="participant-name" type="text" name="participant_name" placeholder="{{ t('session.name_placeholder') }}" required>
         <button type="submit">{{ t("session.add_person") }}</button>
     </form>
 </section>

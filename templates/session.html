@@ -13,7 +13,12 @@
         {% set readiness.missing_detail = 'an end stop' %}
     {% endif %}
 {% endfor %}
-<div class="session-workspace" data-session-workspace data-session-code="{{ session.code }}" data-session-name="{{ session.name }}" data-stops='{{ all_stops | tojson }}'>
+<div class="session-workspace" data-session-workspace data-session-code="{{ session.code }}" data-session-name="{{ session.name }}" data-stops='{{ all_stops | tojson }}'
+    data-readiness-add="{{ t('session.needs_participant') }}"
+    data-readiness-ready="{{ t('session.ready') }}"
+    data-readiness-start-and-end="{{ t('session.needs_start_and_end', name='{name}') }}"
+    data-readiness-end="{{ t('session.needs_end', name='{name}') }}"
+    data-readiness-participant="{{ t('session.participant') }}">
     <header class="session-heading">
         <div class="session-heading__title">
             <span class="session-heading__eyebrow">{{ t("session.plan") }}</span>
@@ -67,31 +72,31 @@
                         <button type="button" data-occasion="anything" aria-pressed="false">{{ t("session.anything") }}</button>
                     </div>
                     <div class="place-type-checks" data-place-type-checks>
-                        <label class="place-type-check"><input type="checkbox" name="place_types" value="pub" checked> Pubs</label>
-                        <label class="place-type-check"><input type="checkbox" name="place_types" value="bar" checked> Bars</label>
-                        <label class="place-type-check"><input type="checkbox" name="place_types" value="cafe" checked> Cafes</label>
-                        <label class="place-type-check"><input type="checkbox" name="place_types" value="restaurant"> Restaurants</label>
+                        <label class="place-type-check"><input type="checkbox" name="place_types" value="pub" checked> {{ t("session.pubs") }}</label>
+                        <label class="place-type-check"><input type="checkbox" name="place_types" value="bar" checked> {{ t("session.bars") }}</label>
+                        <label class="place-type-check"><input type="checkbox" name="place_types" value="cafe" checked> {{ t("session.cafes") }}</label>
+                        <label class="place-type-check"><input type="checkbox" name="place_types" value="restaurant"> {{ t("session.restaurants") }}</label>
                     </div>
                 </fieldset>
                 <div class="plan-panel__choices">
                     <label data-field>
                         {{ t("session.method") }}
                         <select name="method" aria-label="Optimization method">
-                            <option value="minimize-worst-case">Minimize longest journey</option>
-                            <option value="minimize-total">Minimize total journey</option>
+                            <option value="minimize-worst-case">{{ t("session.minimize_longest") }}</option>
+                            <option value="minimize-total">{{ t("session.minimize_total") }}</option>
                         </select>
                     </label>
                     <label data-field>
                         {{ t("session.direction") }}
                         <select name="direction" aria-label="Optimization direction">
-                            <option value="round-trip">Round trip</option>
-                            <option value="there-only">There only</option>
-                            <option value="back-only">Back only</option>
+                            <option value="round-trip">{{ t("session.round_trip") }}</option>
+                            <option value="there-only">{{ t("session.there_only") }}</option>
+                            <option value="back-only">{{ t("session.back_only") }}</option>
                         </select>
                     </label>
                 </div>
                 <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.needs_participant or readiness.missing_name %} disabled{% endif %}>
-                    <span class="htmx-indicator">Searching</span>
+                    <span class="htmx-indicator">{{ t("session.searching") }}</span>
                     <span class="search-label">{{ t("session.find") }}</span>
                 </button>
                 <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.needs_participant %}{{ t("session.needs_participant") }}{% elif readiness.missing_name %}{{ t("session.needs_stops", name=readiness.missing_name, detail=readiness.missing_detail) }}{% else %}{{ t("session.ready") }}{% endif %}</p>
@@ -134,5 +139,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/session.js?v=2"></script>
+<script type="module" src="/static/session.js?v=3"></script>
 {% endblock %}

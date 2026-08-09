@@ -21,7 +21,7 @@ from backend.db import (
     save_search_results_if_active,
     update_search_results_if_current,
 )
-from backend.i18n import make_templates
+from backend.i18n import make_templates, translate
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 from backend.places import (
     cache_pubs_for_type,
@@ -81,21 +81,31 @@ def _is_venue_expansion_rate_limited(session_code: str) -> bool:
     return False
 
 
-def _selected_place_type_labels(place_types: list[str]) -> tuple[str, ...]:
+def _selected_place_type_labels(place_types: list[str], locale: str = "en") -> tuple[str, ...]:
     labels = []
     for place_type in place_types:
         label = _PLACE_TYPE_LABELS.get(place_type)
+        if label:
+            label = translate(f"session.{label.lower()}", locale)
         if label and label not in labels:
             labels.append(label)
     return tuple(labels)
 
 
-def _format_place_type_labels(place_type_labels: tuple[str, ...]) -> str:
+def _format_place_type_labels(place_type_labels: tuple[str, ...], locale: str = "en") -> str:
     if len(place_type_labels) < 2:
         return "".join(place_type_labels)
     if len(place_type_labels) == 2:
-        return " and ".join(place_type_labels)
-    return f"{', '.join(place_type_labels[:-1])}, and {place_type_labels[-1]}"
+        return (" a " if locale == "cs" else " and ").join(place_type_labels)
+    conjunction = " a " if locale == "cs" else ", and "
+    return f"{', '.join(place_type_labels[:-1])}{conjunction}{place_type_labels[-1]}"
+
+
+def _progress_place_type_suffix(place_type_labels: tuple[str, ...], locale: str) -> str:
+    labels = _format_place_type_labels(place_type_labels, locale)
+    if not labels:
+        return ""
+    return f" {'pro' if locale == 'cs' else 'for'} {labels}"
 
 
 def _normalise_progress(
@@ -152,6 +162,7 @@ def _render_progress_html(
     current: int,
     total: int,
     place_type_labels: tuple[str, ...] = (),
+    locale: str = "en",
 ) -> str:
     percentage, stage, current, total = _normalise_progress(percentage, stage, current, total)
     return templates.get_template("partials/search_progress.html").render(
@@ -159,7 +170,8 @@ def _render_progress_html(
         stage=stage,
         current=current,
         total=total,
-        place_type_labels=_format_place_type_labels(place_type_labels),
+        place_type_labels=_progress_place_type_suffix(place_type_labels, locale),
+        locale=locale,
     )
 
 
@@ -170,9 +182,12 @@ def _render_progress_update_html(
     total: int,
     place_type_labels: tuple[str, ...],
     announced_stage: str,
+    locale: str = "en",
 ) -> tuple[str, str]:
     percentage, stage, current, total = _normalise_progress(percentage, stage, current, total)
-    progress_html = _render_progress_html(percentage, stage, current, total, place_type_labels)
+    progress_html = _render_progress_html(
+        percentage, stage, current, total, place_type_labels, locale
+    )
     if stage == announced_stage:
         return progress_html, stage
     announcement = escape(_progress_announcement(stage, place_type_labels, total))
@@ -276,8 +291,9 @@ async def search(
     search_id = secrets.token_hex(8)
     registry = request.app.state.search_registry
     registry.prune()
-    selected_place_type_labels = _selected_place_type_labels(place_types)
-    registry.create(search_id, code, place_type_labels=selected_place_type_labels)
+    locale = request.state.locale
+    selected_place_type_labels = _selected_place_type_labels(place_types, locale)
+    registry.create(search_id, code, place_type_labels=selected_place_type_labels, locale=locale)
     await begin_search(db, code, search_id)
     registry.start(
         search_id,
@@ -300,11 +316,11 @@ async def search(
 
     # Return a progress bar that connects to SSE
     return f"""<section class="search-progress-panel">
-<p id="search-progress-announcement" class="progress-announcement visually-hidden" aria-live="polite">Preparing search.</p>
+<p id="search-progress-announcement" class="progress-announcement visually-hidden" aria-live="polite">{translate("progress.preparing", locale)}</p>
 <div id="search-progress" hx-ext="sse" sse-connect="/session/{code}/search-progress/{search_id}" sse-swap="progress" sse-close="complete" hx-swap="innerHTML">
-    {_render_progress_html(0, "starting", 0, 0, selected_place_type_labels)}
+    {_render_progress_html(0, "starting", 0, 0, selected_place_type_labels, locale)}
 </div>
-<a class="search-progress-back" href="/session/{code}">Back to the plan</a>
+<a class="search-progress-back" href="/session/{code}">{translate("progress.back", locale)}</a>
 </section>"""
 
 
@@ -639,7 +655,13 @@ async def search_progress_stream(request: Request, code: str, search_id: str):
             pct = _progress_percentage(stage, current, total)
 
             progress_html, announced_stage = _render_progress_update_html(
-                pct, stage, current, total, progress.place_type_labels, announced_stage
+                pct,
+                stage,
+                current,
+                total,
+                progress.place_type_labels,
+                announced_stage,
+                progress.locale,
             )
             escaped_html = progress_html.replace("\n", "\ndata: ")
             yield f"event: progress\ndata: {escaped_html}\n\n"

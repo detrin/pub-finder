@@ -336,7 +336,7 @@ function updateReadiness(root) {
     const forms = [...root.querySelectorAll("form.stop-form")];
     if (forms.length < 2) {
         submit.disabled = true;
-        status.textContent = "Add one more participant.";
+        status.textContent = root.dataset.readinessAdd || "Add one more participant.";
         return;
     }
     const incomplete = forms.find((form) => {
@@ -347,13 +347,18 @@ function updateReadiness(root) {
     });
     if (!incomplete) {
         submit.disabled = false;
-        status.textContent = "Everyone is ready.";
+        status.textContent = root.dataset.readinessReady || "Everyone is ready.";
         return;
     }
     const start = incomplete.querySelector("[name=start_stop]")?.value.trim();
-    const name = incomplete.querySelector("[data-participant-name]")?.dataset.participantName || "A participant";
+    const name = incomplete.querySelector("[data-participant-name]")?.dataset.participantName
+        || root.dataset.readinessParticipant
+        || "A participant";
     submit.disabled = true;
-    status.textContent = start ? `${name} needs an end stop.` : `${name} needs start and end stops.`;
+    const message = start
+        ? root.dataset.readinessEnd || "{name} needs an end stop."
+        : root.dataset.readinessStartAndEnd || "{name} needs start and end stops.";
+    status.textContent = message.replace("{name}", name);
 }
 
 function normalize(value) {
