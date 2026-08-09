@@ -65,6 +65,12 @@
         <p>Try again in one minute.</p>
         <p>Transit results are unchanged.</p>
     </div>
+    {% elif state == "daily-limit" %}
+    <div class="venue-state venue-state--error" role="alert">
+        <h3>Venue search is unavailable today</h3>
+        <p>The app's daily venue-search budget has been reached.</p>
+        <p>Transit results are unchanged.</p>
+    </div>
     {% elif state == "provider-error" %}
     <div class="venue-state venue-state--error" role="alert">
         <h3>Places could not be loaded</h3>

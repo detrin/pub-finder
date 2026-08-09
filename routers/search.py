@@ -12,11 +12,13 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.responses import StreamingResponse
 
+from backend.config import PLACES_DAILY_REQUEST_LIMIT
 from backend.db import (
     begin_search,
     get_participants,
     get_search_results,
     get_session,
+    reserve_places_requests,
     save_search_results,
     save_search_results_if_active,
     update_search_results_if_current,
@@ -24,8 +26,6 @@ from backend.db import (
 from backend.i18n import make_templates, translate
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 from backend.places import (
-    cache_pubs_for_type,
-    get_cached_pubs_for_type,
     is_open_during,
     order_pubs_for_stop,
     search_pubs_near_stop,
@@ -39,11 +39,12 @@ logger = logging.getLogger(__name__)
 _search_timestamps: dict[str, list[float]] = defaultdict(list)
 _venue_expansion_timestamps: dict[str, list[float]] = defaultdict(list)
 _venue_expansion_locks: dict[str, asyncio.Lock] = {}
+_places_request_tasks: dict[tuple[float, float, str, int], asyncio.Task[list[dict]]] = {}
 SEARCH_RATE_LIMIT = 3
 SEARCH_RATE_WINDOW = 60  # seconds
 VENUE_EXPANSION_RATE_LIMIT = 3
 VENUE_EXPANSION_RATE_WINDOW = 60
-PUB_DISCOVERY_STOP_LIMIT = 5
+PUB_DISCOVERY_STOP_LIMIT = 3
 PLACES_CONCURRENCY_LIMIT = 4
 PLACES_SEARCH_RADIUS_METERS = 500
 _PROGRESS_STAGES = {"starting", "candidates", "scraping", "pubs"}
@@ -79,6 +80,22 @@ def _is_venue_expansion_rate_limited(session_code: str) -> bool:
         return True
     recent.append(now)
     return False
+
+
+async def _shared_place_search(
+    lat: float, lon: float, place_type: str, radius: int
+) -> list[dict]:
+    """Share an identical in-flight provider request across public sessions."""
+    key = (round(lat, 5), round(lon, 5), place_type, radius)
+    task = _places_request_tasks.get(key)
+    if task is None:
+        task = asyncio.create_task(search_pubs_near_stop(lat, lon, place_type, radius=radius))
+        _places_request_tasks[key] = task
+    try:
+        return await asyncio.shield(task)
+    finally:
+        if task.done() and _places_request_tasks.get(key) is task:
+            _places_request_tasks.pop(key, None)
 
 
 def _selected_place_type_labels(place_types: list[str], locale: str = "en") -> tuple[str, ...]:
@@ -214,7 +231,7 @@ async def search(
     return_time: str = Form(..., max_length=5),
     method: str = Form("minimize-worst-case", max_length=30),
     direction: str = Form("round-trip", max_length=20),
-    place_types: list[str] = Form(default=["pub", "bar", "cafe"]),
+    place_types: list[str] = Form(default=["pub"]),
 ):
     # Validate enum inputs
     valid_methods = {"minimize-worst-case", "minimize-total"}
@@ -224,7 +241,7 @@ async def search(
         method = "minimize-worst-case"
     if direction not in valid_directions:
         direction = "round-trip"
-    place_types = [pt for pt in place_types if pt in valid_place_types] or ["pub", "bar", "cafe"]
+    place_types = [pt for pt in place_types if pt in valid_place_types] or ["pub"]
 
     db = request.app.state.db
     participants = await get_participants(db, code)
@@ -381,122 +398,12 @@ async def _run_search(
         db = request.app.state.db
         stop_geo = request.app.state.stop_geo
         top_stops = df_results["Target Stop"].to_list()
-        pub_search_stop_names = top_stops[:PUB_DISCOVERY_STOP_LIMIT]
-
-        searchable_stops = []
-        for stop_name in pub_search_stop_names:
-            geo_row = stop_geo.filter(pl.col("name") == stop_name)
-            if len(geo_row) == 0:
-                logger.warning("No coordinates available for stop %s", stop_name)
-                continue
-            searchable_stops.append((stop_name, float(geo_row["lat"][0]), float(geo_row["lon"][0])))
-        pub_search_stop_names = [stop_name for stop_name, _, _ in searchable_stops]
-        pubs_by_stop_raw = {stop_name: [] for stop_name in pub_search_stop_names}
+        # Google Places discovery is strictly on demand. A transit optimisation must
+        # not itself create billable venue searches.
+        pub_search_stop_names: list[str] = []
+        pubs_by_stop: dict[str, list[dict]] = {}
         places_api_error = False
-        pending_queries_by_stop = {stop_name: [] for stop_name in pub_search_stop_names}
-        # Form validation has already limited these values to supported types. Preserve
-        # the submitted order while ensuring each stop/type coverage is checked once.
         unique_place_types = list(dict.fromkeys(place_types))
-
-        registry.update(
-            search_id,
-            stage="pubs",
-            current=0,
-            total=len(pub_search_stop_names),
-        )
-
-        # Check coverage per stop and type before scheduling only cache misses. An empty
-        # cached response is meaningful coverage, so distinguish it from a cache miss.
-        for stop_name, lat, lon in searchable_stops:
-            for place_type in unique_place_types:
-                cached = await get_cached_pubs_for_type(
-                    db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
-                )
-                if cached is None:
-                    pending_queries_by_stop[stop_name].append((stop_name, lat, lon, place_type))
-                else:
-                    pubs_by_stop_raw[stop_name].extend(cached)
-
-        # The semaphore is deliberately scoped to this search invocation. It limits live
-        # Google requests without serialising cache reads or response processing.
-        places_semaphore = asyncio.Semaphore(PLACES_CONCURRENCY_LIMIT)
-
-        async def fetch_query(stop_name, lat, lon, place_type):
-            try:
-                async with places_semaphore:
-                    pubs = await search_pubs_near_stop(
-                        lat, lon, place_type, radius=PLACES_SEARCH_RADIUS_METERS
-                    )
-                return stop_name, place_type, pubs, None
-            except Exception as exc:
-                return stop_name, place_type, [], exc
-
-        async def fetch_stop(stop_name, queries):
-            return stop_name, await asyncio.gather(*(fetch_query(*query) for query in queries))
-
-        pending_stop_tasks = [
-            asyncio.create_task(fetch_stop(stop_name, queries))
-            for stop_name, queries in pending_queries_by_stop.items()
-            if queries
-        ]
-        completed_stops = 0
-
-        # Fully cached stops are already checked. Report each before waiting for live work.
-        for stop_name in pub_search_stop_names:
-            if not pending_queries_by_stop[stop_name]:
-                completed_stops += 1
-                registry.update(search_id, current=completed_stops)
-
-        try:
-            # Cache writes are intentionally sequential: aiosqlite shares one connection and
-            # cache_pubs_for_type uses an explicit transaction for each completed query.
-            for completed_task in asyncio.as_completed(pending_stop_tasks):
-                _, query_results = await completed_task
-                for stop_name, place_type, pubs, error in query_results:
-                    if error is not None:
-                        logger.warning(
-                            "Places API error for %s (%s): %s", stop_name, place_type, error
-                        )
-                        places_api_error = True
-                        continue
-                    pubs_by_stop_raw[stop_name].extend(pubs)
-                    try:
-                        await cache_pubs_for_type(
-                            db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS, pubs
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Could not cache Places response for %s (%s): %s",
-                            stop_name,
-                            place_type,
-                            exc,
-                        )
-                completed_stops += 1
-                registry.update(search_id, current=completed_stops)
-        finally:
-            for pending_stop_task in pending_stop_tasks:
-                if not pending_stop_task.done():
-                    pending_stop_task.cancel()
-            if pending_stop_tasks:
-                await asyncio.gather(*pending_stop_tasks, return_exceptions=True)
-
-        # Filter by opening hours and deduplicate
-        seen_place_ids: set[str] = set()
-        pubs_by_stop = {}
-        for stop_name in pub_search_stop_names:
-            geo_row = stop_geo.filter(pl.col("name") == stop_name)
-            ordered_pubs = order_pubs_for_stop(
-                pubs_by_stop_raw[stop_name], float(geo_row["lat"][0]), float(geo_row["lon"][0])
-            )
-            unique_pubs = []
-            for pub in ordered_pubs:
-                if pub["place_id"] in seen_place_ids:
-                    continue
-                if not is_open_during(pub, departure_datetime, return_datetime):
-                    continue
-                seen_place_ids.add(pub["place_id"])
-                unique_pubs.append(pub)
-            pubs_by_stop[stop_name] = unique_pubs
 
         stop_geo_data = []
         for stop_name in top_stops:
@@ -788,23 +695,15 @@ async def load_venues_for_stop(
         lat, lon = coordinates
 
         valid_types = {"pub", "bar", "cafe", "restaurant"}
-        saved_place_types = data.get("place_types") or ["pub", "bar", "cafe"]
+        saved_place_types = data.get("place_types") or ["pub"]
         place_types = list(
             dict.fromkeys(
                 place_type for place_type in saved_place_types if place_type in valid_types
             )
-        ) or ["pub", "bar", "cafe"]
+        ) or ["pub"]
 
         pubs_raw = []
-        missing_types = []
-        for place_type in place_types:
-            cached = await get_cached_pubs_for_type(
-                db, stop_name, place_type, PLACES_SEARCH_RADIUS_METERS
-            )
-            if cached is None:
-                missing_types.append(place_type)
-            else:
-                pubs_raw.extend(cached)
+        missing_types = place_types
 
         if missing_types and _is_venue_expansion_rate_limited(code):
             return _render_venue_suggestions(
@@ -816,16 +715,28 @@ async def load_venues_for_stop(
                 state="rate-limited",
             )
 
+        if missing_types and not await reserve_places_requests(
+            db, len(missing_types), daily_limit=PLACES_DAILY_REQUEST_LIMIT
+        ):
+            return _render_venue_suggestions(
+                request,
+                code,
+                stop_name,
+                [],
+                searched=False,
+                state="daily-limit",
+            )
+
         semaphore = asyncio.Semaphore(PLACES_CONCURRENCY_LIMIT)
 
         async def fetch(place_type: str):
             try:
                 async with semaphore:
-                    pubs = await search_pubs_near_stop(
+                    pubs = await _shared_place_search(
                         lat,
                         lon,
                         place_type,
-                        radius=PLACES_SEARCH_RADIUS_METERS,
+                        PLACES_SEARCH_RADIUS_METERS,
                     )
                 return place_type, pubs, None
             except Exception as exc:
@@ -841,21 +752,6 @@ async def load_venues_for_stop(
                 had_error = True
                 continue
             pubs_raw.extend(pubs)
-            try:
-                await cache_pubs_for_type(
-                    db,
-                    stop_name,
-                    place_type,
-                    PLACES_SEARCH_RADIUS_METERS,
-                    pubs,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Could not cache on-demand Places response for %s (%s): %s",
-                    stop_name,
-                    place_type,
-                    exc,
-                )
 
         if had_error:
             return _render_venue_suggestions(

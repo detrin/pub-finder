@@ -23,7 +23,7 @@ The search works in stages. For each active direction, it selects up to 20 stops
 - **Real-time updates** -- participant list updates live via Server-Sent Events
 - **Interactive map** -- Leaflet.js map showing participants, ranked stops, and nearby venues
 - **Approximate reachability** -- participant and group views derived from precomputed typical transit times
-- **Venue discovery** -- type-balanced Google Places API integration for the top five results, with ratings, price level, and walking directions
+- **Venue discovery**: on-demand Google Places integration with ratings, price level, and walking directions
 - **Shareable results** -- permanent link to search results for each session
 - **Round-trip support** -- optionally set a different return stop
 
@@ -57,6 +57,7 @@ Visit http://localhost:3000.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GOOGLE_PLACES_API_KEY` | _(empty)_ | Required for nearby venue search |
+| `PLACES_DAILY_REQUEST_LIMIT` | `100` | Hard application-level cap on live Google Places requests per UTC day |
 | `DATABASE_PATH` | `pub_finder.db` | SQLite database path |
 | `HOST` | `0.0.0.0` | Server bind address |
 | `PORT` | `3000` | Server port |

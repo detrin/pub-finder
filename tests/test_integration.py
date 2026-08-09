@@ -65,6 +65,7 @@ async def setup_app():
     registry = SearchRegistry(result_ttl_seconds=1)
     app.state.search_registry = registry
     _search_timestamps.clear()
+    search_router._places_request_tasks.clear()
 
     yield db
 
@@ -431,8 +432,8 @@ async def _run_direct_search(monkeypatch, code, place_types):
 
 
 @pytest.mark.asyncio
-async def test_search_queries_each_type_for_only_five_stops(monkeypatch):
-    """Venue discovery is fair across types while bounded to the best five stops."""
+async def test_search_defers_venue_discovery_until_a_user_requests_it(monkeypatch):
+    """Optimising a plan must not create billable Google Places requests."""
     session = await create_session(app.state.db, "Test", "P1")
     calls = []
 
@@ -443,17 +444,39 @@ async def test_search_queries_each_type_for_only_five_stops(monkeypatch):
     monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
     await _run_direct_search(monkeypatch, session["code"], ["pub", "bar", "cafe"])
 
-    assert len(calls) == 15
-    assert {call[0] for call in calls} == {50.00, 50.01, 50.02, 50.03, 50.04}
-    assert {call[2] for call in calls} == {"pub", "bar", "cafe"}
+    assert calls == []
     saved = await get_search_results(app.state.db, session["code"])
     assert saved is not None
     assert saved["data"]["place_types"] == ["pub", "bar", "cafe"]
+    assert saved["data"]["pub_search_stop_names"] == []
     assert saved["data"]["departure_datetime"] == "2026-08-10T20:00:00"
     assert saved["data"]["return_datetime"] == "2026-08-10T23:00:00"
 
 
 @pytest.mark.asyncio
+async def test_identical_concurrent_venue_requests_share_one_provider_call(monkeypatch):
+    calls = 0
+    release = asyncio.Event()
+
+    async def fake_search(lat, lon, place_type, radius=500):
+        nonlocal calls
+        calls += 1
+        await release.wait()
+        return []
+
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", fake_search)
+    first = asyncio.create_task(search_router._shared_place_search(50.08, 14.42, "pub", 500))
+    second = asyncio.create_task(search_router._shared_place_search(50.08, 14.42, "pub", 500))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert calls == 1
+    release.set()
+    assert await first == []
+    assert await second == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="Venue discovery is now explicitly on demand.")
 async def test_duplicate_place_types_do_not_repeat_cache_or_live_queries(monkeypatch):
     """Duplicate submitted venue types keep their first position but run once per stop."""
     session = await create_session(app.state.db, "Test", "P1")
@@ -494,6 +517,7 @@ async def test_duplicate_place_types_do_not_repeat_cache_or_live_queries(monkeyp
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Venue provider work no longer runs during a transit search.")
 async def test_one_type_failure_keeps_other_results(monkeypatch):
     """A failed type query neither cancels peers nor hides their venue results."""
     session = await create_session(app.state.db, "Test", "P1")
@@ -535,6 +559,7 @@ async def test_one_type_failure_keeps_other_results(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Venue provider work no longer runs during a transit search.")
 async def test_venue_progress_advances_when_each_stop_group_finishes(monkeypatch):
     """Venue progress advances for a completed stop without waiting for slower top stops."""
     session = await create_session(app.state.db, "Test", "P1")
@@ -618,6 +643,7 @@ async def test_venue_progress_advances_when_each_stop_group_finishes(monkeypatch
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Venue provider work no longer runs during a transit search.")
 async def test_registry_shutdown_cancels_pending_venue_stop_tasks(monkeypatch):
     """Registry shutdown leaves no live venue request running after its parent search ends."""
     session = await create_session(app.state.db, "Test", "P1")

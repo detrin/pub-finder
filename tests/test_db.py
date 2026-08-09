@@ -9,6 +9,7 @@ from backend.db import (
     get_session,
     init_db,
     join_session,
+    reserve_places_requests,
 )
 
 
@@ -26,6 +27,13 @@ async def test_create_session(db):
     assert session["code"]
     assert len(session["code"]) == 32
     assert session["creator_name"] == "Daniel"
+
+
+@pytest.mark.asyncio
+async def test_places_request_reservations_enforce_a_daily_global_budget(db):
+    assert await reserve_places_requests(db, 2, daily_limit=3) is True
+    assert await reserve_places_requests(db, 1, daily_limit=3) is True
+    assert await reserve_places_requests(db, 1, daily_limit=3) is False
 
 
 @pytest.mark.asyncio

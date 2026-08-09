@@ -62,6 +62,11 @@ async def init_db(db: aiosqlite.Connection):
             PRIMARY KEY (stop_name, place_type, radius, place_id)
         );
 
+        CREATE TABLE IF NOT EXISTS places_daily_usage (
+            usage_date TEXT PRIMARY KEY,
+            request_count INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS search_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_code TEXT NOT NULL REFERENCES sessions(code),
@@ -116,6 +121,13 @@ async def init_db(db: aiosqlite.Connection):
         await db.execute("ALTER TABLE analytics_users ADD COLUMN country TEXT")
         await db.commit()
 
+    # Google Places content is not a durable application cache. Clear records created
+    # by earlier versions; place data now only lives in the active response/session.
+    await db.execute("DELETE FROM pub_cache_matches")
+    await db.execute("DELETE FROM pub_cache_queries")
+    await db.execute("DELETE FROM pub_cache")
+    await db.commit()
+
 
 async def create_session(db: aiosqlite.Connection, session_name: str, creator_name: str) -> dict:
     code = secrets.token_hex(16)
@@ -130,6 +142,23 @@ async def create_session(db: aiosqlite.Connection, session_name: str, creator_na
     )
     await db.commit()
     return {"code": code, "name": session_name, "creator_name": creator_name, "created_at": now}
+
+
+async def reserve_places_requests(
+    db: aiosqlite.Connection, request_count: int, *, daily_limit: int
+) -> bool:
+    """Atomically reserve Google Places calls without exceeding the daily application cap."""
+    if request_count <= 0:
+        return True
+    cursor = await db.execute(
+        "INSERT INTO places_daily_usage (usage_date, request_count) "
+        "VALUES (date('now'), ?) "
+        "ON CONFLICT(usage_date) DO UPDATE SET request_count = request_count + excluded.request_count "
+        "WHERE request_count + excluded.request_count <= ?",
+        (request_count, daily_limit),
+    )
+    await db.commit()
+    return cursor.rowcount == 1
 
 
 async def get_session(db: aiosqlite.Connection, code: str) -> Optional[dict]:
