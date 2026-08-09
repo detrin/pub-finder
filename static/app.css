@@ -1634,6 +1634,7 @@ input[data-stop-input]:not(:disabled) {
 /* Results */
 #results-section {
     width: min(1600px, calc(100vw - 2rem));
+    min-width: 100%;
     margin-top: 2rem;
     margin-left: 50%;
     transform: translateX(-50%);
