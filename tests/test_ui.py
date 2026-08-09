@@ -527,10 +527,16 @@ def test_results_map_explains_every_marker_type():
     template = Path("templates/partials/results_table.html").read_text()
 
     assert 'class="map-marker-legend"' in template
-    assert "Selected meeting stop" in template
-    assert "Other ranked meeting stop" in template
+    assert "Meeting points considered" in template
     assert "Nearby place" in template
-    assert "Participant start/end stops" in template
+    assert "Input stops" in template
+
+
+def test_results_map_uses_role_colours_not_participant_identity_colours():
+    script = Path("static/reachability-map.js").read_text()
+
+    assert "fillColor: \"#fffefa\"" in script
+    assert "fillColor: \"#2458df\"" in script
 
 
 @pytest.mark.asyncio

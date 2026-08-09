@@ -71,10 +71,6 @@ function validLocation(item) {
     return item != null && Number.isFinite(item.lat) && Number.isFinite(item.lon);
 }
 
-function safeColor(value, fallback) {
-    return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
-}
-
 function popupContent(document, title, details = []) {
     const wrapper = document.createElement("div");
     const heading = document.createElement("strong");
@@ -199,7 +195,7 @@ export class ReachabilityMapController {
                 {
                     className: "ranked-stop-marker",
                     color: "#17191c",
-                    fillColor: selected ? "#4dc694" : "#fffefa",
+                    fillColor: "#fffefa",
                     fillOpacity: 1,
                     radius: selected ? 10 : 7,
                     weight: selected ? 3 : 2,
@@ -237,7 +233,6 @@ export class ReachabilityMapController {
         this.participantLayer.clearLayers();
         const stopsByName = new Map(this.payload.stops.map((stop) => [stop.name, stop]));
         for (const participant of this.payload.participants) {
-            const color = safeColor(participant.color, "#2458df");
             const locations = [
                 [participant.start_stop, "Starting stop"],
                 [participant.end_stop, "Return stop"],
@@ -256,7 +251,7 @@ export class ReachabilityMapController {
                     {
                         className: "participant-marker",
                         color: "#17191c",
-                        fillColor: color,
+                        fillColor: "#2458df",
                         fillOpacity: 1,
                         radius: 8,
                         weight: 2,
