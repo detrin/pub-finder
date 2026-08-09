@@ -1,7 +1,10 @@
+from contextvars import ContextVar
+
 from fastapi.templating import Jinja2Templates
 
 SUPPORTED_LOCALES = {"en", "cs"}
 DEFAULT_LOCALE = "en"
+_current_locale: ContextVar[str] = ContextVar("current_locale", default=DEFAULT_LOCALE)
 
 TRANSLATIONS = {
     "en": {
@@ -22,6 +25,39 @@ TRANSLATIONS = {
         "home.join_with_code": "Join with a code",
         "home.plan_code": "Plan code",
         "home.join_plan": "Join plan",
+        "session.plan": "Plan",
+        "session.invite": "Invite",
+        "session.people": "People",
+        "session.participants": "Participants ({count})",
+        "session.shared_plan": "Shared plan",
+        "session.when_and_what": "When and what",
+        "session.departure_date": "Departure date",
+        "session.departure_time": "Departure time",
+        "session.return_date": "Return date",
+        "session.return_time": "Return time",
+        "session.occasion": "Occasion",
+        "session.drinks": "Drinks",
+        "session.coffee": "Coffee",
+        "session.food": "Food",
+        "session.anything": "Anything",
+        "session.method": "Method",
+        "session.direction": "Direction",
+        "session.find": "Find somewhere",
+        "session.add_person": "Add person",
+        "session.start": "Start",
+        "session.end": "End",
+        "session.return_same": "Return to the same stop",
+        "session.choose_stop": "Choose a stop",
+        "session.select_stop": "Select a stop",
+        "session.filter_stops": "Filter stops",
+        "session.close": "Close",
+        "session.remove": "Remove",
+        "session.cancel": "Cancel",
+        "session.remove_participant": "Remove participant?",
+        "session.remove_detail": "Remove {name} and their selected stops.",
+        "session.needs_participant": "Add one more participant.",
+        "session.needs_stops": "{name} needs {detail}.",
+        "session.ready": "Everyone is ready.",
     },
     "cs": {
         "nav.home": "Domů",
@@ -41,11 +77,57 @@ TRANSLATIONS = {
         "home.join_with_code": "Připojit se kódem",
         "home.plan_code": "Kód plánu",
         "home.join_plan": "Připojit se k plánu",
+        "session.plan": "Plán",
+        "session.invite": "Pozvat",
+        "session.people": "Lidé",
+        "session.participants": "Účastníci ({count})",
+        "session.shared_plan": "Společný plán",
+        "session.when_and_what": "Kdy a co",
+        "session.departure_date": "Datum odjezdu",
+        "session.departure_time": "Čas odjezdu",
+        "session.return_date": "Datum návratu",
+        "session.return_time": "Čas návratu",
+        "session.occasion": "Příležitost",
+        "session.drinks": "Nápoje",
+        "session.coffee": "Káva",
+        "session.food": "Jídlo",
+        "session.anything": "Cokoli",
+        "session.method": "Metoda",
+        "session.direction": "Směr",
+        "session.find": "Najít místo",
+        "session.add_person": "Přidat člověka",
+        "session.start": "Začátek",
+        "session.end": "Konec",
+        "session.return_same": "Návrat na stejnou zastávku",
+        "session.choose_stop": "Vyberte zastávku",
+        "session.select_stop": "Zvolte zastávku",
+        "session.filter_stops": "Filtrovat zastávky",
+        "session.close": "Zavřít",
+        "session.remove": "Odebrat",
+        "session.cancel": "Zrušit",
+        "session.remove_participant": "Odebrat účastníka?",
+        "session.remove_detail": "Odebrat {name} a jeho vybrané zastávky.",
+        "session.needs_participant": "Přidejte ještě jednoho účastníka.",
+        "session.needs_stops": "{name} potřebuje {detail}.",
+        "session.ready": "Všichni jsou připraveni.",
     },
 }
 
 
-def translate(key: str, locale: str = DEFAULT_LOCALE, **values: object) -> str:
+def set_current_locale(locale: str):
+    return _current_locale.set(locale if locale in SUPPORTED_LOCALES else DEFAULT_LOCALE)
+
+
+def reset_current_locale(token: object) -> None:
+    _current_locale.reset(token)
+
+
+def current_locale() -> str:
+    return _current_locale.get()
+
+
+def translate(key: str, locale: str | None = None, **values: object) -> str:
+    locale = locale or current_locale()
     text = TRANSLATIONS.get(locale, TRANSLATIONS[DEFAULT_LOCALE]).get(
         key, TRANSLATIONS[DEFAULT_LOCALE].get(key, key)
     )
@@ -55,4 +137,5 @@ def translate(key: str, locale: str = DEFAULT_LOCALE, **values: object) -> str:
 def make_templates(directory: str = "templates") -> Jinja2Templates:
     templates = Jinja2Templates(directory=directory)
     templates.env.globals["t"] = translate
+    templates.env.globals["locale"] = current_locale
     return templates

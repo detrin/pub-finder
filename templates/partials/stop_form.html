@@ -7,13 +7,13 @@
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
     <div class="stop-form-row">
         <label data-field>
-            Start
+            {{ t("session.start") }}
             <input type="text" name="start_stop" placeholder="Tap to select stop..."
                 value="{{ participant.start_stop }}" readonly data-stop-input
                 data-participant-name="{{ participant.name }}" data-stop-direction="starting from">
         </label>
         <label data-field>
-            End
+            {{ t("session.end") }}
             <input type="text" name="end_stop" placeholder="Tap to select stop..."
                 value="{{ participant.end_stop }}" readonly data-stop-input
                 data-participant-name="{{ participant.name }}" data-stop-direction="returning to"
@@ -23,7 +23,7 @@
             <input type="checkbox" name="same_start_end" value="true"
                 {% if participant.same_start_end %}checked{% endif %}
                 data-same-start-end>
-            Return to the same stop
+            {{ t("session.return_same") }}
         </label>
     </div>
 </form>

@@ -17,7 +17,7 @@ from routers.session import router as session_router
 
 from .config import DATABASE_PATH, HOST, PORT
 from .db import cleanup_old_sessions, init_db
-from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES
+from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, reset_current_locale, set_current_locale
 from .search_registry import SearchRegistry
 
 logging.basicConfig(
@@ -77,7 +77,11 @@ class LocaleMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         locale = request.cookies.get("language", DEFAULT_LOCALE)
         request.state.locale = locale if locale in SUPPORTED_LOCALES else DEFAULT_LOCALE
-        return await call_next(request)
+        token = set_current_locale(request.state.locale)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_locale(token)
 
 
 app = FastAPI(lifespan=lifespan)
