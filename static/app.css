@@ -2304,7 +2304,8 @@ input[data-stop-input]:not(:disabled) {
     max-width: 10ch;
     margin-bottom: 1rem;
     font-size: clamp(2.75rem, 6.5vw, 5.6rem);
-    letter-spacing: -0.065em;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
 }
 
 .home-hero p,

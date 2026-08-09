@@ -516,6 +516,13 @@ def test_mobile_map_fills_the_results_frame_width():
     assert ".results-map-panel #map {\n        width: 100%;" in mobile_results
 
 
+def test_home_headline_uses_readable_display_tracking():
+    css = Path("static/app.css").read_text()
+    hero_heading = css.split(".home-hero h1 {", 1)[1].split("}", 1)[0]
+
+    assert "letter-spacing: -0.035em;" in hero_heading
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
