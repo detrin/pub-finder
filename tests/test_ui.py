@@ -193,6 +193,16 @@ async def test_session_workspace_exposes_autosave_and_dialog_hooks():
     assert "data-remove-dialog" in response.text
     assert 'aria-live="polite"' in response.text
     assert "Find somewhere" in response.text
+    assert 'hx-swap="innerHTML focus-scroll:false"' in response.text
+
+
+def test_mobile_stop_picker_stays_centered_in_the_viewport():
+    css = Path("static/app.css").read_text()
+    mobile_stop_picker = css.rsplit(".stop-picker {", 1)[1].split("}", 1)[0]
+
+    assert "width: min(520px, calc(100vw - 1.5rem));" in mobile_stop_picker
+    assert "margin: auto;" in mobile_stop_picker
+    assert "margin: auto 0 0;" not in mobile_stop_picker
 
 
 @pytest.mark.asyncio

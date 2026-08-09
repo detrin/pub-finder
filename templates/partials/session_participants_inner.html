@@ -32,7 +32,7 @@
         </article>
         {% endfor %}
     </div>
-    <form class="add-participant-form" hx-post="/session/{{ session.code }}/add-participant" hx-target="#session-participants-inner" hx-swap="innerHTML">
+    <form class="add-participant-form" hx-post="/session/{{ session.code }}/add-participant" hx-target="#session-participants-inner" hx-swap="innerHTML focus-scroll:false">
         <label class="visually-hidden" for="participant-name">Add a participant</label>
         <input id="participant-name" type="text" name="participant_name" placeholder="Name" required>
         <button type="submit">Add person</button>
