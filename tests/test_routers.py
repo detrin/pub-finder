@@ -104,6 +104,19 @@ async def test_session_page():
 
 
 @pytest.mark.asyncio
+async def test_participants_refresh_keeps_the_current_participant_card_ui():
+    session = await create_session(app.state.db, "Test Session", "Daniel")
+    await join_session(app.state.db, session["code"], "Petra")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/session/{session['code']}/participants")
+
+    assert 'class="participants-panel"' in response.text
+    assert 'class="participant-row"' in response.text
+    assert "Stops set" not in response.text
+
+
+@pytest.mark.asyncio
 async def test_session_page_autosaves_valid_stop_selections():
     session = await create_session(app.state.db, "Test Session", "Daniel")
     await join_session(app.state.db, session["code"], "Petra")

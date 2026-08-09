@@ -139,7 +139,7 @@ async def participants_partial(request: Request, code: str):
     participants = await get_participants(db, code)
     return templates.TemplateResponse(
         request,
-        "partials/participant_list_inner.html",
+        "partials/session_participants_inner.html",
         {
             "session": {"code": code},
             "participants": participants,
