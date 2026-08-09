@@ -136,6 +136,10 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
                     this.tooltip = content;
                     return this;
                 },
+                bringToFront() {
+                    this.isFront = true;
+                    return this;
+                },
             };
         },
         latLngBounds(points) {
@@ -316,6 +320,21 @@ test("selected result controls marker emphasis without changing its factual rank
     assert.ok(second.options.radius > first.options.radius);
     assert.ok(second.options.weight > first.options.weight);
     assert.equal(second.popup.children.at(-1).textContent, "Rank 2");
+});
+
+test("input stop markers stay above meeting point markers", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        reachabilityUrl: "/reachability",
+        fetch: async () => ({ ok: true, json: async () => payload }),
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    controller.setResults([{ name: "First", lat: 0.5, lon: 1.5, rank: 1 }]);
+
+    assert.ok(harness.createdGroups[0].layers.every((marker) => marker.isFront));
 });
 
 test("map movement coalesces redraws and destroy cleans up once", async () => {

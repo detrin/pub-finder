@@ -84,10 +84,11 @@ function popupContent(document, title, details = []) {
 }
 
 function addCircle(leaflet, group, document, item, options, details = []) {
-    if (!validLocation(item)) return;
+    if (!validLocation(item)) return null;
     const marker = leaflet.circleMarker([item.lat, item.lon], options);
     marker.bindPopup(popupContent(document, item.name, details));
     group.addLayer(marker);
+    return marker;
 }
 
 export class ReachabilityMapController {
@@ -104,6 +105,7 @@ export class ReachabilityMapController {
         this.threshold = Number.isFinite(options.threshold) ? options.threshold : DEFAULT_THRESHOLD;
         this.step = Number.isFinite(options.step) && options.step > 0 ? options.step : DEFAULT_STEP;
         this.participantId = null;
+        this.participantMarkers = [];
         this.layerValues = [];
         this.results = [];
         this.venues = [];
@@ -203,6 +205,7 @@ export class ReachabilityMapController {
                 [`Rank ${rank}`],
             );
         });
+        this._bringParticipantsToFront();
     }
 
     setVenues(venues) {
@@ -231,6 +234,7 @@ export class ReachabilityMapController {
 
     renderParticipants() {
         this.participantLayer.clearLayers();
+        this.participantMarkers = [];
         const stopsByName = new Map(this.payload.stops.map((stop) => [stop.name, stop]));
         for (const participant of this.payload.participants) {
             const locations = [
@@ -243,7 +247,7 @@ export class ReachabilityMapController {
                 seen.add(stopName);
                 const stop = stopsByName.get(stopName);
                 if (!stop) continue;
-                addCircle(
+                const marker = addCircle(
                     this.leaflet,
                     this.participantLayer,
                     this.document,
@@ -258,8 +262,14 @@ export class ReachabilityMapController {
                     },
                     [`${label}: ${stopName}`],
                 );
+                if (marker) this.participantMarkers.push(marker);
             }
         }
+        this._bringParticipantsToFront();
+    }
+
+    _bringParticipantsToFront() {
+        this.participantMarkers.forEach((marker) => marker.bringToFront?.());
     }
 
     scheduleRedraw() {
