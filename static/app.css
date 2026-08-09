@@ -2133,7 +2133,11 @@ input[data-stop-input]:not(:disabled) {
     background: var(--coral);
 }
 
-.map-marker-legend__dot--person {
+.map-marker-legend__dot--start {
+    background: var(--coral);
+}
+
+.map-marker-legend__dot--return {
     background: var(--blue);
 }
 

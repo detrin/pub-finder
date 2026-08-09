@@ -529,14 +529,16 @@ def test_results_map_explains_every_marker_type():
     assert 'class="map-marker-legend"' in template
     assert "Meeting points considered" in template
     assert "Nearby place" in template
-    assert "Input stops" in template
+    assert "Start stops" in template
+    assert "Return stops" in template
 
 
 def test_results_map_uses_role_colours_not_participant_identity_colours():
     script = Path("static/reachability-map.js").read_text()
 
     assert "fillColor: \"#fffefa\"" in script
-    assert "fillColor: \"#2458df\"" in script
+    assert '"#ff6658", "#17191c", 2' in script
+    assert '"#2458df", "#17191c", 2' in script
 
 
 @pytest.mark.asyncio

@@ -237,14 +237,16 @@ export class ReachabilityMapController {
         this.participantMarkers = [];
         const stopsByName = new Map(this.payload.stops.map((stop) => [stop.name, stop]));
         for (const participant of this.payload.participants) {
-            const locations = [
-                [participant.start_stop, "Starting stop"],
-                [participant.end_stop, "Return stop"],
-            ];
-            const seen = new Set();
-            for (const [stopName, label] of locations) {
-                if (typeof stopName !== "string" || seen.has(stopName)) continue;
-                seen.add(stopName);
+            const startStop = participant.start_stop;
+            const endStop = participant.end_stop;
+            const locations = startStop === endStop
+                ? [[startStop, "Start and return stop", "#2458df", "#ff6658", 4]]
+                : [
+                    [startStop, "Starting stop", "#ff6658", "#17191c", 2],
+                    [endStop, "Return stop", "#2458df", "#17191c", 2],
+                ];
+            for (const [stopName, label, fillColor, borderColor, weight] of locations) {
+                if (typeof stopName !== "string") continue;
                 const stop = stopsByName.get(stopName);
                 if (!stop) continue;
                 const marker = addCircle(
@@ -254,11 +256,11 @@ export class ReachabilityMapController {
                     { ...stop, name: participant.name ?? stopName },
                     {
                         className: "participant-marker",
-                        color: "#17191c",
-                        fillColor: "#2458df",
+                        color: borderColor,
+                        fillColor,
                         fillOpacity: 1,
                         radius: 8,
-                        weight: 2,
+                        weight,
                     },
                     [`${label}: ${stopName}`],
                 );
