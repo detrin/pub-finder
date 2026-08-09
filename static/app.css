@@ -2100,6 +2100,42 @@ input[data-stop-input]:not(:disabled) {
     font-size: 0.62rem;
 }
 
+.map-marker-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    padding-top: 0.45rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+}
+
+.map-marker-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.map-marker-legend__dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    background: var(--paper);
+}
+
+.map-marker-legend__dot--best {
+    background: var(--green);
+}
+
+.map-marker-legend__dot--venue {
+    background: var(--coral);
+}
+
+.map-marker-legend__dot--person {
+    background: linear-gradient(135deg, var(--yellow) 0 50%, var(--blue) 50% 100%);
+}
+
 .map-source {
     color: var(--ink) !important;
     font-weight: 500;
@@ -2196,6 +2232,10 @@ input[data-stop-input]:not(:disabled) {
 
     .map-caption {
         padding: 0.45rem 0.65rem;
+    }
+
+    .map-marker-legend {
+        padding: 0.45rem 0.65rem 0;
     }
 
     .map-caption p:last-child {

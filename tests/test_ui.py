@@ -523,6 +523,16 @@ def test_home_headline_uses_readable_display_tracking():
     assert "letter-spacing: -0.035em;" in hero_heading
 
 
+def test_results_map_explains_every_marker_type():
+    template = Path("templates/partials/results_table.html").read_text()
+
+    assert 'class="map-marker-legend"' in template
+    assert "Best meeting stop" in template
+    assert "Other ranked stop" in template
+    assert "Nearby place" in template
+    assert "Participant stop" in template
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
