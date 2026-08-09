@@ -10,7 +10,6 @@ from html import escape
 import polars as pl
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
 from backend.db import (
@@ -22,6 +21,7 @@ from backend.db import (
     save_search_results_if_active,
     update_search_results_if_current,
 )
+from backend.i18n import make_templates
 from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
 from backend.places import (
     cache_pubs_for_type,
@@ -185,7 +185,7 @@ def _render_progress_update_html(
 
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = make_templates()
 templates.env.filters["participant_text_color"] = participant_text_color
 
 
@@ -211,6 +211,37 @@ async def search(
         direction = "round-trip"
     place_types = [pt for pt in place_types if pt in valid_place_types] or ["pub", "bar", "cafe"]
 
+    db = request.app.state.db
+    participants = await get_participants(db, code)
+    if len(participants) < 2:
+        return templates.TemplateResponse(
+            request,
+            "partials/results_table.html",
+            {
+                "error": "Add one more participant, then choose their stops.",
+                "results": None,
+            },
+        )
+
+    incomplete_participant = next(
+        (
+            participant
+            for participant in participants
+            if not participant["start_stop"]
+            or (not participant["same_start_end"] and not participant["end_stop"])
+        ),
+        None,
+    )
+    if incomplete_participant:
+        return templates.TemplateResponse(
+            request,
+            "partials/results_table.html",
+            {
+                "error": f"{incomplete_participant['name']} needs start and end stops.",
+                "results": None,
+            },
+        )
+
     if _is_rate_limited(code):
         return templates.TemplateResponse(
             request,
@@ -221,21 +252,9 @@ async def search(
             },
         )
 
-    db = request.app.state.db
-    participants = await get_participants(db, code)
-    active_participants = [p for p in participants if p["start_stop"]]
-    stop_pairs = [(p["start_stop"], p["end_stop"] or p["start_stop"]) for p in active_participants]
-    participant_names = [p["name"] for p in active_participants]
-
-    if len(stop_pairs) < 2:
-        return templates.TemplateResponse(
-            request,
-            "partials/results_table.html",
-            {
-                "error": "Add one more participant, then choose their stops.",
-                "results": None,
-            },
-        )
+    active_participants = participants
+    stop_pairs = [(p["start_stop"], p["end_stop"] or p["start_stop"]) for p in participants]
+    participant_names = [p["name"] for p in participants]
 
     is_valid, error_msg = validate_date_time(departure_date, departure_time)
     if not is_valid:

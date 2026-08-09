@@ -32,6 +32,21 @@ async def test_home_page():
 
 
 @pytest.mark.asyncio
+async def test_language_switch_defaults_to_english_and_can_set_czech():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        english = await client.get("/")
+        switched = await client.get("/language/cs?next=/", follow_redirects=False)
+        czech = await client.get("/")
+
+    assert 'class="language-switch"' in english.text
+    assert "Find a place that works for everyone." in english.text
+    assert switched.status_code == 303
+    assert "language=cs" in switched.headers["set-cookie"]
+    assert "Najděte místo, které vyhovuje všem." in czech.text
+
+
+@pytest.mark.asyncio
 async def test_csp_allows_only_self_hosted_fonts_and_existing_map_assets():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")

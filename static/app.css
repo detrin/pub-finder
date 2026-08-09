@@ -176,6 +176,27 @@ a:hover {
     text-decoration: underline;
 }
 
+.language-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.language-switch a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.language-switch a[aria-current="true"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 0.16em;
+}
+
 .site-footer {
     margin: 4rem 0 1.5rem;
     padding-top: 1rem;

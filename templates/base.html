@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ request.state.locale }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <!-- App CSS -->
-    <link rel="stylesheet" href="/static/app.css?v=39">
+    <link rel="stylesheet" href="/static/app.css?v=40">
     <link rel="modulepreload" href="/static/reachability-map.js?v=3">
 </head>
 <body>
@@ -23,18 +23,23 @@
                 <span>meet somewhere</span>
             </a>
             <div class="site-nav__links site-nav__links--desktop">
-                <a href="/">Home</a>
-                <a href="/how-it-works">How it works</a>
-                <a href="/feedback">Feedback</a>
+                <a href="/">{{ t("nav.home", request.state.locale) }}</a>
+                <a href="/how-it-works">{{ t("nav.how_it_works", request.state.locale) }}</a>
+                <a href="/feedback">{{ t("nav.feedback", request.state.locale) }}</a>
             </div>
             <details class="site-nav__menu">
                 <summary>Menu</summary>
                 <div class="site-nav__links site-nav__links--mobile">
-                <a href="/">Home</a>
-                <a href="/how-it-works">How it works</a>
-                <a href="/feedback">Feedback</a>
+                <a href="/">{{ t("nav.home", request.state.locale) }}</a>
+                <a href="/how-it-works">{{ t("nav.how_it_works", request.state.locale) }}</a>
+                <a href="/feedback">{{ t("nav.feedback", request.state.locale) }}</a>
                 </div>
             </details>
+            <div class="language-switch" aria-label="{{ t('nav.language', request.state.locale) }}">
+                <a href="/language/en?next={{ request.url.path }}"{% if request.state.locale == "en" %} aria-current="true"{% endif %}>EN</a>
+                <span aria-hidden="true">/</span>
+                <a href="/language/cs?next={{ request.url.path }}"{% if request.state.locale == "cs" %} aria-current="true"{% endif %}>CZ</a>
+            </div>
             <button class="theme-toggle" data-theme-toggle aria-label="Use dark theme" title="Toggle theme">
                 <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -48,7 +53,7 @@
         </main>
 
         <footer class="site-footer">
-            <p>Created by <a href="https://www.hermandaniel.com">Daniel Herman</a></p>
+            <p>{{ t("footer.created_by", request.state.locale) }} <a href="https://www.hermandaniel.com">Daniel Herman</a></p>
         </footer>
     </div>
 

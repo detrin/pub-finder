@@ -17,6 +17,7 @@ from routers.session import router as session_router
 
 from .config import DATABASE_PATH, HOST, PORT
 from .db import cleanup_old_sessions, init_db
+from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES
 from .search_registry import SearchRegistry
 
 logging.basicConfig(
@@ -72,8 +73,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class LocaleMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        locale = request.cookies.get("language", DEFAULT_LOCALE)
+        request.state.locale = locale if locale in SUPPORTED_LOCALES else DEFAULT_LOCALE
+        return await call_next(request)
+
+
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LocaleMiddleware)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(home_router)
 app.include_router(reachability_router)

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
 from backend.db import (
@@ -20,12 +19,13 @@ from backend.db import (
     join_session,
     remove_participant,
 )
+from backend.i18n import make_templates
 from backend.reachability import participant_color, participant_text_color
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/session")
-templates = Jinja2Templates(directory="templates")
+templates = make_templates()
 
 MAX_NAME_LENGTH = 50
 MAX_PARTICIPANTS = 20

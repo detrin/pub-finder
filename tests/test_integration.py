@@ -258,6 +258,37 @@ async def test_search_requires_two_participants():
     assert "Add one more participant" in resp.text
 
 
+@pytest.mark.asyncio
+async def test_search_requires_every_person_to_have_a_complete_trip_before_rate_limiting(
+    monkeypatch,
+):
+    """An incomplete second participant cannot start or consume a search."""
+    transport = ASGITransport(app=app)
+    called = False
+
+    def rate_limiter(_code):
+        nonlocal called
+        called = True
+        return False
+
+    monkeypatch.setattr(search_router, "_is_rate_limited", rate_limiter)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        code = await _create_session_with_participants(client, [("A", "A"), ("B", "")])
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        response = await client.post(
+            f"/session/{code}/search",
+            data={
+                "departure_date": tomorrow,
+                "departure_time": "20:00",
+                "return_date": tomorrow,
+                "return_time": "23:00",
+            },
+        )
+
+    assert "P2 needs start and end stops." in response.text
+    assert called is False
+
+
 async def _wait_for_search(search_id, session_code, timeout=10):
     """Wait for a background search to complete."""
     start = time.monotonic()
