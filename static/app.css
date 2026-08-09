@@ -909,11 +909,13 @@ nav[data-topnav] strong {
 
 /* Search progress */
 .search-progress-panel {
-    width: min(100%, 640px);
+    width: 100%;
     margin: 0 auto;
 }
 
 .progress-box {
+    width: min(100%, 640px);
+    margin: 0 auto;
     padding: 1.25rem;
     border: 2px solid var(--ink);
     background: var(--sky-surface);

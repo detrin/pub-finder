@@ -447,6 +447,21 @@ async def test_results_threshold_keeps_a_44px_pointer_target():
 
 
 @pytest.mark.asyncio
+async def test_completed_search_results_are_not_constrained_by_the_progress_wrapper():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/static/app.css")
+
+    progress_panel = response.text.split(".search-progress-panel {", 1)[1].split("}", 1)[0]
+    progress_box = response.text.split(".progress-box {", 1)[1].split("}", 1)[0]
+
+    assert "width: 100%;" in progress_panel
+    assert "width: min(100%, 640px);" in progress_box
+    assert "margin: 0 auto;" in progress_box
+
+
+@pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
     unsafe_name = 'O\'Reilly "Stop" <script>alert(1)</script>'
