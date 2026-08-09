@@ -12,8 +12,11 @@ from httpx import ASGITransport
 
 from backend.app import app
 from backend.db import (
+    add_participant,
+    add_participant_stops,
     begin_search,
     create_session,
+    get_participants,
     get_search_results,
     init_db,
     save_search_results,
@@ -144,6 +147,36 @@ async def test_session_workspace_exposes_autosave_and_dialog_hooks():
     assert "data-remove-dialog" in response.text
     assert 'aria-live="polite"' in response.text
     assert "Find somewhere" in response.text
+
+
+@pytest.mark.asyncio
+async def test_participant_card_groups_status_and_remove_in_header_actions():
+    """Keep card-level status and actions together instead of in the stop grid."""
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await add_participant(app.state.db, session["code"], "Alice")
+    participant = (await get_participants(app.state.db, session["code"]))[0]
+    await add_participant_stops(
+        app.state.db,
+        session["code"],
+        participant["id"],
+        "A",
+        "A",
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}")
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    card = soup.select_one(".participant-row")
+    actions = card.select_one(".participant-row__actions")
+
+    assert actions is not None
+    assert actions.select_one(".stop-save-status") is not None
+    assert actions.select_one(".save-state--saved") is not None
+    assert actions.select_one(".participant-remove") is not None
+    assert card.select_one(".stop-form-row .save-state") is None
 
 
 @pytest.mark.asyncio

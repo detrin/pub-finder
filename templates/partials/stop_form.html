@@ -1,6 +1,7 @@
 <form hx-post="/session/{{ session_code }}/stops"
       hx-trigger="change target:[data-stop-input], change target:[data-same-start-end]"
       hx-sync="this:replace"
+      hx-indicator="#stop-save-status-{{ participant.id }}"
       hx-target="#session-participants-inner" hx-swap="innerHTML"
       class="stop-form">
     <input type="hidden" name="participant_id" value="{{ participant.id }}">
@@ -24,7 +25,5 @@
                 data-same-start-end>
             Return to the same stop
         </label>
-        <span class="stop-save-status save-state htmx-indicator" role="status" aria-live="polite">saving</span>
-        {% if participant.start_stop %}<span class="save-state save-state--saved">saved</span>{% endif %}
     </div>
 </form>

@@ -102,8 +102,10 @@ async def test_session_page_autosaves_valid_stop_selections():
             "change target:[data-stop-input], change target:[data-same-start-end]"
         )
         assert form["hx-sync"] == "this:replace"
-        assert not form.has_attr("hx-indicator")
-        status = form.select_one(".save-state.htmx-indicator")
+        participant_id = form.select_one('input[name="participant_id"]')["value"]
+        indicator_id = f"stop-save-status-{participant_id}"
+        assert form["hx-indicator"] == f"#{indicator_id}"
+        status = soup.select_one(f"#{indicator_id}")
         assert status is not None
         assert status.get_text(strip=True) == "saving"
         assert status["role"] == "status"
