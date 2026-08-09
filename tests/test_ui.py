@@ -536,7 +536,7 @@ async def test_footer_does_not_link_to_the_private_repository():
     assert navigation is not None
     assert footer.find("a", href="https://www.hermandaniel.com") is not None
     assert footer.find("a", href="https://github.com/detrin/pub-finder") is None
-    assert navigation.find("a", href="https://github.com/detrin/pub-finder") is not None
+    assert navigation.find("a", href="https://github.com/detrin/pub-finder") is None
 
 
 @pytest.mark.asyncio
@@ -553,7 +553,6 @@ async def test_desktop_navigation_uses_a_non_disclosure_link_group():
         "Home",
         "How it works",
         "Feedback",
-        "GitHub",
     ]
     assert ".site-nav__links--desktop" in Path("static/app.css").read_text()
 
