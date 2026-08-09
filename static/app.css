@@ -1826,6 +1826,11 @@ input[data-stop-input]:not(:disabled) {
     background: color-mix(in srgb, var(--reach-short) 72%, transparent);
 }
 
+.reach-legend__swatch--unshaded {
+    border-style: dashed;
+    background: transparent;
+}
+
 .reach-error,
 .results-warning,
 .results-local-error {

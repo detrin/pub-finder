@@ -216,7 +216,7 @@ const payload = {
     ],
 };
 
-test("controller owns separate marker and canvas layers and draws four travel-time bands", async () => {
+test("controller leaves the farthest travel-time band transparent", async () => {
     const harness = createHarness();
     const fetchCalls = [];
     const controller = await createReachabilityMap(harness.root, {
@@ -251,7 +251,6 @@ test("controller owns separate marker and canvas layers and draws four travel-ti
         "#4dc694",
         "#ffd447",
         "#ff8a47",
-        "#d83b55",
     ]);
     assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.48]);
     assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 4);

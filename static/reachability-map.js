@@ -5,7 +5,7 @@ const DEFAULT_ZOOM = 12;
 const DEFAULT_THRESHOLD = 35;
 const DEFAULT_STEP = 15;
 const MAX_RENDER_GRID_SIZE = 96;
-const BAND_COLORS = ["#4dc694", "#ffd447", "#ff8a47", "#d83b55"];
+const BAND_COLORS = ["#4dc694", "#ffd447", "#ff8a47"];
 const BAND_OPACITY = 0.48;
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -347,7 +347,7 @@ export class ReachabilityMapController {
                 const centerY = y + 0.5;
                 if (centerX < minX || centerX > maxX || centerY < minY || centerY > maxY) continue;
                 const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
-                if (band == null) continue;
+                if (band == null || band >= BAND_COLORS.length) continue;
                 this.context.fillStyle = BAND_COLORS[band];
                 this.context.globalAlpha = BAND_OPACITY;
                 const left = Math.floor(x * outputWidth / grid.width);
