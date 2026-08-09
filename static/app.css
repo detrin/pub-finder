@@ -1129,7 +1129,7 @@ nav[data-topnav] strong {
 
 .travel-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: 1fr;
     gap: 0.75rem;
     margin-top: 0.5rem;
 }
@@ -1948,8 +1948,8 @@ input[data-stop-input]:not(:disabled) {
 }
 
 .travel-times {
-    overflow-x: auto;
-    flex-wrap: nowrap;
+    overflow-x: visible;
+    flex-wrap: wrap;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
 }

@@ -461,6 +461,16 @@ async def test_completed_search_results_are_not_constrained_by_the_progress_wrap
     assert "margin: 0 auto;" in progress_box
 
 
+def test_each_persons_journey_details_use_a_separate_row():
+    css = Path("static/app.css").read_text()
+    travel_grid = css.split(".travel-grid {", 1)[1].split("}", 1)[0]
+    travel_times = css.rsplit(".travel-times {", 1)[1].split("}", 1)[0]
+
+    assert "grid-template-columns: 1fr;" in travel_grid
+    assert "flex-wrap: wrap;" in travel_times
+    assert "overflow-x: visible;" in travel_times
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()
