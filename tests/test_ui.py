@@ -104,6 +104,35 @@ async def test_home_uses_meet_somewhere_shell():
 
 
 @pytest.mark.asyncio
+async def test_navigation_and_favicon_use_the_same_canonical_mark():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    favicon = page.find("link", rel="icon")
+    brand_mark = page.select_one(".brand-mark")
+
+    assert favicon is not None
+    assert brand_mark is not None
+    assert favicon["href"] == "/static/meet-somewhere-mark.svg"
+    assert brand_mark.name == "img"
+    assert brand_mark["src"] == favicon["href"]
+
+
+def test_canonical_mark_contains_the_approved_convergence_geometry():
+    mark = Path("static/meet-somewhere-mark.svg").read_text()
+
+    assert 'viewBox="0 0 64 64"' in mark
+    assert mark.count("<path") == 6
+    assert 'fill="#4DC694"' in mark
+    assert "#2458DF" in mark
+    assert "#FF6658" in mark
+    assert "#FFD447" in mark
+
+
+@pytest.mark.asyncio
 async def test_home_has_one_primary_start_form_and_secondary_join_path():
     """Catch a regression to the competing create and join card layout."""
     async with httpx.AsyncClient(
@@ -571,7 +600,6 @@ def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
         ".venue-action",
         '.results-mobile-views button[aria-pressed="true"]',
         ".sticker",
-        ".home-preview .home-preview__meet + text",
         ".invite-participants li",
         ".workspace-error",
         ".participant-remove:hover",
@@ -584,6 +612,8 @@ def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
     )
     for selector in accent_ink_selectors:
         assert "color: var(--accent-ink);" in declarations(selector), selector
+
+    assert "fill: var(--ink);" in declarations(".home-preview__meet-core")
 
     for selector in ('.participant-tabs button[aria-pressed="true"]', ".participant-initial"):
         assert "color: var(--participant-ink, var(--accent-ink));" in declarations(selector)

@@ -138,6 +138,7 @@ a:hover {
 }
 
 .brand-mark {
+    display: block;
     width: 36px;
     height: 36px;
     flex: 0 0 auto;
@@ -2329,17 +2330,27 @@ input[data-stop-input]:not(:disabled) {
     height: auto;
 }
 
-.home-preview__line {
+.home-preview__line,
+.home-preview__line-outline {
     fill: none;
-    stroke: var(--ink);
     stroke-linecap: round;
-    stroke-width: 12;
     stroke-dasharray: 650;
     stroke-dashoffset: 650;
     animation: route-converge 560ms ease-out forwards;
 }
 
+.home-preview__line-outline {
+    stroke: var(--ink);
+    stroke-width: 16;
+}
+
+.home-preview__line {
+    stroke-width: 9;
+}
+
+.home-preview__line-outline--coral,
 .home-preview__line--coral { animation-delay: 90ms; }
+.home-preview__line-outline--yellow,
 .home-preview__line--yellow { animation-delay: 180ms; }
 
 @keyframes route-converge {
@@ -2362,9 +2373,8 @@ input[data-stop-input]:not(:disabled) {
     stroke-width: 5;
 }
 
-.home-preview .home-preview__meet + text {
-    fill: var(--accent-ink);
-    color: var(--accent-ink);
+.home-preview__meet-core {
+    fill: var(--ink);
 }
 
 .home-preview text {

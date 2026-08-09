@@ -4,27 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Meet Somewhere{% endblock %}</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="/static/meet-somewhere-mark.svg">
+    <link rel="apple-touch-icon" href="/static/meet-somewhere-mark.svg">
     <script src="/static/theme-init.js"></script>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <!-- App CSS -->
-    <link rel="stylesheet" href="/static/app.css?v=30">
+    <link rel="stylesheet" href="/static/app.css?v=31">
     <link rel="modulepreload" href="/static/reachability-map.js?v=3">
 </head>
 <body>
     <nav class="site-nav" aria-label="Primary navigation">
         <div class="site-nav__inner">
             <a class="brand" href="/" aria-label="Meet Somewhere home">
-                <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M7 34 20 21 41 12" fill="none" stroke="var(--ink)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M7 34 20 21 41 12" fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="m8 12 14 14 19 9" fill="none" stroke="var(--ink)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="m8 12 14 14 19 9" fill="none" stroke="var(--blue)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="21" cy="23" r="4" fill="var(--yellow)" stroke="var(--ink)" stroke-width="2"/>
-                </svg>
+                <img class="brand-mark" src="/static/meet-somewhere-mark.svg" alt="" width="36" height="36">
                 <span>meet somewhere</span>
             </a>
             <details class="site-nav__menu">
