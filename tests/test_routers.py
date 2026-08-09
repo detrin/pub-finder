@@ -25,7 +25,10 @@ async def test_home_page():
         response = await client.get("/")
     assert response.status_code == 200
     assert "Meet Somewhere" in response.text
-    assert "Pick a place that works for everyone." in response.text
+    assert "Find a place that works for everyone." in response.text
+    assert "Let’s meet" in response.text
+    assert "Somewhere" in response.text
+    assert "Náměstí Míru" not in response.text
 
 
 @pytest.mark.asyncio

@@ -111,7 +111,9 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
     ) as client:
         response = await client.get("/")
 
-    assert "Pick a place that works for everyone." in response.text
+    assert "Find a place that works for everyone." in response.text
+    assert "Let’s meet" in response.text
+    assert "Somewhere" in response.text
     assert 'name="session_name"' in response.text
     assert 'name="creator_name"' in response.text
     assert "data-join-disclosure" in response.text

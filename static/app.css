@@ -629,8 +629,10 @@ button.outline {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0;
     background: transparent;
     border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.2));
@@ -2376,6 +2378,14 @@ input[data-stop-input]:not(:disabled) {
     font-family: var(--font-display);
     font-size: 18px;
     font-weight: 800;
+}
+
+.home-preview .home-preview__title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .home-preview .home-preview__time {
