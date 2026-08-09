@@ -506,6 +506,16 @@ def test_mobile_results_stack_the_map_above_stop_details():
     assert "position: absolute;" not in mobile_results
 
 
+def test_mobile_map_fills_the_results_frame_width():
+    css = Path("static/app.css").read_text()
+    mobile_results = css.split("@media (max-width: 720px) {\n    #results-section", 1)[1].split(
+        "/* Session history */", 1
+    )[0]
+
+    assert ".results-map-panel {\n        order: 1;\n        width: 100%;" in mobile_results
+    assert ".results-map-panel #map {\n        width: 100%;" in mobile_results
+
+
 @pytest.mark.asyncio
 async def test_results_json_attributes_escape_names_without_losing_visible_text():
     fixture = saved_result_fixture()

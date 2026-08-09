@@ -2158,11 +2158,15 @@ input[data-stop-input]:not(:disabled) {
 
     .results-map-panel {
         order: 1;
+        width: 100%;
+        align-self: stretch;
         position: static;
         padding: 0;
     }
 
     .results-map-panel #map {
+        width: 100%;
+        min-width: 0;
         height: calc(100vh - 190px);
         height: calc(100dvh - 190px);
         min-height: 480px;
