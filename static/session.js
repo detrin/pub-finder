@@ -316,6 +316,107 @@ function bindOccasionPresets(root) {
     syncOccasionPresets(root, presets);
 }
 
+function bindStyledSelects(root) {
+    const controls = () => [...root.querySelectorAll("[data-select]")];
+
+    function elements(control) {
+        return {
+            trigger: control.querySelector("[data-select-trigger]"),
+            input: control.querySelector("[data-select-input]"),
+            menu: control.querySelector("[data-select-menu]"),
+            options: [...control.querySelectorAll("[data-select-option]")],
+        };
+    }
+
+    function close(control) {
+        const { trigger, menu } = elements(control);
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+        if (menu) menu.hidden = true;
+    }
+
+    function open(control) {
+        controls().forEach((candidate) => {
+            if (candidate !== control) close(candidate);
+        });
+        const { trigger, menu } = elements(control);
+        if (trigger) trigger.setAttribute("aria-expanded", "true");
+        if (menu) menu.hidden = false;
+    }
+
+    function choose(control, option) {
+        const { trigger, input, options } = elements(control);
+        if (input) input.value = option.dataset.value || "";
+        if (trigger) trigger.textContent = option.textContent;
+        options.forEach((candidate) => {
+            candidate.setAttribute("aria-selected", String(candidate === option));
+        });
+        close(control);
+    }
+
+    root.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-select-option]");
+        if (option && root.contains(option)) {
+            event.preventDefault();
+            choose(option.closest("[data-select]"), option);
+            return;
+        }
+        const selectTrigger = event.target.closest("[data-select-trigger]");
+        if (!selectTrigger || !root.contains(selectTrigger)) return;
+        event.preventDefault();
+        const control = selectTrigger.closest("[data-select]");
+        const { menu } = elements(control);
+        if (menu?.hidden) open(control);
+        else close(control);
+    });
+
+    root.addEventListener("keydown", (event) => {
+        const trigger = event.target.closest("[data-select-trigger]");
+        if (trigger && root.contains(trigger)) {
+            const control = trigger.closest("[data-select]");
+            const { menu, options } = elements(control);
+            if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
+                event.preventDefault();
+                if (menu?.hidden) open(control);
+                const selected = options.find((option) => option.getAttribute("aria-selected") === "true");
+                const target = event.key === "ArrowUp" ? options.at(-1) : selected || options[0];
+                target?.focus();
+            } else if (event.key === "Escape") {
+                close(control);
+            }
+            return;
+        }
+
+        const option = event.target.closest("[data-select-option]");
+        if (!option || !root.contains(option)) return;
+        const control = option.closest("[data-select]");
+        const { trigger: controlTrigger, options } = elements(control);
+        const index = options.indexOf(option);
+        if (event.key === "Escape") {
+            event.preventDefault();
+            close(control);
+            controlTrigger?.focus();
+        } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            choose(control, option);
+            controlTrigger?.focus();
+        } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const offset = event.key === "ArrowDown" ? 1 : -1;
+            (options[index + offset] || options[(index + offset + options.length) % options.length])?.focus();
+        } else if (event.key === "Home") {
+            event.preventDefault();
+            options[0]?.focus();
+        } else if (event.key === "End") {
+            event.preventDefault();
+            options.at(-1)?.focus();
+        }
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!root.contains(event.target)) controls().forEach(close);
+    });
+}
+
 function syncOccasionPresets(root, presets) {
     const selected = [...root.querySelectorAll("input[name=place_types]")]
         .filter((input) => input.checked)
@@ -384,6 +485,7 @@ export function initSessionUi() {
     bindSseProtection(root);
     bindRemoveConfirmation(root);
     bindOccasionPresets(root);
+    bindStyledSelects(root);
     updateReadiness(root);
     document.addEventListener("htmx:afterSwap", (event) => {
         if (root.contains(event.detail.target)) updateReadiness(root);

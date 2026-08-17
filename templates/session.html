@@ -79,21 +79,35 @@
                     </div>
                 </fieldset>
                 <div class="plan-panel__choices">
-                    <label data-field>
-                        {{ t("session.method") }}
-                        <select name="method" aria-label="Optimization method">
-                            <option value="minimize-worst-case">{{ t("session.minimize_longest") }}</option>
-                            <option value="minimize-total">{{ t("session.minimize_total") }}</option>
-                        </select>
-                    </label>
-                    <label data-field>
-                        {{ t("session.direction") }}
-                        <select name="direction" aria-label="Optimization direction">
-                            <option value="round-trip">{{ t("session.round_trip") }}</option>
-                            <option value="there-only">{{ t("session.there_only") }}</option>
-                            <option value="back-only">{{ t("session.back_only") }}</option>
-                        </select>
-                    </label>
+                    <div data-field>
+                        <span id="method-label">{{ t("session.method") }}</span>
+                        <div class="styled-select" data-select aria-labelledby="method-label">
+                            <input data-select-input type="hidden" name="method" value="minimize-worst-case">
+                            <button class="styled-select__trigger" type="button" data-select-trigger
+                                aria-haspopup="listbox" aria-expanded="false" aria-controls="method-options">
+                                {{ t("session.minimize_longest") }}
+                            </button>
+                            <div class="styled-select__menu" id="method-options" data-select-menu role="listbox" hidden>
+                                <button type="button" role="option" data-select-option data-value="minimize-worst-case" aria-selected="true">{{ t("session.minimize_longest") }}</button>
+                                <button type="button" role="option" data-select-option data-value="minimize-total" aria-selected="false">{{ t("session.minimize_total") }}</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-field>
+                        <span id="direction-label">{{ t("session.direction") }}</span>
+                        <div class="styled-select" data-select aria-labelledby="direction-label">
+                            <input data-select-input type="hidden" name="direction" value="round-trip">
+                            <button class="styled-select__trigger" type="button" data-select-trigger
+                                aria-haspopup="listbox" aria-expanded="false" aria-controls="direction-options">
+                                {{ t("session.round_trip") }}
+                            </button>
+                            <div class="styled-select__menu" id="direction-options" data-select-menu role="listbox" hidden>
+                                <button type="button" role="option" data-select-option data-value="round-trip" aria-selected="true">{{ t("session.round_trip") }}</button>
+                                <button type="button" role="option" data-select-option data-value="there-only" aria-selected="false">{{ t("session.there_only") }}</button>
+                                <button type="button" role="option" data-select-option data-value="back-only" aria-selected="false">{{ t("session.back_only") }}</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.needs_participant or readiness.missing_name %} disabled{% endif %}>
                     <span class="htmx-indicator">{{ t("session.searching") }}</span>
@@ -139,5 +153,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/session.js?v=3"></script>
+<script type="module" src="/static/session.js?v=4"></script>
 {% endblock %}

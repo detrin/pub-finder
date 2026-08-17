@@ -267,6 +267,60 @@ test("occasion presets update source checkboxes and resync after manual changes"
     assert.equal(drinks.attributes["aria-pressed"], "false");
 });
 
+test("styled dropdowns update their submitted value and close after a selection", async () => {
+    const hidden = eventTarget({ value: "minimize-worst-case" });
+    const trigger = eventTarget({
+        selector: "[data-select-trigger]",
+        textContent: "Minimize longest journey",
+    });
+    const longest = eventTarget({
+        selector: "[data-select-option]",
+        dataset: { value: "minimize-worst-case" },
+        textContent: "Minimize longest journey",
+    });
+    const total = eventTarget({
+        selector: "[data-select-option]",
+        dataset: { value: "minimize-total" },
+        textContent: "Minimize total journey",
+    });
+    const menu = eventTarget({ hidden: true });
+    const control = eventTarget({
+        querySelector(selector) {
+            return {
+                "[data-select-trigger]": trigger,
+                "[data-select-input]": hidden,
+                "[data-select-menu]": menu,
+            }[selector] ?? null;
+        },
+        querySelectorAll(selector) { return selector === "[data-select-option]" ? [longest, total] : []; },
+    });
+    for (const element of [trigger, longest, total]) {
+        element.closest = (selector) => {
+            if (selector === element.selector) return element;
+            return selector === "[data-select]" ? control : null;
+        };
+    }
+    const root = eventTarget({
+        querySelector() { return null; },
+        querySelectorAll(selector) { return selector === "[data-select]" ? [control] : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+
+    fire(root, "click", { target: trigger, preventDefault() {} });
+    assert.equal(trigger.attributes["aria-expanded"], "true");
+    assert.equal(menu.hidden, false);
+
+    fire(root, "click", { target: total, preventDefault() {} });
+    assert.equal(hidden.value, "minimize-total");
+    assert.equal(trigger.textContent, "Minimize total journey");
+    assert.equal(trigger.attributes["aria-expanded"], "false");
+    assert.equal(menu.hidden, true);
+    assert.equal(total.attributes["aria-selected"], "true");
+    assert.equal(longest.attributes["aria-selected"], "false");
+});
+
 test("stop selection resolves the latest replacement field once", async () => {
     let forms = [];
     const search = eventTarget({ value: "" });
