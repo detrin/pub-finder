@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock
 
 import aiosqlite
 import pytest
@@ -75,6 +76,25 @@ async def test_create_session(db):
     assert session["code"]
     assert len(session["code"]) == 32
     assert session["creator_name"] == "Daniel"
+
+
+@pytest.mark.asyncio
+async def test_create_session_rolls_back_session_and_participants_when_slot_insert_fails(
+    db, monkeypatch
+):
+    monkeypatch.setattr(
+        db,
+        "executemany",
+        AsyncMock(side_effect=RuntimeError("participant insert failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="participant insert failed"):
+        await create_session(db, "Friday crew", initial_stops=("A", "B"))
+
+    async with db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+    async with db.execute("SELECT COUNT(*) FROM participants") as cursor:
+        assert (await cursor.fetchone())[0] == 0
 
 
 @pytest.mark.asyncio

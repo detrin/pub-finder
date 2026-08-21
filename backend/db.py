@@ -1,5 +1,6 @@
 import logging
 import secrets
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -173,24 +174,47 @@ async def init_db(db: aiosqlite.Connection):
 
 
 async def create_session(
-    db: aiosqlite.Connection, session_name: str, creator_name: str = ""
+    db: aiosqlite.Connection,
+    session_name: str,
+    creator_name: str = "",
+    initial_stops: Sequence[str] = (),
 ) -> dict:
     code = secrets.token_hex(16)
     now = datetime.now(timezone.utc).isoformat()
-    await db.execute(
-        "INSERT INTO sessions (code, name, creator_name, created_at) VALUES (?, ?, ?, ?)",
-        (code, session_name, creator_name, now),
-    )
-    if creator_name:
+    # token_hex keeps this interpolated SQLite identifier within a safe ASCII allowlist.
+    savepoint = f"create_session_{secrets.token_hex(16)}"
+    await db.execute(f"SAVEPOINT {savepoint}")
+    try:
         await db.execute(
-            "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?)",
-            (code, creator_name, now),
+            "INSERT INTO sessions (code, name, creator_name, created_at) VALUES (?, ?, ?, ?)",
+            (code, session_name, creator_name, now),
         )
-    else:
+        if creator_name:
+            rows = [(code, creator_name, "", "", 1, now)]
+        else:
+            slot_count = max(2, len(initial_stops))
+            rows = [
+                (
+                    code,
+                    "",
+                    initial_stops[index] if index < len(initial_stops) else "",
+                    "",
+                    0 if index < len(initial_stops) else 1,
+                    now,
+                )
+                for index in range(slot_count)
+            ]
         await db.executemany(
-            "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?)",
-            [(code, "", now), (code, "", now)],
+            "INSERT INTO participants "
+            "(session_code, name, start_stop, end_stop, same_start_end, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
         )
+    except Exception:
+        await db.execute(f"ROLLBACK TO {savepoint}")
+        await db.execute(f"RELEASE {savepoint}")
+        raise
+    await db.execute(f"RELEASE {savepoint}")
     await db.commit()
     return {"code": code, "name": session_name, "creator_name": creator_name, "created_at": now}
 

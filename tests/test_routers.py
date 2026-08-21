@@ -263,6 +263,101 @@ async def test_create_session():
     assert code
     participants = await get_participants(app.state.db, code)
     assert [participant["name"] for participant in participants] == ["", ""]
+    assert [participant["start_stop"] for participant in participants] == ["", ""]
+    assert [participant["end_stop"] for participant in participants] == ["", ""]
+    assert [participant["same_start_end"] for participant in participants] == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_create_session_carries_preview_origins_into_unnamed_slots():
+    app.state.all_stops = ["A", "B", "C"]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={
+                "session_name": "Friday crew",
+                "preview_stops": ["A", "B", "C"],
+            },
+            follow_redirects=False,
+        )
+
+    code = response.headers["location"].removeprefix("/session/")
+    participants = await get_participants(app.state.db, code)
+    assert [person["name"] for person in participants] == ["", "", ""]
+    assert [person["start_stop"] for person in participants] == ["A", "B", "C"]
+    assert [person["end_stop"] for person in participants] == ["", "", ""]
+    assert [person["same_start_end"] for person in participants] == [False, False, False]
+
+
+@pytest.mark.asyncio
+async def test_create_session_with_one_preview_origin_keeps_two_slots():
+    app.state.all_stops = ["A"]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={"session_name": "Friday crew", "preview_stops": ["A"]},
+            follow_redirects=False,
+        )
+
+    code = response.headers["location"].removeprefix("/session/")
+    participants = await get_participants(app.state.db, code)
+    assert [person["name"] for person in participants] == ["", ""]
+    assert [person["start_stop"] for person in participants] == ["A", ""]
+    assert [person["end_stop"] for person in participants] == ["", ""]
+    assert [person["same_start_end"] for person in participants] == [False, True]
+
+
+@pytest.mark.asyncio
+async def test_create_session_deduplicates_normalized_preview_origins():
+    app.state.all_stops = ["A", "B"]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={
+                "session_name": "Friday crew",
+                "preview_stops": [" A ", "A", "B"],
+            },
+            follow_redirects=False,
+        )
+
+    code = response.headers["location"].removeprefix("/session/")
+    participants = await get_participants(app.state.db, code)
+    assert [person["start_stop"] for person in participants] == ["A", "B"]
+
+
+@pytest.mark.asyncio
+async def test_create_session_rejects_an_unknown_preview_stop_without_writing():
+    app.state.all_stops = ["A"]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={"session_name": "Friday crew", "preview_stops": ["Unknown"]},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?error=preview_stops_invalid"
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_session_rejects_more_than_six_preview_stops_without_writing():
+    app.state.all_stops = ["A", "B", "C", "D", "E", "F", "G"]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={
+                "session_name": "Friday crew",
+                "preview_stops": ["A", "B", "C", "D", "E", "F", "G"],
+            },
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?error=preview_stops_invalid"
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
 
 
 @pytest.mark.asyncio

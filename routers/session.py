@@ -21,6 +21,7 @@ from backend.db import (
     update_participant_name,
 )
 from backend.i18n import make_templates
+from backend.preview import PreviewValidationError, normalize_preview_origins
 from backend.reachability import participant_color, participant_text_color
 
 logger = logging.getLogger(__name__)
@@ -66,14 +67,25 @@ def _is_rate_limited(request: Request) -> bool:
 async def create(
     request: Request,
     session_name: str = Form(..., max_length=100),
+    preview_stops: list[str] = Form(default=[]),
 ):
     normalized_name = session_name.strip()[:100]
     if not normalized_name:
         return RedirectResponse(url="/?error=session_name_required", status_code=303)
+    initial_stops: tuple[str, ...] = ()
+    if preview_stops:
+        try:
+            initial_stops = normalize_preview_origins(
+                preview_stops,
+                getattr(request.app.state, "all_stops", []),
+                reject_duplicates=False,
+            )
+        except PreviewValidationError:
+            return RedirectResponse(url="/?error=preview_stops_invalid", status_code=303)
     if _is_rate_limited(request):
         return RedirectResponse(url="/?error=rate_limited", status_code=303)
     db = request.app.state.db
-    session = await create_session(db, normalized_name)
+    session = await create_session(db, normalized_name, initial_stops=initial_stops)
     return RedirectResponse(url=f"/session/{session['code']}", status_code=303)
 
 
