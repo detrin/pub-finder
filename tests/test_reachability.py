@@ -1,4 +1,5 @@
 import math
+import importlib
 from pathlib import Path
 
 import aiosqlite
@@ -75,6 +76,67 @@ def participants() -> list[dict]:
 
 def stop(payload: dict, name: str) -> dict:
     return next(item for item in payload["stops"] if item["name"] == name)
+
+
+def preview_module():
+    try:
+        return importlib.import_module("backend.preview")
+    except ModuleNotFoundError:
+        pytest.fail("backend.preview is not implemented")
+
+
+def test_preview_cache_preserves_origin_order_in_keys():
+    preview = preview_module()
+    cache = preview.PreviewPayloadCache()
+    payload = {"participants": ["A", "C"]}
+
+    cache.set(("A", "C"), payload)
+
+    assert cache.get(("C", "A")) is None
+    assert cache.get(("A", "C")) == payload
+
+
+def test_preview_cache_misses_an_expired_entry():
+    now = [0.0]
+    preview = preview_module()
+    cache = preview.PreviewPayloadCache(clock=lambda: now[0])
+    cache.set(("A",), {"participants": ["A"]})
+    now[0] = 300.0
+
+    assert cache.get(("A",)) is None
+
+
+def test_preview_cache_evicts_the_least_recently_used_entry_at_capacity():
+    preview = preview_module()
+    cache = preview.PreviewPayloadCache(max_entries=2)
+    cache.set(("A",), {"id": "A"})
+    cache.set(("B",), {"id": "B"})
+    assert cache.get(("A",)) == {"id": "A"}
+
+    cache.set(("C",), {"id": "C"})
+
+    assert cache.get(("B",)) is None
+    assert cache.get(("A",)) == {"id": "A"}
+    assert cache.get(("C",)) == {"id": "C"}
+
+
+def test_preview_rate_limiter_rejects_requests_after_its_configured_limit():
+    preview = preview_module()
+    limiter = preview.PreviewRateLimiter(limit=2)
+
+    assert limiter.allow("client") is True
+    assert limiter.allow("client") is True
+    assert limiter.allow("client") is False
+
+
+def test_preview_rate_limiter_prunes_inactive_clients_before_accepting_new_ones():
+    now = [0.0]
+    preview = preview_module()
+    limiter = preview.PreviewRateLimiter(max_clients=1, clock=lambda: now[0])
+    assert limiter.allow("first") is True
+    now[0] = 60.0
+
+    assert limiter.allow("second") is True
 
 
 def test_there_only_uses_maximum_participant_time():
@@ -484,3 +546,63 @@ async def test_reachability_version_rejects_an_old_result_payload_after_rerun():
 
     assert stale.status_code == 409
     assert current.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_preview_returns_one_way_reachability_without_a_session():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/reachability/preview", json={"origins": ["A", "C"]})
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    payload = response.json()
+    assert payload["direction"] == "there-only"
+    assert [person["start_stop"] for person in payload["participants"]] == ["A", "C"]
+    assert stop(payload, "B")["group_max_minutes"] == 15
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("body", "status"),
+    [
+        ({"origins": []}, 422),
+        ({"origins": ["missing"]}, 422),
+        ({"origins": ["A", " A "]}, 422),
+        ({"origins": ["A"] * 7}, 422),
+        ({"origins": "A"}, 422),
+    ],
+)
+async def test_preview_rejects_invalid_origins(body, status):
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/reachability/preview", json=body)
+    assert response.status_code == status
+
+
+@pytest.mark.asyncio
+async def test_preview_limiter_uses_the_connected_client_not_a_forwarded_header(monkeypatch):
+    preview = preview_module()
+    router = importlib.import_module("routers.reachability")
+    monkeypatch.setattr(router, "_preview_limiter", preview.PreviewRateLimiter(limit=1))
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await client.post(
+            "/reachability/preview",
+            json={"origins": ["A"]},
+            headers={"X-Forwarded-For": "198.51.100.1"},
+        )
+        second = await client.post(
+            "/reachability/preview",
+            json={"origins": ["A"]},
+            headers={"X-Forwarded-For": "203.0.113.2"},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
