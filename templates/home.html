@@ -19,43 +19,112 @@
         action_href="/", action_label="Try again" %}
     {% include "partials/system_message.html" %}
 {% endwith %}
+{% elif error == "preview_stops_invalid" %}
+{% with kind="error", title=t("home.preview_stops_invalid_title", request.state.locale),
+        body=t("home.preview_stops_invalid_body", request.state.locale),
+        action_href="/#home-stop-search", action_label=t("home.try_again", request.state.locale) %}
+    {% include "partials/system_message.html" %}
+{% endwith %}
 {% endif %}
-<section class="home-hero">
+
+<section class="home-hero" aria-labelledby="home-title">
     <div class="home-hero__copy">
         <span class="sticker">{{ t("home.made_for_prague", request.state.locale) }}</span>
-        <h1>{{ t("home.title", request.state.locale) }}</h1>
+        <h1 id="home-title">{{ t("home.title", request.state.locale) }}</h1>
         <p>{{ t("home.description", request.state.locale) }}</p>
     </div>
-    <div class="home-preview" aria-label="Three routes meeting somewhere">
-        <svg viewBox="0 0 440 270" role="img" aria-hidden="true">
-            <text class="home-preview__title" x="226" y="25" text-anchor="middle">{{ t("home.lets_meet", request.state.locale) }}</text>
-            <path class="home-preview__line-outline" d="M45 65C108 68 155 105 226 140" />
-            <path class="home-preview__line home-preview__line--blue" d="M45 65C108 68 155 105 226 140" />
-            <path class="home-preview__line-outline home-preview__line-outline--coral" d="M50 222C115 190 157 157 226 140" />
-            <path class="home-preview__line home-preview__line--coral" d="M50 222C115 190 157 157 226 140" />
-            <path class="home-preview__line-outline home-preview__line-outline--yellow" d="M388 52C361 97 305 126 226 140" />
-            <path class="home-preview__line home-preview__line--yellow" d="M388 52C361 97 305 126 226 140" />
-            <circle class="home-preview__person" cx="45" cy="65" r="13" />
-            <circle class="home-preview__person" cx="50" cy="222" r="13" />
-            <circle class="home-preview__person" cx="388" cy="52" r="13" />
-            <circle class="home-preview__meet" cx="226" cy="140" r="20" />
-            <circle class="home-preview__meet-core" cx="226" cy="140" r="5" />
-            <text class="home-preview__label" x="226" y="181" text-anchor="middle">{{ t("home.somewhere", request.state.locale) }}</text>
-            <text class="home-preview__time" x="45" y="37" text-anchor="middle">18 min</text>
-            <text class="home-preview__time" x="50" y="255" text-anchor="middle">24 min</text>
-            <text class="home-preview__time" x="388" y="24" text-anchor="middle">21 min</text>
-        </svg>
-    </div>
+
+    <section
+        class="home-preview home-estimate"
+        aria-labelledby="home-estimate-title"
+        data-home-preview
+        data-stops='{{ all_stops | tojson }}'
+        data-carry="{{ t('home.preview_carry', request.state.locale, count='{count}') }}"
+        data-coverage="{{ t('home.preview_coverage', request.state.locale, stop='{stop}') }}"
+        data-duplicate="{{ t('home.preview_duplicate', request.state.locale) }}"
+        data-empty-heading="{{ t('home.preview_empty', request.state.locale) }}"
+        data-failure="{{ t('home.preview_failure', request.state.locale) }}"
+        data-group-heading="{{ t('home.preview_group', request.state.locale, count='{count}') }}"
+        data-group-prompt="{{ t('home.preview_group_prompt', request.state.locale) }}"
+        data-invalid="{{ t('home.preview_invalid', request.state.locale) }}"
+        data-limit="{{ t('home.preview_limit', request.state.locale) }}"
+        data-one-heading="{{ t('home.preview_one', request.state.locale, stop='{stop}') }}"
+        data-one-prompt="{{ t('home.preview_one_prompt', request.state.locale) }}"
+        data-remove="{{ t('home.preview_remove', request.state.locale, stop='{stop}') }}"
+        data-updated-group="{{ t('home.preview_updated_group', request.state.locale, count='{count}') }}"
+        data-updated-one="{{ t('home.preview_updated_one', request.state.locale) }}"
+        data-updating="{{ t('home.preview_updating', request.state.locale) }}"
+    >
+        <header class="home-estimate__header">
+            <span id="home-estimate-title">{{ t("home.quick_estimate", request.state.locale) }}</span>
+            <span class="home-estimate__badge">{{ t("home.approximate_one_way", request.state.locale) }}</span>
+        </header>
+        <div class="home-estimate__body">
+            <div class="home-estimate__combobox">
+                <label for="home-stop-search">{{ t("home.starting_stops", request.state.locale) }}</label>
+                <input
+                    id="home-stop-search"
+                    type="search"
+                    role="combobox"
+                    list="home-stop-suggestions"
+                    placeholder="{{ t('home.add_prague_stop', request.state.locale) }}"
+                    autocomplete="off"
+                    aria-autocomplete="list"
+                    aria-expanded="false"
+                    aria-controls="home-stop-options"
+                    data-preview-search
+                >
+                <datalist id="home-stop-suggestions">
+                    {% for stop in all_stops %}<option value="{{ stop }}"></option>{% endfor %}
+                </datalist>
+                <ul id="home-stop-options" class="home-estimate__options" role="listbox" hidden data-preview-options></ul>
+            </div>
+
+            <ul
+                class="home-estimate__selections"
+                aria-label="{{ t('home.selected_stops', request.state.locale) }}"
+                data-preview-selections
+            ></ul>
+
+            <div class="home-estimate__state">
+                <h2 data-preview-heading>{{ t("home.preview_empty", request.state.locale) }}</h2>
+                <p data-preview-prompt></p>
+            </div>
+            <p class="home-estimate__status" aria-live="polite" aria-atomic="true" data-preview-status></p>
+
+            <div class="home-estimate__map" aria-hidden="true" data-preview-map></div>
+
+            <ul
+                class="home-estimate__legend"
+                aria-label="{{ t('home.legend_label', request.state.locale) }}"
+                data-preview-legend
+            >
+                <li><span class="home-estimate__swatch home-estimate__swatch--short"></span>{{ t("home.legend_about_35", request.state.locale) }}</li>
+                <li><span class="home-estimate__swatch home-estimate__swatch--medium"></span>{{ t("home.legend_36_50", request.state.locale) }}</li>
+                <li><span class="home-estimate__swatch home-estimate__swatch--long"></span>{{ t("home.legend_51_65", request.state.locale) }}</li>
+                <li><span class="home-estimate__swatch home-estimate__swatch--longest"></span>{{ t("home.legend_over_65", request.state.locale) }}</li>
+                <li><span class="home-estimate__swatch home-estimate__swatch--missing"></span>{{ t("home.legend_no_estimate", request.state.locale) }}</li>
+            </ul>
+
+            <div class="home-estimate__disclosure">
+                <p>{{ t("home.preview_disclosure", request.state.locale) }}</p>
+                <a href="#session-name" data-preview-handoff>{{ t("home.preview_handoff", request.state.locale) }}</a>
+            </div>
+        </div>
+    </section>
 </section>
 
 <section class="start-plan" aria-labelledby="start-plan-title">
-    <h2 id="start-plan-title">{{ t("home.start_plan", request.state.locale) }}</h2>
+    <div class="start-plan__intro">
+        <h2 id="start-plan-title">{{ t("home.start_plan", request.state.locale) }}</h2>
+        <p>{{ t("home.plan_support", request.state.locale) }}</p>
+    </div>
     <form action="/session/create" method="post">
-        <label data-field>
-            {{ t("home.plan_name", request.state.locale) }}
-            <input type="text" name="session_name" required placeholder="Friday drinks">
-        </label>
+        <label data-field for="session-name">{{ t("home.plan_name", request.state.locale) }}</label>
+        <input id="session-name" type="text" name="session_name" required placeholder="Friday drinks">
         <button type="submit">{{ t("home.start_planning", request.state.locale) }}</button>
+        <div data-preview-hidden-fields></div>
+        <p class="start-plan__carry" hidden aria-live="polite" data-preview-carry-status></p>
     </form>
 </section>
 
@@ -76,4 +145,8 @@
 
 <h2 id="recent-plans-title" class="visually-hidden">Recent plans</h2>
 <section hidden data-session-history aria-labelledby="recent-plans-title" aria-label="Recent plans"></section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/home-preview.js?v=1"></script>
 {% endblock %}

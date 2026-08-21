@@ -12,7 +12,10 @@ async def home(request: Request):
     return templates.TemplateResponse(
         request,
         "home.html",
-        {"error": request.query_params.get("error")},
+        {
+            "error": request.query_params.get("error"),
+            "all_stops": getattr(request.app.state, "all_stops", []),
+        },
     )
 
 

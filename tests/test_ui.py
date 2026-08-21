@@ -141,8 +141,8 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
         response = await client.get("/")
 
     assert "Find a place that works for everyone." in response.text
-    assert "Let’s meet" in response.text
-    assert "Somewhere" in response.text
+    assert "Quick estimate" in response.text
+    assert "Approximate · one way" in response.text
     assert 'name="session_name"' in response.text
     create_form = BeautifulSoup(response.text, "html.parser").select_one(
         'form[action="/session/create"][method="post"]'
@@ -153,6 +153,113 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
     assert create_form.select_one('[name="creator_name"]') is None
     assert "data-join-disclosure" in response.text
     assert "data-session-history" in response.text
+
+
+@pytest.mark.asyncio
+async def test_home_renders_sessionless_preview_before_the_single_create_form():
+    """Catch regressions to the static hero or a competing preview form."""
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    preview = page.select_one("[data-home-preview]")
+    create_forms = page.select('form[action="/session/create"][method="post"]')
+
+    assert preview is not None
+    assert preview.select_one("[data-preview-map]") is not None
+    assert preview.select_one('[role="combobox"]') is not None
+    assert preview.get("data-stops") == '["A", "B"]'
+    assert page.select_one(".home-preview svg") is None
+    assert len(create_forms) == 1
+    main_elements = list(page.select_one("main").descendants)
+    assert main_elements.index(preview) < main_elements.index(create_forms[0])
+    assert "Approximate · one way" in preview.get_text(" ", strip=True)
+    assert "No selected date" in preview.get_text(" ", strip=True)
+
+
+@pytest.mark.asyncio
+async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
+    """Catch a visual-only map that loses keyboard and no-JavaScript affordances."""
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        home_response = await client.get("/")
+        other_response = await client.get("/how-it-works")
+
+    page = BeautifulSoup(home_response.text, "html.parser")
+    preview = page.select_one("[data-home-preview]")
+    search = preview.select_one("[data-preview-search]")
+    options = preview.select_one("[data-preview-options]")
+    selections = preview.select_one("ul[data-preview-selections]")
+    status = preview.select_one('[data-preview-status][aria-live="polite"]')
+    legend = preview.select_one("[data-preview-legend]")
+    handoff = preview.select_one('[data-preview-handoff][href="#session-name"]')
+    canonical_options = page.select("#home-stop-suggestions option")
+    create_form = page.select_one('form[action="/session/create"]')
+
+    assert search["aria-controls"] == options["id"]
+    assert options["role"] == "listbox"
+    assert selections is not None
+    assert status is not None
+    assert legend.name == "ul"
+    assert len(legend.select("li")) == 5
+    assert "no estimate" in legend.get_text(" ", strip=True)
+    assert handoff is not None
+    assert page.select_one("#session-name") is not None
+    assert create_form.select_one("[data-preview-hidden-fields]") is not None
+    assert create_form.select_one("[data-preview-carry-status]") is not None
+    assert [option["value"] for option in canonical_options] == ["A", "B"]
+    home_modules = [script.get("src") for script in page.select('script[type="module"]')]
+    assert "/static/home-preview.js?v=1" in home_modules
+    assert "/static/home-preview.js" not in other_response.text
+
+
+@pytest.mark.asyncio
+async def test_home_preview_and_plan_support_copy_is_localized_in_czech():
+    """Catch English fallback copy leaking into the Czech preview experience."""
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set("language", "cs")
+        response = await client.get("/")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    preview = page.select_one("[data-home-preview]")
+    visible = page.select_one("main").get_text(" ", strip=True)
+
+    for text in (
+        "Rychlý odhad",
+        "Přibližně · jedním směrem",
+        "Výchozí zastávky",
+        "Přidejte výchozí zastávku a zobrazí se její dosah.",
+        "bez zvoleného data",
+        "bez odhadu",
+        "Plánovat podle aktuálních časů DPP ↓",
+        "Zvolte datum a čas, seřaďte místa setkání a zahrňte cestu zpět.",
+    ):
+        assert text in visible
+
+    assert preview["data-updating"] == "Aktualizuji odhad…"
+    assert preview["data-duplicate"] == "Tato zastávka už je vybraná."
+    assert preview["data-limit"] == "Rychlý odhad podporuje nejvýše šest výchozích zastávek."
+    assert preview["data-failure"] == ("Rychlý odhad není dostupný. Plán můžete přesto vytvořit.")
+    assert preview["data-coverage"] == (
+        "Pro zastávku {stop} není odhad dostupný. Odeberte ji a pokračujte."
+    )
+    assert "Add a Prague stop" not in visible
+
+
+@pytest.mark.asyncio
+async def test_home_explains_invalid_preview_carry_over():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/?error=preview_stops_invalid")
+
+    assert "Choose up to six Prague stops from the list." in response.text
+    assert "No plan was created." in response.text
 
 
 @pytest.mark.asyncio
@@ -177,21 +284,6 @@ async def test_new_session_starts_with_two_editable_empty_participant_slots():
     )
     assert workspace.select_one("[data-search-submit]").has_attr("disabled")
     assert "Name each participant." in workspace.get_text(" ", strip=True)
-
-
-@pytest.mark.asyncio
-async def test_right_preview_time_is_above_its_endpoint():
-    async with httpx.AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/")
-
-    page = BeautifulSoup(response.text, "html.parser")
-    time_label = next(text.parent for text in page.find_all(string="21 min"))
-    endpoint = page.find("circle", {"class": "home-preview__person", "cx": "388"})
-
-    assert endpoint is not None
-    assert float(time_label["y"]) < float(endpoint["cy"])
 
 
 @pytest.mark.asyncio
@@ -582,7 +674,7 @@ def test_results_map_explains_every_marker_type():
 def test_results_map_uses_role_colours_not_participant_identity_colours():
     script = Path("static/reachability-map.js").read_text()
 
-    assert "fillColor: \"#fffefa\"" in script
+    assert 'fillColor: "#fffefa"' in script
     assert '"#ff6658", "#17191c", 2' in script
     assert '"#2458df", "#17191c", 2' in script
 
@@ -782,6 +874,7 @@ def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
         ".workspace-error",
         ".participant-remove:hover",
         '.occasion-presets button[aria-pressed="true"]',
+        ".home-estimate__badge",
         ".stop-picker__close",
         ".stop-picker__item:hover,\n.stop-picker__item:focus-visible",
         ".badge-ready",
@@ -790,8 +883,6 @@ def test_dark_theme_accent_surfaces_use_contrasting_foregrounds():
     )
     for selector in accent_ink_selectors:
         assert "color: var(--accent-ink);" in declarations(selector), selector
-
-    assert "fill: var(--ink);" in declarations(".home-preview__meet-core")
 
     for selector in ('.participant-tabs button[aria-pressed="true"]', ".participant-initial"):
         assert "color: var(--participant-ink, var(--accent-ink));" in declarations(selector)
