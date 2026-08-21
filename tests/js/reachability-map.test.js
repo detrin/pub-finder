@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { interpolateGrid } from "../../static/reachability-core.js";
-import { createReachabilityMap } from "../../static/reachability-map.js";
+import { createReachabilityMap, validateReachabilityPayload } from "../../static/reachability-map.js";
 
 function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     const events = [];
@@ -219,6 +219,88 @@ const payload = {
         { name: "D", lat: 0.5, lon: 3.5, participant_minutes: [80], group_max_minutes: 80 },
     ],
 };
+
+test("payload validator rejects non-plain participant records", () => {
+    assert.equal(typeof validateReachabilityPayload, "function");
+    const inheritedParticipant = Object.create({ id: 7 });
+
+    assert.throws(
+        () => validateReachabilityPayload({
+            participants: [inheritedParticipant],
+            stops: payload.stops,
+        }),
+        { name: "TypeError", message: "Reachability response is invalid" },
+    );
+});
+
+test("payload mode creates a reusable map without fetching", async () => {
+    const harness = createHarness();
+    let fetchCount = 0;
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload,
+        fetch: async () => {
+            fetchCount += 1;
+        },
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    assert.equal(fetchCount, 0);
+    const participantLayer = harness.createdGroups[0];
+    controller.setPayload({ participants: [], stops: [] });
+    assert.equal(participantLayer.layers.length, 0);
+    assert.equal(harness.createdGroups[0], participantLayer);
+});
+
+test("malformed replacement payloads leave the current map state intact", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+    const participantLayer = harness.createdGroups[0];
+    const currentPayload = controller.payload;
+    const currentMarkers = [...participantLayer.layers];
+
+    assert.throws(
+        () => controller.setPayload({
+            participants: [{ id: 7 }],
+            stops: [{
+                name: "Start",
+                lat: 0.5,
+                lon: 0.5,
+                participant_minutes: [],
+                group_max_minutes: 20,
+            }],
+        }),
+        { name: "TypeError", message: "Reachability response is invalid" },
+    );
+
+    assert.equal(controller.payload, currentPayload);
+    assert.deepEqual(participantLayer.layers, currentMarkers);
+});
+
+test("clearPayload hides the field and clears participant markers without destroying the map", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+    harness.runFrame();
+    assert.equal(harness.canvas.hidden, false);
+    assert.equal(harness.createdGroups[0].layers.length, 1);
+
+    controller.clearPayload();
+
+    assert.equal(harness.canvas.hidden, true);
+    assert.equal(harness.createdGroups[0].layers.length, 0);
+    assert.equal(harness.mapRemoveCount, 0);
+});
 
 test("controller leaves the farthest travel-time band transparent", async () => {
     const harness = createHarness();

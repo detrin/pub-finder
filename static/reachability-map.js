@@ -23,48 +23,93 @@ function dispatchReachabilityError(root, error) {
 }
 
 function isNullableFinite(value) {
-    return value == null || Number.isFinite(value);
+    return value === null || Number.isFinite(value);
 }
 
-function validatePayload(payload) {
-    if (
-        payload == null
-        || typeof payload !== "object"
-        || !Array.isArray(payload.participants)
-        || !Array.isArray(payload.stops)
-    ) {
-        throw new TypeError("Reachability response is invalid");
-    }
+function invalidPayload() {
+    throw new TypeError("Reachability response is invalid");
+}
 
-    const participantIds = new Set();
-    for (const participant of payload.participants) {
-        if (
-            participant == null
-            || typeof participant !== "object"
-            || (typeof participant.id !== "number" && typeof participant.id !== "string")
-            || participantIds.has(String(participant.id))
-        ) {
-            throw new TypeError("Reachability response is invalid");
-        }
-        participantIds.add(String(participant.id));
-    }
+function isPlainRecord(value) {
+    return value != null
+        && typeof value === "object"
+        && Object.getPrototypeOf(value) === Object.prototype;
+}
 
-    for (const stop of payload.stops) {
+function isPlainArray(value) {
+    return Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype;
+}
+
+function hasDangerousKeys(value) {
+    return Object.keys(value).some((key) => (
+        key === "__proto__" || key === "constructor" || key === "prototype"
+    ));
+}
+
+function hasOwn(value, key) {
+    return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+export function validateReachabilityPayload(payload) {
+    try {
         if (
-            stop == null
-            || typeof stop !== "object"
-            || typeof stop.name !== "string"
-            || !Number.isFinite(stop.lat)
-            || !Number.isFinite(stop.lon)
-            || !Array.isArray(stop.participant_minutes)
-            || stop.participant_minutes.length !== payload.participants.length
-            || !stop.participant_minutes.every(isNullableFinite)
-            || !isNullableFinite(stop.group_max_minutes)
-        ) {
-            throw new TypeError("Reachability response is invalid");
+            !isPlainRecord(payload)
+            || hasDangerousKeys(payload)
+            || !hasOwn(payload, "participants")
+            || !hasOwn(payload, "stops")
+            || !isPlainArray(payload.participants)
+            || !isPlainArray(payload.stops)
+            || hasDangerousKeys(payload.participants)
+            || hasDangerousKeys(payload.stops)
+        ) invalidPayload();
+
+        const participantIds = new Set();
+        for (let index = 0; index < payload.participants.length; index += 1) {
+            if (!hasOwn(payload.participants, index)) invalidPayload();
+            const participant = payload.participants[index];
+            if (
+                !isPlainRecord(participant)
+                || hasDangerousKeys(participant)
+                || !hasOwn(participant, "id")
+                || !["number", "string"].includes(typeof participant.id)
+                || participantIds.has(String(participant.id))
+            ) invalidPayload();
+            participantIds.add(String(participant.id));
         }
+
+        for (let index = 0; index < payload.stops.length; index += 1) {
+            if (!hasOwn(payload.stops, index)) invalidPayload();
+            const stop = payload.stops[index];
+            if (
+                !isPlainRecord(stop)
+                || hasDangerousKeys(stop)
+                || !hasOwn(stop, "name")
+                || !hasOwn(stop, "lat")
+                || !hasOwn(stop, "lon")
+                || !hasOwn(stop, "participant_minutes")
+                || !hasOwn(stop, "group_max_minutes")
+                || typeof stop.name !== "string"
+                || !Number.isFinite(stop.lat)
+                || !Number.isFinite(stop.lon)
+                || !isPlainArray(stop.participant_minutes)
+                || hasDangerousKeys(stop.participant_minutes)
+                || stop.participant_minutes.length !== payload.participants.length
+                || !isNullableFinite(stop.group_max_minutes)
+            ) invalidPayload();
+            for (let minuteIndex = 0; minuteIndex < stop.participant_minutes.length; minuteIndex += 1) {
+                if (
+                    !hasOwn(stop.participant_minutes, minuteIndex)
+                    || !isNullableFinite(stop.participant_minutes[minuteIndex])
+                ) invalidPayload();
+            }
+        }
+        return payload;
+    } catch (error) {
+        if (error instanceof TypeError && error.message === "Reachability response is invalid") {
+            throw error;
+        }
+        invalidPayload();
     }
-    return payload;
 }
 
 function validLocation(item) {
@@ -93,8 +138,9 @@ function addCircle(leaflet, group, document, item, options, details = []) {
 
 export class ReachabilityMapController {
     constructor(map, payload, options = {}) {
+        const validatedPayload = validateReachabilityPayload(payload);
         this.map = map;
-        this.payload = payload;
+        this.payload = validatedPayload;
         this.options = options;
         this.root = options.root;
         this.leaflet = options.leaflet;
@@ -143,15 +189,21 @@ export class ReachabilityMapController {
 
         this.setResults(options.stops ?? []);
         this.setVenues(options.venues ?? []);
-        this.setPayload(payload);
+        this.setPayload(validatedPayload);
     }
 
     setPayload(payload) {
-        this.payload = payload;
+        const validatedPayload = validateReachabilityPayload(payload);
+        this.payload = validatedPayload;
         this.participantId = null;
-        this.layerValues = selectLayerValues(payload, null);
+        this.layerValues = selectLayerValues(validatedPayload, null);
         this.renderParticipants();
         this.scheduleRedraw();
+    }
+
+    clearPayload() {
+        this.setPayload({ participants: [], stops: [] });
+        this.hideField();
     }
 
     render() {
@@ -408,14 +460,25 @@ export async function createReachabilityMap(root, options = {}) {
     if (!root || typeof root.dispatchEvent !== "function") {
         throw new TypeError("A map root element is required");
     }
-    if (typeof options.reachabilityUrl !== "string" || options.reachabilityUrl.length === 0) {
+    const hasPayload = hasOwn(options, "payload");
+    const hasReachabilityUrl = hasOwn(options, "reachabilityUrl");
+    if (hasPayload && hasReachabilityUrl) {
+        throw new TypeError("Provide either a reachability URL or payload");
+    }
+    if (
+        !hasPayload
+        && (typeof options.reachabilityUrl !== "string" || options.reachabilityUrl.length === 0)
+    ) {
         throw new TypeError("A reachability URL is required");
     }
+    const initialPayload = hasPayload
+        ? validateReachabilityPayload(options.payload)
+        : { participants: [], stops: [] };
 
     const leaflet = options.leaflet ?? globalThis.L;
     if (!leaflet) throw new Error("Leaflet is unavailable");
-    const fetchRequest = options.fetch ?? globalThis.fetch;
-    if (typeof fetchRequest !== "function") throw new Error("Fetch is unavailable");
+    const fetchRequest = hasPayload ? null : options.fetch ?? globalThis.fetch;
+    if (!hasPayload && typeof fetchRequest !== "function") throw new Error("Fetch is unavailable");
     const requestFrame = options.requestAnimationFrame
         ?? globalThis.requestAnimationFrame?.bind(globalThis)
         ?? ((callback) => setTimeout(callback, 0));
@@ -449,9 +512,14 @@ export async function createReachabilityMap(root, options = {}) {
     };
     const controller = new ReachabilityMapController(
         map,
-        { participants: [], stops: [] },
+        initialPayload,
         controllerOptions,
     );
+
+    if (hasPayload) {
+        detachAbort();
+        return controller;
+    }
 
     try {
         const response = await fetchRequest(options.reachabilityUrl, {
@@ -461,8 +529,7 @@ export async function createReachabilityMap(root, options = {}) {
         if (!response.ok) {
             throw new Error(`Reachability request failed: ${response.status}`);
         }
-        const payload = validatePayload(await response.json());
-        controller.setPayload(payload);
+        controller.setPayload(await response.json());
     } catch (error) {
         if (error?.name !== "AbortError") dispatchReachabilityError(root, error);
     } finally {
