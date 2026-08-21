@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -11,10 +11,11 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from backend.db import get_search_results, get_session
 from backend.preview import (
+    MAX_PREVIEW_ORIGIN_LENGTH,
     MAX_PREVIEW_ORIGINS,
     PreviewPayloadCache,
     PreviewRateLimiter,
@@ -34,10 +35,16 @@ _preview_cache = PreviewPayloadCache()
 _preview_limiter = PreviewRateLimiter()
 
 
+PreviewOrigin = Annotated[
+    str,
+    StringConstraints(max_length=MAX_PREVIEW_ORIGIN_LENGTH, strict=True),
+]
+
+
 class PreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    origins: list[str] = Field(min_length=1, max_length=MAX_PREVIEW_ORIGINS)
+    origins: list[PreviewOrigin] = Field(min_length=1, max_length=MAX_PREVIEW_ORIGINS)
 
 
 class PreviewRoute(APIRoute):

@@ -63,6 +63,56 @@ test("history migrates legacy pubfinder sessions once without replacing current 
     assert.equal(store.has("pubfinder_sessions"), false);
 });
 
+test("history initialization without legacy state performs no storage writes", async () => {
+    const store = new Map();
+    const writes = [];
+    const removals = [];
+    globalThis.localStorage = {
+        getItem(key) { return store.get(key) ?? null; },
+        setItem(key, value) { writes.push([key, value]); },
+        removeItem(key) { removals.push(key); },
+    };
+    globalThis.document = {
+        readyState: "complete",
+        querySelector() { return null; },
+        createElement() { return { href: "", textContent: "" }; },
+    };
+
+    await import(new URL(`../../static/history.js?test=${Math.random()}`, import.meta.url));
+
+    assert.deepEqual(writes, []);
+    assert.deepEqual(removals, []);
+});
+
+test("current history renders without being rewritten when there is no legacy state", async () => {
+    const saved = JSON.stringify([{ code: "current", name: "Current plan" }]);
+    const store = new Map([["meet_somewhere_recent_sessions", saved]]);
+    const writes = [];
+    const historyRoot = {
+        hidden: true,
+        children: [],
+        replaceChildren(...children) { this.children = children; },
+    };
+    globalThis.localStorage = {
+        getItem(key) { return store.get(key) ?? null; },
+        setItem(key, value) { writes.push([key, value]); },
+        removeItem() { throw new Error("No legacy key should be removed"); },
+    };
+    globalThis.document = {
+        readyState: "complete",
+        querySelector(selector) {
+            return selector === "[data-session-history]" ? historyRoot : null;
+        },
+        createElement() { return { href: "", textContent: "" }; },
+    };
+
+    await import(new URL(`../../static/history.js?test=${Math.random()}`, import.meta.url));
+
+    assert.deepEqual(writes, []);
+    assert.equal(store.get("meet_somewhere_recent_sessions"), saved);
+    assert.equal(historyRoot.children[0].href, "/session/current");
+});
+
 test("history migration normalizes, deduplicates, bounds, and is idempotent", async () => {
     const store = new Map([
         ["meet_somewhere_recent_sessions", JSON.stringify([
@@ -127,9 +177,8 @@ test("history migration safely recovers malformed current and legacy stores", as
     assert.equal(store.has("pubfinder_sessions"), false);
 
     store.set("pubfinder_sessions", "not-json");
+    const current = store.get("meet_somewhere_recent_sessions");
     await import(new URL(`../../static/history.js?test=${Math.random()}`, import.meta.url));
-    assert.deepEqual(JSON.parse(store.get("meet_somewhere_recent_sessions")), [
-        { code: "legacy", name: "Legacy" },
-    ]);
-    assert.equal(store.has("pubfinder_sessions"), false);
+    assert.equal(store.get("meet_somewhere_recent_sessions"), current);
+    assert.equal(store.get("pubfinder_sessions"), "not-json");
 });

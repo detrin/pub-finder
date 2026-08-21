@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import time
 from collections import OrderedDict, deque
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
-import time
 from typing import Any
 
 from backend.reachability import participant_color
 
 MAX_PREVIEW_ORIGINS = 6
+MAX_PREVIEW_ORIGIN_LENGTH = 200
+MAX_PREVIEW_BODY_BYTES = 2048
 PREVIEW_CACHE_TTL_SECONDS = 300.0
 MAX_PREVIEW_CACHE_ENTRIES = 64
 PREVIEW_RATE_LIMIT = 30
@@ -32,7 +34,7 @@ def normalize_preview_origins(
     normalized: list[str] = []
     seen: set[str] = set()
     for value in raw_origins:
-        if not isinstance(value, str):
+        if not isinstance(value, str) or len(value) > MAX_PREVIEW_ORIGIN_LENGTH:
             raise PreviewValidationError("Starting stops are invalid.")
         stop = value.strip()
         if not stop or stop not in allowed:

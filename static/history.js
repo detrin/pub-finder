@@ -38,9 +38,11 @@ function getSessions() {
 }
 
 function migrateLegacySessions() {
+    const legacy = readSessions(LEGACY_KEY);
+    if (legacy.length === 0) return;
     const merged = uniqueSessions([
         ...readSessions(KEY),
-        ...readSessions(LEGACY_KEY),
+        ...legacy,
     ]).slice(0, LIMIT);
     try {
         localStorage.setItem(KEY, JSON.stringify(merged));

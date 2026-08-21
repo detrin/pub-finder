@@ -9,8 +9,10 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     const frameQueue = [];
     const canvasOperations = [];
     const createdGroups = [];
+    const documentListeners = new Map();
     const mapListeners = new Map();
     const mapOptions = [];
+    const themeColors = new Map();
     let mapRemoveCount = 0;
     let cancelledFrames = 0;
     let failSizeRead = false;
@@ -66,6 +68,11 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     };
     const document = {
         canvasCount: 0,
+        addEventListener(type, handler) {
+            const handlers = documentListeners.get(type) ?? new Set();
+            handlers.add(handler);
+            documentListeners.set(type, handlers);
+        },
         createElement(tagName) {
             if (tagName === "canvas") {
                 this.canvasCount += 1;
@@ -99,7 +106,26 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         createTextNode(text) {
             return { textContent: text };
         },
-        defaultView: { CustomEvent, devicePixelRatio: pixelRatio },
+        defaultView: {
+            CustomEvent,
+            devicePixelRatio: pixelRatio,
+            getComputedStyle() {
+                return {
+                    getPropertyValue(property) {
+                        return themeColors.get(property) ?? "";
+                    },
+                };
+            },
+        },
+        dispatchEvent(event) {
+            for (const handler of documentListeners.get(event.type) ?? []) handler(event);
+            return true;
+        },
+        removeEventListener(type, handler) {
+            const handlers = documentListeners.get(type);
+            handlers?.delete(handler);
+            if (handlers?.size === 0) documentListeners.delete(type);
+        },
     };
     const root = {
         ownerDocument: document,
@@ -205,6 +231,9 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         mapListeners,
         mapOptions,
         root,
+        dispatchThemeChange() {
+            document.dispatchEvent(new CustomEvent("themechange"));
+        },
         cancelAnimationFrame() {
             cancelledFrames += 1;
         },
@@ -213,6 +242,9 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         },
         get mapRemoveCount() {
             return mapRemoveCount;
+        },
+        get themeListenerCount() {
+            return documentListeners.get("themechange")?.size ?? 0;
         },
         failNextSizeRead() {
             failSizeRead = true;
@@ -225,6 +257,9 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
             const callback = frameQueue.shift();
             assert.equal(typeof callback, "function");
             callback();
+        },
+        setThemeColor(property, value) {
+            themeColors.set(property, value);
         },
     };
 }
@@ -550,6 +585,43 @@ test("map movement coalesces redraws and destroy cleans up once", async () => {
     assert.equal(harness.cancelledFrames, 1);
     assert.equal(harness.mapRemoveCount, 1);
     assert.equal(harness.canvas.parentNode, null);
+});
+
+test("theme changes redraw homepage and results maps with fresh CSS colors without leaks", async () => {
+    for (const mode of ["homepage", "results"]) {
+        const harness = createHarness();
+        const controller = await createReachabilityMap(harness.root, {
+            leaflet: harness.leaflet,
+            ...(mode === "homepage"
+                ? { payload }
+                : {
+                    reachabilityUrl: "/reachability",
+                    fetch: async () => ({ ok: true, json: async () => payload }),
+                }),
+            requestAnimationFrame: harness.requestAnimationFrame,
+            cancelAnimationFrame: harness.cancelAnimationFrame,
+        });
+        harness.runFrame();
+        assert.equal(harness.themeListenerCount, 1, mode);
+
+        harness.setThemeColor("--mint", "#123456");
+        harness.dispatchThemeChange();
+        harness.dispatchThemeChange();
+        assert.equal(harness.frameQueue.length, 1, mode);
+        harness.runFrame();
+        assert.ok(
+            harness.canvasOperations.some((operation) => (
+                operation.type === "fillRect" && operation.fillStyle === "#123456"
+            )),
+            mode,
+        );
+
+        controller.destroy();
+        controller.destroy();
+        assert.equal(harness.themeListenerCount, 0, mode);
+        harness.dispatchThemeChange();
+        assert.equal(harness.frameQueue.length, 0, mode);
+    }
 });
 
 test("redraw errors hide stale field pixels without changing markers and later redraw restores them", async () => {

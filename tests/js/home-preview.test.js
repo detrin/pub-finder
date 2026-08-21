@@ -162,11 +162,21 @@ function createPreviewHarness(stops) {
         clearFieldCount: 0,
         clearPayloadCount: 0,
         destroyCount: 0,
+        markers: [],
         payloads: [],
         clearField() { this.clearFieldCount += 1; },
-        clearPayload() { this.clearPayloadCount += 1; },
+        clearPayload() {
+            this.clearPayloadCount += 1;
+            this.markers = [];
+        },
         destroy() { this.destroyCount += 1; },
-        setPayload(payload) { this.payloads.push(payload); },
+        setPayload(payload) {
+            this.payloads.push(payload);
+            const renderedStops = new Set(payload.stops.map((stop) => stop.name));
+            this.markers = payload.participants
+                .filter((participant) => renderedStops.has(participant.start_stop))
+                .map((participant) => [participant.marker_label, participant.start_stop]);
+        },
     };
     let createMapCount = 0;
     let mapOptions = null;
@@ -443,6 +453,101 @@ test("a genuine failure clears only stale field data and keeps selections and or
     assert.equal(harness.status.textContent, "The quick estimate is unavailable. You can still create a plan.");
     assert.equal(harness.selections.children.length, 2);
     assert.equal(harness.hiddenInputs.length, 2);
+});
+
+test("an add failure redraws markers and heading for the current A and B selection", async () => {
+    const harness = createPreviewHarness(["Anděl", "Dejvická"]);
+    const requests = deferredFetches();
+    const controller = await createHomePreview(harness.root, {
+        fetch: requests.fetch,
+        createMap: harness.createMap,
+    });
+    const oneOriginPayload = completePayload(["Anděl"]);
+    oneOriginPayload.stops.push({
+        name: "Dejvická",
+        lat: 50.1,
+        lon: 14.1,
+        participant_minutes: [25],
+        group_max_minutes: 25,
+    });
+
+    controller.addOrigin("Anděl");
+    requests.resolve(0, oneOriginPayload);
+    await harness.flush();
+    controller.addOrigin("Dejvická");
+    requests.resolve(1, {}, { ok: false, status: 503 });
+    await harness.flush();
+
+    assert.deepEqual(harness.map.markers, [["A", "Anděl"], ["B", "Dejvická"]]);
+    assert.equal(harness.heading.textContent, "Shared reach for 2 starting points");
+    assert.equal(harness.prompt.textContent, "");
+    assert.equal(harness.status.textContent, "The quick estimate is unavailable. You can still create a plan.");
+});
+
+test("a removal failure relabels the remaining origin and updates the heading", async () => {
+    const harness = createPreviewHarness(["Anděl", "Dejvická"]);
+    const requests = deferredFetches();
+    const controller = await createHomePreview(harness.root, {
+        fetch: requests.fetch,
+        createMap: harness.createMap,
+    });
+
+    controller.addOrigin("Anděl");
+    controller.addOrigin("Dejvická");
+    requests.resolve(1, completePayload(["Anděl", "Dejvická"]));
+    await harness.flush();
+    controller.removeOrigin("Anděl");
+    requests.resolve(2, {}, { ok: false, status: 503 });
+    await harness.flush();
+
+    assert.deepEqual(harness.map.markers, [["A", "Dejvická"]]);
+    assert.equal(harness.heading.textContent, "Approximate reach from Dejvická");
+    assert.equal(harness.prompt.textContent, "");
+    assert.equal(harness.status.textContent, "The quick estimate is unavailable. You can still create a plan.");
+});
+
+test("six current origins render stable A through F marker labels", async () => {
+    const origins = ["A", "B", "C", "D", "E", "F"];
+    const harness = createPreviewHarness(origins);
+    const requests = deferredFetches();
+    const controller = await createHomePreview(harness.root, {
+        fetch: requests.fetch,
+        createMap: harness.createMap,
+    });
+
+    origins.forEach((origin) => controller.addOrigin(origin));
+    requests.resolve(5, completePayload(origins));
+    await harness.flush();
+
+    assert.deepEqual(harness.map.markers, origins.map((origin) => [origin, origin]));
+    assert.equal(harness.heading.textContent, "Shared reach for 6 starting points");
+});
+
+test("preview interactions do not write browser storage", async () => {
+    const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    const writes = [];
+    Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: { setItem(key, value) { writes.push([key, value]); } },
+    });
+    try {
+        const harness = createPreviewHarness(["Anděl"]);
+        const requests = deferredFetches();
+        const controller = await createHomePreview(harness.root, {
+            fetch: requests.fetch,
+            createMap: harness.createMap,
+        });
+
+        controller.addOrigin("Anděl");
+        requests.resolve(0, completePayload(["Anděl"]));
+        await harness.flush();
+        controller.removeOrigin("Anděl");
+
+        assert.deepEqual(writes, []);
+    } finally {
+        if (previousStorage) Object.defineProperty(globalThis, "localStorage", previousStorage);
+        else delete globalThis.localStorage;
+    }
 });
 
 test("empty or reordered participants fail before ready state or payload replacement", async () => {

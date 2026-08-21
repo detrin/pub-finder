@@ -579,8 +579,133 @@ async def test_preview_does_not_issue_an_analytics_identifier_cookie():
 
     assert response.status_code == 200
     assert "set-cookie" not in response.headers
-    async with app.state.db.execute("SELECT COUNT(*) FROM analytics_users") as cursor:
-        assert (await cursor.fetchone())[0] == 0
+    for table in ("analytics_users", "sessions", "participants"):
+        async with app.state.db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+            assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_preview_rejects_oversized_content_length_before_rate_limiting(monkeypatch):
+    class CountingLimiter:
+        calls = 0
+
+        def allow(self, _client_key):
+            self.calls += 1
+            return True
+
+    limiter = CountingLimiter()
+    calculation_calls = []
+    monkeypatch.setattr(reachability_router, "_preview_limiter", limiter)
+    monkeypatch.setattr(
+        reachability_router,
+        "build_reachability_payload",
+        lambda *args: calculation_calls.append(args),
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/reachability/preview",
+            content=b'{"origins":["A"]}',
+            headers={
+                "Content-Length": "2049",
+                "Content-Type": "application/json",
+            },
+        )
+
+    assert response.status_code == 413
+    assert response.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in response.headers
+    assert limiter.calls == 0
+    assert calculation_calls == []
+    for table in ("analytics_users", "sessions", "participants"):
+        async with app.state.db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+            assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_preview_rejects_accumulated_streamed_bytes_before_rate_limiting(monkeypatch):
+    class CountingLimiter:
+        calls = 0
+
+        def allow(self, _client_key):
+            self.calls += 1
+            return True
+
+    async def oversized_chunks():
+        yield b'{"origins":["'
+        yield b"A" * 2048
+        yield b'"]}'
+
+    limiter = CountingLimiter()
+    calculation_calls = []
+    monkeypatch.setattr(reachability_router, "_preview_limiter", limiter)
+    monkeypatch.setattr(
+        reachability_router,
+        "build_reachability_payload",
+        lambda *args: calculation_calls.append(args),
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/reachability/preview",
+            content=oversized_chunks(),
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 413
+    assert response.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in response.headers
+    assert limiter.calls == 0
+    assert calculation_calls == []
+    for table in ("analytics_users", "sessions", "participants"):
+        async with app.state.db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+            assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_preview_caps_each_origin_string_with_the_normal_422_contract(monkeypatch):
+    long_origin = "A" * 201
+    app.state.all_stops = [long_origin]
+    calculation_calls = []
+    monkeypatch.setattr(
+        reachability_router,
+        "build_reachability_payload",
+        lambda *args: calculation_calls.append(args),
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/reachability/preview",
+            json={"origins": [long_origin]},
+        )
+
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+    assert isinstance(response.json()["detail"], list)
+    assert "set-cookie" not in response.headers
+    assert calculation_calls == []
+
+
+@pytest.mark.asyncio
+async def test_preview_body_guard_preserves_malformed_json_validation_contract():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/reachability/preview",
+            content=b'{"origins":',
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+    assert isinstance(response.json()["detail"], list)
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+import backend.app as app_module
 import routers.reachability as reachability_router
 import routers.search as search_router
 from backend.app import app
@@ -92,6 +93,48 @@ async def _create_session_with_participants(client, stops):
         await add_participant_stops(db, code, result["id"], start, end)
 
     return code
+
+
+@pytest.mark.asyncio
+async def test_homepage_display_then_preview_has_no_identity_persistence_or_live_provider_calls(
+    monkeypatch,
+):
+    provider_calls = []
+    send_events = AsyncMock()
+
+    def provider_tripwire(*args, **kwargs):
+        provider_calls.append((args, kwargs))
+        raise AssertionError("The homepage preview must not call a live provider")
+
+    monkeypatch.setattr(app_module, "send_events", send_events)
+    monkeypatch.setattr(search_router, "get_total_minutes_with_retries", provider_tripwire)
+    monkeypatch.setattr(search_router, "search_pubs_near_stop", provider_tripwire)
+    monkeypatch.setattr(reachability_router, "_preview_cache", PreviewPayloadCache())
+    monkeypatch.setattr(
+        reachability_router,
+        "_preview_limiter",
+        PreviewRateLimiter(limit=10),
+    )
+    app.state.analytics_tasks = set()
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://test"
+    ) as client:
+        homepage = await client.get("/")
+        preview = await client.post("/reachability/preview", json={"origins": ["A", "B"]})
+        await app_module.drain_analytics_tasks(app)
+
+    assert homepage.status_code == 200
+    assert preview.status_code == 200
+    assert client.cookies.get("_uid") is None
+    assert "set-cookie" not in homepage.headers
+    assert "set-cookie" not in preview.headers
+    assert preview.headers["cache-control"] == "no-store"
+    assert send_events.await_count == 0
+    assert provider_calls == []
+    for table in ("analytics_users", "sessions", "participants"):
+        async with app.state.db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+            assert (await cursor.fetchone())[0] == 0
 
 
 @pytest.mark.asyncio

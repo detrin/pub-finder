@@ -231,7 +231,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert create_form.select_one("[data-preview-carry-status]") is not None
     assert [option["value"] for option in canonical_options] == ["A", "B"]
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
-    assert "/static/home-preview.js?v=2" in home_modules
+    assert "/static/home-preview.js?v=3" in home_modules
     assert "/static/home-preview.js" not in other_response.text
     assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=46"]') is not None
     assert preview["data-limit"] == (
@@ -862,6 +862,30 @@ async def test_how_it_works_separates_the_homepage_estimate_from_live_planning()
         "return trip, or call live DPP or Google services. Create a plan for date-specific "
         "journey queries and ranked meeting points."
     )
+
+
+@pytest.mark.asyncio
+async def test_how_it_works_localizes_the_homepage_method_note_in_czech():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set("language", "cs")
+        response = await client.get("/how-it-works")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    section = page.select_one("#homepage-quick-estimate")
+    toc_link = page.select_one('.technical-page__toc a[href="#homepage-quick-estimate"]')
+    assert section is not None
+    assert toc_link is not None
+    assert toc_link.get_text(" ", strip=True) == "Rychlý odhad na úvodní stránce"
+    assert section.get_text(" ", strip=True) == (
+        "Rychlý odhad na úvodní stránce Rychlý odhad na úvodní stránce používá předem "
+        "vypočítané obvyklé doby cest veřejnou dopravou jedním směrem. Nevyužívá zvolené "
+        "datum, nezohledňuje změny v provozu, nezahrnuje cestu zpět ani nevolá aktuální "
+        "služby DPP či Googlu. Pro dotazy na cesty k určitému datu a seřazená místa setkání "
+        "vytvořte plán."
+    )
+    assert "Homepage quick estimate" not in section.get_text(" ", strip=True)
 
 
 @pytest.mark.asyncio

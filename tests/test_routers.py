@@ -46,9 +46,9 @@ async def test_home_page():
 async def test_analytics_cookie_is_secure_and_reused_across_pages():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="https://test") as client:
-        first = await client.get("/")
+        first = await client.get("/how-it-works")
         first_user_id = client.cookies.get("_uid")
-        second = await client.get("/how-it-works")
+        second = await client.get("/feedback")
 
     set_cookie = first.headers["set-cookie"]
     assert first_user_id
@@ -62,12 +62,26 @@ async def test_analytics_cookie_is_secure_and_reused_across_pages():
 async def test_invalid_analytics_cookie_is_replaced_with_a_server_identifier():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
         client.cookies.set("_uid", "attacker-chosen", domain="test.local", path="/")
-        response = await client.get("/")
+        response = await client.get("/how-it-works")
 
     replacement = client.cookies.get("_uid", domain="test.local", path="/")
     assert replacement != "attacker-chosen"
     assert re.fullmatch(r"[1-9]\d*\.[1-9]\d*", replacement)
     assert "_uid=" in response.headers["set-cookie"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "expected_status"), [("GET", 200), ("HEAD", 405)])
+async def test_homepage_display_does_not_create_an_analytics_identity(method, expected_status):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        response = await client.request(method, "/")
+        await app_module.drain_analytics_tasks(app)
+
+    assert response.status_code == expected_status
+    assert client.cookies.get("_uid") is None
+    assert "set-cookie" not in response.headers
+    async with app.state.db.execute("SELECT COUNT(*) FROM analytics_users") as cursor:
+        assert (await cursor.fetchone())[0] == 0
 
 
 @pytest.mark.asyncio
@@ -170,7 +184,7 @@ async def test_page_view_forwards_only_safe_campaign_attribution(monkeypatch):
         base_url="https://test",
     ) as client:
         response = await client.get(
-            "/?code=secret&utm_source=newsletter&utm_medium=email&utm_campaign=summer",
+            "/how-it-works?code=secret&utm_source=newsletter&utm_medium=email&utm_campaign=summer",
             headers={
                 "referer": "https://example.org/article?subscriber=42",
             },
@@ -185,7 +199,7 @@ async def test_page_view_forwards_only_safe_campaign_attribution(monkeypatch):
     ]
     page_view = captured["events"][1]["params"]
     assert page_view["page_location"] == (
-        "https://test/?utm_source=newsletter&utm_medium=email&utm_campaign=summer"
+        "https://test/how-it-works?utm_source=newsletter&utm_medium=email&utm_campaign=summer"
     )
     assert page_view["page_referrer"] == "https://example.org/"
     assert captured["ip_address"] == "8.8.8.8"

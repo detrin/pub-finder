@@ -32,7 +32,9 @@ class FakeButton {
 class FakeDocument {
     constructor(button) {
         this.button = button;
+        this.defaultView = { CustomEvent };
         this.documentElement = { dataset: { theme: "light" }, style: {} };
+        this.events = [];
         this.listeners = new Map();
     }
 
@@ -54,6 +56,12 @@ class FakeDocument {
         for (const handler of this.listeners.get(type) ?? []) {
             handler({ type, target, detail: { target } });
         }
+    }
+
+    dispatchEvent(event) {
+        this.events.push(event);
+        for (const handler of this.listeners.get(event.type) ?? []) handler(event);
+        return true;
     }
 }
 
@@ -88,6 +96,9 @@ test("theme toggle survives an HTMX replacement shell without duplicate handlers
     assert.equal(documentFixture.documentElement.dataset.theme, "dark");
     assert.equal(documentFixture.documentElement.style.colorScheme, "dark");
     assert.equal(replacementButton.attributes["aria-label"], "Use light theme");
+    assert.equal(documentFixture.events.length, 1);
+    assert.equal(documentFixture.events[0].type, "themechange");
+    assert.deepEqual(documentFixture.events[0].detail, { theme: "dark" });
 
     replacementButton.dispatch("click");
     assert.equal(documentFixture.documentElement.dataset.theme, "light");
@@ -96,4 +107,6 @@ test("theme toggle survives an HTMX replacement shell without duplicate handlers
         ["pubfinder_theme", "dark"],
         ["pubfinder_theme", "light"],
     ]);
+    assert.equal(documentFixture.events.length, 2);
+    assert.deepEqual(documentFixture.events[1].detail, { theme: "light" });
 });

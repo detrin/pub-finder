@@ -57,6 +57,13 @@ TRANSLATIONS = {
         "home.preview_stops_invalid_title": "Choose up to six Prague stops from the list.",
         "home.preview_stops_invalid_body": "No plan was created. Remove the invalid starting stop and try again.",
         "home.try_again": "Try again",
+        "how.homepage_quick_estimate_title": "Homepage quick estimate",
+        "how.homepage_quick_estimate_body": (
+            "The homepage quick estimate uses precomputed typical one-way transit times. "
+            "It does not use a selected date, account for service changes, include a return "
+            "trip, or call live DPP or Google services. Create a plan for date-specific "
+            "journey queries and ranked meeting points."
+        ),
         "session.plan": "Plan",
         "session.invite": "Invite",
         "session.people": "People",
@@ -166,6 +173,13 @@ TRANSLATIONS = {
         "home.preview_stops_invalid_title": "Vyberte ze seznamu nejvýše šest pražských zastávek.",
         "home.preview_stops_invalid_body": "Plán nebyl vytvořen. Odeberte neplatnou výchozí zastávku a zkuste to znovu.",
         "home.try_again": "Zkusit znovu",
+        "how.homepage_quick_estimate_title": "Rychlý odhad na úvodní stránce",
+        "how.homepage_quick_estimate_body": (
+            "Rychlý odhad na úvodní stránce používá předem vypočítané obvyklé doby cest "
+            "veřejnou dopravou jedním směrem. Nevyužívá zvolené datum, nezohledňuje změny "
+            "v provozu, nezahrnuje cestu zpět ani nevolá aktuální služby DPP či Googlu. "
+            "Pro dotazy na cesty k určitému datu a seřazená místa setkání vytvořte plán."
+        ),
         "session.plan": "Plán",
         "session.invite": "Pozvat",
         "session.people": "Lidé",

@@ -9,7 +9,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from routers.home import router as home_router
 from routers.reachability import router as reachability_router
@@ -34,6 +35,7 @@ from .analytics import (
 from .config import DATABASE_PATH, HOST, PORT
 from .db import cleanup_old_sessions, init_db
 from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, reset_current_locale, set_current_locale
+from .preview import MAX_PREVIEW_BODY_BYTES
 from .search_registry import SearchRegistry
 
 logging.basicConfig(
@@ -69,6 +71,74 @@ async def lifespan(app: FastAPI):
     await search_registry.shutdown()
     await drain_analytics_tasks(app)
     await db.close()
+
+
+class PreviewBodyLimitMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        if not (
+            scope["type"] == "http"
+            and scope.get("method") == "POST"
+            and scope.get("path") == "/reachability/preview"
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        for name, raw_value in scope.get("headers", []):
+            if name.lower() != b"content-length":
+                continue
+            try:
+                content_length = int(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if content_length > MAX_PREVIEW_BODY_BYTES:
+                await self._reject(scope, receive, send)
+                return
+
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+
+                async def disconnected_receive() -> Message:
+                    return message
+
+                await self.app(scope, disconnected_receive, send)
+                return
+            chunk = message.get("body", b"")
+            if len(body) + len(chunk) > MAX_PREVIEW_BODY_BYTES:
+                await self._reject(scope, receive, send)
+                return
+            body.extend(chunk)
+            if not message.get("more_body", False):
+                break
+
+        delivered = False
+
+        async def replay_receive() -> Message:
+            nonlocal delivered
+            if delivered:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            delivered = True
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, replay_receive, send)
+
+    @staticmethod
+    async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
+        response = JSONResponse(
+            {"detail": "Preview request body is too large"},
+            status_code=413,
+            headers={"Cache-Control": "no-store"},
+        )
+        await response(scope, receive, send)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -120,7 +190,10 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Server-side GA4 tracking keyed off a single first-party user id cookie."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.method == "POST" and request.url.path == "/reachability/preview":
+        privacy_exempt = (request.url.path == "/" and request.method in {"GET", "HEAD"}) or (
+            request.url.path == "/reachability/preview" and request.method == "POST"
+        )
+        if privacy_exempt:
             return await call_next(request)
         response = await call_next(request)
 
@@ -193,6 +266,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(PreviewBodyLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LocaleMiddleware)
 app.add_middleware(AnalyticsMiddleware)

@@ -151,10 +151,10 @@ async def test_concurrent_session_creates_both_commit_atomically(db, monkeypatch
     monkeypatch.setattr(db, "execute", original_execute)
     monkeypatch.setattr(db, "commit", original_commit)
     assert all(isinstance(result, dict) for result in results)
-    assert [
-        (await get_session(db, result["code"]))["name"]
-        for result in results
-    ] == ["First", "Second"]
+    assert [(await get_session(db, result["code"]))["name"] for result in results] == [
+        "First",
+        "Second",
+    ]
 
 
 @pytest.mark.asyncio

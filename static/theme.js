@@ -1,5 +1,13 @@
 let lifecycleBound = false;
 
+function dispatchThemeChange(theme) {
+  const EventConstructor = document.defaultView?.CustomEvent ?? globalThis.CustomEvent;
+  const event = typeof EventConstructor === "function"
+    ? new EventConstructor("themechange", { detail: { theme } })
+    : { type: "themechange", detail: { theme } };
+  document.dispatchEvent?.(event);
+}
+
 export function initThemeToggle() {
   const button = document.querySelector("[data-theme-toggle]");
   if (button && button.dataset.bound !== "true") {
@@ -14,6 +22,7 @@ export function initThemeToggle() {
       document.documentElement.style.colorScheme = next;
       localStorage.setItem("pubfinder_theme", next);
       button.setAttribute("aria-label", next === "dark" ? "Use light theme" : "Use dark theme");
+      dispatchThemeChange(next);
     });
   }
   if (lifecycleBound) return;

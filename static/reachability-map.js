@@ -196,6 +196,8 @@ export class ReachabilityMapController {
         }
         this.redrawListener = () => this.scheduleRedraw();
         this.map.on("move zoom resize", this.redrawListener);
+        this.themeListener = () => this.scheduleRedraw();
+        this.document.addEventListener?.("themechange", this.themeListener);
 
         this.setResults(options.stops ?? []);
         this.setVenues(options.venues ?? []);
@@ -530,6 +532,7 @@ export class ReachabilityMapController {
         if (this.destroyed) return;
         this.destroyed = true;
         this.map.off("move zoom resize", this.redrawListener);
+        this.document.removeEventListener?.("themechange", this.themeListener);
         if (this.frameId != null) {
             this.cancelFrame(this.frameId);
             this.frameId = null;

@@ -1,7 +1,7 @@
 import {
     createReachabilityMap,
     validateReachabilityPayload,
-} from "./reachability-map.js?v=5";
+} from "./reachability-map.js?v=6";
 
 const EMPTY_PAYLOAD = Object.freeze({
     participants: Object.freeze([]),
@@ -97,6 +97,32 @@ function preparePayload(payload, origins) {
     };
 }
 
+function createMarkerPayload(origins, coordinates) {
+    return validateReachabilityPayload({
+        participants: origins.map((origin, index) => {
+            const markerLabel = participantLetter(index);
+            return {
+                id: `preview-${index + 1}`,
+                marker_label: markerLabel,
+                name: `${markerLabel} · ${origin}`,
+                start_stop: origin,
+                end_stop: "",
+            };
+        }),
+        stops: origins.flatMap((origin) => {
+            const coordinate = coordinates.get(origin);
+            if (!coordinate) return [];
+            return [{
+                name: origin,
+                lat: coordinate.lat,
+                lon: coordinate.lon,
+                participant_minutes: origins.map(() => null),
+                group_max_minutes: null,
+            }];
+        }),
+    });
+}
+
 function findPreviewRoots(target) {
     if (!target) return [];
     if (target.matches?.("[data-home-preview]")) return [target];
@@ -127,6 +153,7 @@ export async function createHomePreview(root, dependencies = {}) {
     const stops = parseStops(root.dataset?.stops);
     // Keep every request value inside the server-rendered canonical stop allowlist.
     const canonicalStops = new Set(stops);
+    const stopCoordinates = new Map();
     const selected = [];
     const listeners = [];
     const optionListeners = [];
@@ -138,6 +165,7 @@ export async function createHomePreview(root, dependencies = {}) {
     let activeRequest = null;
     let filteredStops = [];
     let activeOption = -1;
+    let hasValidatedPayload = false;
     let destroyed = false;
     const nativeSuggestionList = search.getAttribute?.("list");
     const map = await createMap(mapRoot, { interactive: false, payload: EMPTY_PAYLOAD });
@@ -266,27 +294,36 @@ export async function createHomePreview(root, dependencies = {}) {
         setStatus(copy(root, "updating"));
     }
 
-    function renderReady() {
-        setState("ready");
+    function renderSelectionHeading() {
         if (selected.length === 1) {
             heading.textContent = format(copy(root, "oneHeading"), { stop: selected[0] });
+            return;
+        }
+        heading.textContent = format(copy(root, "groupHeading"), { count: selected.length });
+    }
+
+    function renderReady() {
+        setState("ready");
+        renderSelectionHeading();
+        if (selected.length === 1) {
             prompt.textContent = copy(root, "onePrompt");
             setStatus(copy(root, "updatedOne"));
             return;
         }
-        heading.textContent = format(copy(root, "groupHeading"), { count: selected.length });
         prompt.textContent = copy(root, "groupPrompt");
         setStatus(format(copy(root, "updatedGroup"), { count: selected.length }));
     }
 
     function renderFailure() {
         setState("failure");
+        renderSelectionHeading();
         prompt.textContent = "";
         setStatus(copy(root, "failure"));
     }
 
     function renderCoverage(stop) {
         setState("coverage");
+        renderSelectionHeading();
         prompt.textContent = "";
         setStatus(format(copy(root, "coverage"), { stop }));
         const remove = document.createElement("button");
@@ -325,6 +362,10 @@ export async function createHomePreview(root, dependencies = {}) {
             const payload = await response.json();
             if (destroyed || version !== requestVersion) return;
             const prepared = preparePayload(payload, origins);
+            hasValidatedPayload = true;
+            prepared.payload.stops.forEach((stop) => {
+                stopCoordinates.set(stop.name, { lat: stop.lat, lon: stop.lon });
+            });
             map.setPayload(prepared.payload);
             if (prepared.missingOrigin !== null) {
                 map.clearField();
@@ -334,6 +375,9 @@ export async function createHomePreview(root, dependencies = {}) {
             renderReady();
         } catch (error) {
             if (error?.name === "AbortError" || destroyed || version !== requestVersion) return;
+            if (hasValidatedPayload) {
+                map.setPayload(createMarkerPayload([...selected], stopCoordinates));
+            }
             map.clearField();
             renderFailure();
         } finally {

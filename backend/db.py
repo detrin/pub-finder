@@ -221,8 +221,7 @@ async def create_session(
         connection.execute(f"SAVEPOINT {savepoint}")
         try:
             connection.execute(
-                "INSERT INTO sessions (code, name, creator_name, created_at) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO sessions (code, name, creator_name, created_at) VALUES (?, ?, ?, ?)",
                 (code, session_name, creator_name, now),
             )
             connection.executemany(
@@ -552,7 +551,9 @@ async def cleanup_old_sessions(db: aiosqlite.Connection, max_age_days: int = 30)
         codes = [row[0] for row in old_sessions]
         placeholders = ",".join("?" for _ in codes)
         await db.execute(f"DELETE FROM participants WHERE session_code IN ({placeholders})", codes)
-        await db.execute(f"DELETE FROM search_results WHERE session_code IN ({placeholders})", codes)
+        await db.execute(
+            f"DELETE FROM search_results WHERE session_code IN ({placeholders})", codes
+        )
         await db.execute(f"DELETE FROM sessions WHERE code IN ({placeholders})", codes)
         await db.commit()
     logger.info("Cleaned up %d sessions older than %d days", len(codes), max_age_days)
