@@ -10,9 +10,11 @@ const EMPTY_PAYLOAD = Object.freeze({
 const MAX_ORIGINS = 6;
 const MAX_OPTIONS = 50;
 const initializations = new WeakMap();
+let previewInstanceId = 0;
 
 const DEFAULT_COPY = Object.freeze({
     carry: "{count} selected starts will be added to this plan.",
+    coverage: "No estimate is available from {stop}. Remove it to continue.",
     duplicate: "That stop is already selected.",
     emptyHeading: "Add a starting stop to see its reach.",
     failure: "The quick estimate is unavailable. You can still create a plan.",
@@ -66,9 +68,18 @@ function participantLetter(index) {
     return String.fromCharCode(65 + index);
 }
 
-function labelledPayload(payload, origins) {
+function preparePayload(payload, origins) {
     const validated = validateReachabilityPayload(payload);
-    return {
+    if (
+        validated.participants.length !== origins.length
+        || validated.participants.some((participant, index) => participant.start_stop !== origins[index])
+    ) {
+        throw new TypeError("Preview response does not match the request");
+    }
+    const missingIndex = validated.participants.findIndex((_, participantIndex) => (
+        !validated.stops.some((stop) => Number.isFinite(stop.participant_minutes[participantIndex]))
+    ));
+    const labelled = {
         ...validated,
         participants: validated.participants.map((participant, index) => {
             const markerLabel = participantLetter(index);
@@ -79,6 +90,10 @@ function labelledPayload(payload, origins) {
                 name: `${markerLabel} · ${stop}`,
             };
         }),
+    };
+    return {
+        missingOrigin: missingIndex === -1 ? null : origins[missingIndex],
+        payload: labelled,
     };
 }
 
@@ -116,6 +131,9 @@ export async function createHomePreview(root, dependencies = {}) {
     const listeners = [];
     const optionListeners = [];
     const selectionListeners = [];
+    const statusListeners = [];
+    const optionIdPrefix = `home-stop-option-${++previewInstanceId}`;
+    let removeButtons = [];
     let requestVersion = 0;
     let activeRequest = null;
     let filteredStops = [];
@@ -135,6 +153,11 @@ export async function createHomePreview(root, dependencies = {}) {
     function setState(state) {
         root.dataset.previewState = state;
         mapRoot.setAttribute?.("aria-busy", state === "updating" ? "true" : "false");
+    }
+
+    function setStatus(text) {
+        detachAll(statusListeners);
+        status.textContent = text;
     }
 
     function dismissOptions() {
@@ -176,7 +199,7 @@ export async function createHomePreview(root, dependencies = {}) {
         const nodes = filteredStops.map((stop, index) => {
             const option = document.createElement("li");
             option.dataset.stop = stop;
-            option.setAttribute("id", `home-stop-option-${index}`);
+            option.setAttribute("id", `${optionIdPrefix}-${index}`);
             option.setAttribute("role", "option");
             option.setAttribute("aria-selected", "false");
             option.textContent = stop;
@@ -192,6 +215,7 @@ export async function createHomePreview(root, dependencies = {}) {
 
     function renderSelections() {
         detachAll(selectionListeners);
+        removeButtons = [];
         const chips = selected.map((stop, index) => {
             const item = document.createElement("li");
             const letter = document.createElement("span");
@@ -202,7 +226,8 @@ export async function createHomePreview(root, dependencies = {}) {
             remove.setAttribute("type", "button");
             remove.setAttribute("aria-label", format(copy(root, "remove"), { stop }));
             remove.textContent = "×";
-            listen(remove, "click", () => removeOrigin(stop), selectionListeners);
+            listen(remove, "click", () => removeOrigin(stop, true), selectionListeners);
+            removeButtons.push(remove);
             item.appendChild(letter);
             item.appendChild(name);
             item.appendChild(remove);
@@ -232,12 +257,12 @@ export async function createHomePreview(root, dependencies = {}) {
         setState("empty");
         heading.textContent = copy(root, "emptyHeading");
         prompt.textContent = "";
-        status.textContent = "";
+        setStatus("");
     }
 
     function renderUpdating() {
         setState("updating");
-        status.textContent = copy(root, "updating");
+        setStatus(copy(root, "updating"));
     }
 
     function renderReady() {
@@ -245,18 +270,30 @@ export async function createHomePreview(root, dependencies = {}) {
         if (selected.length === 1) {
             heading.textContent = format(copy(root, "oneHeading"), { stop: selected[0] });
             prompt.textContent = copy(root, "onePrompt");
-            status.textContent = copy(root, "updatedOne");
+            setStatus(copy(root, "updatedOne"));
             return;
         }
         heading.textContent = format(copy(root, "groupHeading"), { count: selected.length });
         prompt.textContent = copy(root, "groupPrompt");
-        status.textContent = format(copy(root, "updatedGroup"), { count: selected.length });
+        setStatus(format(copy(root, "updatedGroup"), { count: selected.length }));
     }
 
     function renderFailure() {
         setState("failure");
         prompt.textContent = "";
-        status.textContent = copy(root, "failure");
+        setStatus(copy(root, "failure"));
+    }
+
+    function renderCoverage(stop) {
+        setState("coverage");
+        prompt.textContent = "";
+        setStatus(format(copy(root, "coverage"), { stop }));
+        const remove = document.createElement("button");
+        remove.setAttribute("type", "button");
+        remove.setAttribute("aria-label", format(copy(root, "remove"), { stop }));
+        remove.textContent = format(copy(root, "remove"), { stop });
+        listen(remove, "click", () => removeOrigin(stop, true), statusListeners);
+        status.appendChild(remove);
     }
 
     async function refresh() {
@@ -286,11 +323,17 @@ export async function createHomePreview(root, dependencies = {}) {
             if (!response?.ok) throw new Error("Preview request failed");
             const payload = await response.json();
             if (destroyed || version !== requestVersion) return;
-            map.setPayload(labelledPayload(payload, origins));
+            const prepared = preparePayload(payload, origins);
+            map.setPayload(prepared.payload);
+            if (prepared.missingOrigin !== null) {
+                map.clearField();
+                renderCoverage(prepared.missingOrigin);
+                return;
+            }
             renderReady();
         } catch (error) {
             if (error?.name === "AbortError" || destroyed || version !== requestVersion) return;
-            map.clearPayload();
+            map.clearField();
             renderFailure();
         } finally {
             if (version === requestVersion) activeRequest = null;
@@ -300,15 +343,15 @@ export async function createHomePreview(root, dependencies = {}) {
     function addOrigin(stop) {
         if (destroyed) return false;
         if (typeof stop !== "string" || !canonicalStops.has(stop)) {
-            status.textContent = copy(root, "invalid");
+            setStatus(copy(root, "invalid"));
             return false;
         }
         if (selected.includes(stop)) {
-            status.textContent = copy(root, "duplicate");
+            setStatus(copy(root, "duplicate"));
             return false;
         }
         if (selected.length >= MAX_ORIGINS) {
-            status.textContent = copy(root, "limit");
+            setStatus(copy(root, "limit"));
             return false;
         }
         selected.push(stop);
@@ -319,13 +362,16 @@ export async function createHomePreview(root, dependencies = {}) {
         return true;
     }
 
-    function removeOrigin(stop) {
+    function removeOrigin(stop, recoverFocus = false) {
         if (destroyed || typeof stop !== "string") return false;
         const index = selected.indexOf(stop);
         if (index === -1) return false;
         selected.splice(index, 1);
         dismissOptions();
         renderSelections();
+        if (recoverFocus) {
+            (removeButtons[Math.min(index, removeButtons.length - 1)] ?? search).focus?.();
+        }
         void refresh();
         return true;
     }
@@ -338,8 +384,10 @@ export async function createHomePreview(root, dependencies = {}) {
         activeRequest = null;
         detachAll(optionListeners);
         detachAll(selectionListeners);
+        detachAll(statusListeners);
         detachAll(listeners);
         map.destroy?.();
+        initializations.delete(root);
     }
 
     listen(search, "input", renderOptions);

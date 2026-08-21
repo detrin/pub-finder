@@ -132,8 +132,9 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
                     this.popup = content;
                     return this;
                 },
-                bindTooltip(content) {
+                bindTooltip(content, tooltipOptions) {
                     this.tooltip = content;
+                    this.tooltipOptions = tooltipOptions;
                     return this;
                 },
                 bringToFront() {
@@ -300,6 +301,52 @@ test("clearPayload hides the field and clears participant markers without destro
     assert.equal(harness.canvas.hidden, true);
     assert.equal(harness.createdGroups[0].layers.length, 0);
     assert.equal(harness.mapRemoveCount, 0);
+});
+
+test("participant marker labels render as safe permanent text", async () => {
+    const harness = createHarness();
+    const labelledPayload = {
+        ...payload,
+        participants: [{ ...payload.participants[0], marker_label: "A" }],
+    };
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload: labelledPayload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    const marker = harness.createdGroups[0].layers[0];
+    assert.equal(marker.tooltip.textContent, "A");
+    assert.deepEqual(marker.tooltipOptions, {
+        className: "participant-marker-label",
+        direction: "center",
+        interactive: false,
+        opacity: 1,
+        permanent: true,
+    });
+});
+
+test("clearField hides stale heat values while retaining origin markers", async () => {
+    const harness = createHarness();
+    const controller = await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+    harness.runFrame();
+    const participantMarkers = [...harness.createdGroups[0].layers];
+
+    controller.clearField();
+
+    assert.equal(harness.canvas.hidden, true);
+    assert.deepEqual(harness.createdGroups[0].layers, participantMarkers);
+    assert.equal(controller.payload, payload);
+    harness.mapListeners.get("move zoom resize")();
+    harness.runFrame();
+    assert.equal(harness.canvas.hidden, true);
+    assert.deepEqual(harness.createdGroups[0].layers, participantMarkers);
 });
 
 test("controller leaves the farthest travel-time band transparent", async () => {

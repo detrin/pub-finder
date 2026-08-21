@@ -72,6 +72,9 @@ export function validateReachabilityPayload(payload) {
                 || hasDangerousKeys(participant)
                 || !hasOwn(participant, "id")
                 || !["number", "string"].includes(typeof participant.id)
+                || (hasOwn(participant, "marker_label")
+                    && (typeof participant.marker_label !== "string"
+                        || !/^[A-F]$/.test(participant.marker_label)))
                 || participantIds.has(String(participant.id))
             ) invalidPayload();
             participantIds.add(String(participant.id));
@@ -206,6 +209,11 @@ export class ReachabilityMapController {
         this.hideField();
     }
 
+    clearField() {
+        this.layerValues = this.payload.stops.map(() => null);
+        this.hideField();
+    }
+
     render() {
         this.renderParticipants();
         this.setResults(this.results);
@@ -316,7 +324,20 @@ export class ReachabilityMapController {
                     },
                     [`${label}: ${stopName}`],
                 );
-                if (marker) this.participantMarkers.push(marker);
+                if (marker) {
+                    if (typeof participant.marker_label === "string") {
+                        const markerLabel = this.document.createElement("span");
+                        markerLabel.textContent = participant.marker_label;
+                        marker.bindTooltip(markerLabel, {
+                            className: "participant-marker-label",
+                            direction: "center",
+                            interactive: false,
+                            opacity: 1,
+                            permanent: true,
+                        });
+                    }
+                    this.participantMarkers.push(marker);
+                }
             }
         }
         this._bringParticipantsToFront();

@@ -11,7 +11,7 @@ class FakeElement {
         this.events = new Map();
         this.hidden = false;
         this.parentNode = null;
-        this.textContent = "";
+        this._textContent = "";
         this.value = "";
     }
 
@@ -29,6 +29,7 @@ class FakeElement {
 
     dispatch(type, event = {}) {
         const dispatched = {
+            currentTarget: this,
             preventDefault() { this.defaultPrevented = true; },
             target: this,
             ...event,
@@ -58,6 +59,7 @@ class FakeElement {
     replaceChildren(...children) {
         for (const child of this.children) child.parentNode = null;
         this.children = [];
+        this._textContent = "";
         for (const child of children) this.appendChild(child);
     }
 
@@ -67,6 +69,16 @@ class FakeElement {
 
     getAttribute(name) {
         return this.attributes.get(name) ?? null;
+    }
+
+    get textContent() {
+        return this._textContent + this.children.map((child) => child.textContent).join("");
+    }
+
+    set textContent(value) {
+        for (const child of this.children) child.parentNode = null;
+        this.children = [];
+        this._textContent = String(value);
     }
 }
 
@@ -111,6 +123,7 @@ function createPreviewHarness(stops) {
         groupPrompt: "Colour shows the longest estimated journey among the selected starts.",
         updating: "Updating estimate…",
         failure: "The quick estimate is unavailable. You can still create a plan.",
+        coverage: "No estimate is available from {stop}. Remove it to continue.",
         duplicate: "That stop is already selected.",
         limit: "The quick estimate supports up to six starting stops.",
         invalid: "Choose a stop from the Prague stop list.",
@@ -145,10 +158,12 @@ function createPreviewHarness(stops) {
     hooks.set("#session-name", planName);
 
     const map = {
-        clearCount: 0,
+        clearFieldCount: 0,
+        clearPayloadCount: 0,
         destroyCount: 0,
         payloads: [],
-        clearPayload() { this.clearCount += 1; },
+        clearField() { this.clearFieldCount += 1; },
+        clearPayload() { this.clearPayloadCount += 1; },
         destroy() { this.destroyCount += 1; },
         setPayload(payload) { this.payloads.push(payload); },
     };
@@ -371,10 +386,11 @@ test("aborted requests are silent", async () => {
     await harness.flush();
 
     assert.equal(harness.status.textContent, "Updating estimate…");
-    assert.equal(harness.map.clearCount, 0);
+    assert.equal(harness.map.clearFieldCount, 0);
+    assert.equal(harness.map.clearPayloadCount, 0);
 });
 
-test("a genuine failure clears stale map data but keeps selections and plan fields", async () => {
+test("a genuine failure clears only stale field data and keeps selections and origin markers", async () => {
     const harness = createPreviewHarness(["Anděl", "Dejvická"]);
     const requests = deferredFetches();
     const controller = await createHomePreview(harness.root, {
@@ -389,11 +405,116 @@ test("a genuine failure clears stale map data but keeps selections and plan fiel
     requests.resolve(1, {}, { ok: false, status: 503 });
     await harness.flush();
 
-    assert.equal(harness.map.clearCount, 1);
+    assert.equal(harness.map.clearFieldCount, 1);
+    assert.equal(harness.map.clearPayloadCount, 0);
     assert.equal(harness.root.dataset.previewState, "failure");
     assert.equal(harness.status.textContent, "The quick estimate is unavailable. You can still create a plan.");
     assert.equal(harness.selections.children.length, 2);
     assert.equal(harness.hiddenInputs.length, 2);
+});
+
+test("empty or reordered participants fail before ready state or payload replacement", async () => {
+    for (const invalidPayload of [
+        { direction: "there-only", participants: [], stops: [] },
+        {
+            ...completePayload(["Anděl", "Dejvická"]),
+            participants: completePayload(["Dejvická", "Anděl"]).participants,
+        },
+    ]) {
+        const harness = createPreviewHarness(["Anděl", "Dejvická"]);
+        const requests = deferredFetches();
+        const controller = await createHomePreview(harness.root, {
+            fetch: requests.fetch,
+            createMap: harness.createMap,
+        });
+        controller.addOrigin("Anděl");
+        controller.addOrigin("Dejvická");
+
+        requests.resolve(1, invalidPayload);
+        await harness.flush();
+
+        assert.equal(harness.root.dataset.previewState, "failure");
+        assert.equal(harness.map.payloads.length, 0);
+        assert.equal(harness.map.clearFieldCount, 1);
+        assert.equal(harness.map.clearPayloadCount, 0);
+    }
+});
+
+test("insufficient participant coverage identifies the stop and offers removal", async () => {
+    const harness = createPreviewHarness(["Anděl", "Dejvická"]);
+    const requests = deferredFetches();
+    const controller = await createHomePreview(harness.root, {
+        fetch: requests.fetch,
+        createMap: harness.createMap,
+    });
+    controller.addOrigin("Anděl");
+    controller.addOrigin("Dejvická");
+    const sparsePayload = completePayload(["Anděl", "Dejvická"]);
+    sparsePayload.stops.forEach((stop) => {
+        stop.participant_minutes[1] = null;
+        stop.group_max_minutes = stop.participant_minutes[0];
+    });
+
+    requests.resolve(1, sparsePayload);
+    await harness.flush();
+
+    assert.equal(harness.root.dataset.previewState, "coverage");
+    assert.match(harness.status.textContent, /No estimate is available from Dejvická/);
+    const remove = harness.status.children.at(-1);
+    assert.equal(remove.getAttribute("aria-label"), "Remove Dejvická");
+    assert.equal(harness.map.payloads.length, 1);
+    assert.equal(harness.map.clearFieldCount, 1);
+
+    remove.dispatch("click");
+    assert.deepEqual(JSON.parse(requests.requests.at(-1).options.body), { origins: ["Anděl"] });
+    assert.equal(harness.selections.children.length, 1);
+});
+
+test("chip removal focuses the next button, then previous, then combobox", async () => {
+    const harness = createPreviewHarness(["Anděl", "Dejvická", "Florenc"]);
+    const requests = deferredFetches();
+    const controller = await createHomePreview(harness.root, {
+        fetch: requests.fetch,
+        createMap: harness.createMap,
+    });
+    controller.addOrigin("Anděl");
+    controller.addOrigin("Dejvická");
+    controller.addOrigin("Florenc");
+
+    const middleRemove = harness.selections.children[1].children.at(-1);
+    middleRemove.focus();
+    middleRemove.dispatch("click");
+    assert.equal(harness.document.activeElement.getAttribute("aria-label"), "Remove Florenc");
+
+    harness.document.activeElement.dispatch("click");
+    assert.equal(harness.document.activeElement.getAttribute("aria-label"), "Remove Anděl");
+
+    harness.document.activeElement.dispatch("click");
+    assert.equal(harness.document.activeElement, harness.search);
+});
+
+test("combobox option IDs are unique across preview roots", async () => {
+    const first = createPreviewHarness(["Anděl"]);
+    const second = createPreviewHarness(["Anděl"]);
+    await createHomePreview(first.root, {
+        fetch: async () => ({ ok: true, json: async () => completePayload(["Anděl"]) }),
+        createMap: first.createMap,
+    });
+    await createHomePreview(second.root, {
+        fetch: async () => ({ ok: true, json: async () => completePayload(["Anděl"]) }),
+        createMap: second.createMap,
+    });
+
+    for (const harness of [first, second]) {
+        harness.search.value = "and";
+        harness.search.dispatch("input");
+        harness.search.dispatch("keydown", { key: "ArrowDown" });
+    }
+
+    assert.notEqual(
+        first.search.getAttribute("aria-activedescendant"),
+        second.search.getAttribute("aria-activedescendant"),
+    );
 });
 
 test("handoff focuses the existing plan field", async () => {
@@ -427,4 +548,25 @@ test("page initialization is idempotent for the same preview root", async () => 
 
     assert.equal(harness.createMapCount, 1);
     assert.equal(harness.search.events.get("input").length, 1);
+});
+
+test("destroy evicts initialization so the same root can initialize again", async () => {
+    const harness = createPreviewHarness(["Anděl"]);
+    const target = {
+        querySelectorAll(selector) {
+            return selector === "[data-home-preview]" ? [harness.root] : [];
+        },
+    };
+    const dependencies = {
+        fetch: async () => ({ ok: true, json: async () => completePayload(["Anděl"]) }),
+        createMap: harness.createMap,
+    };
+
+    const [first] = await initHomePreview(target, dependencies);
+    first.destroy();
+    const [second] = await initHomePreview(target, dependencies);
+
+    assert.notEqual(first, second);
+    assert.equal(harness.createMapCount, 2);
+    assert.equal(harness.map.destroyCount, 1);
 });
