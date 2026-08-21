@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 import aiosqlite
 import httpx
@@ -95,6 +96,62 @@ def test_round_trip_sums_directional_pairs():
 
     assert stop(payload, "B")["participant_minutes"] == [21, 31]
     assert stop(payload, "B")["group_max_minutes"] == 31
+
+
+def test_round_trip_uses_reverse_direction_only_for_a_missing_matrix_leg():
+    sparse_matrix = pl.DataFrame(
+        {
+            "from": ["A", "B", "C"],
+            "to": ["B", "A", "B"],
+            "total_minutes": [10, 1, 15],
+        }
+    )
+    sparse_geo = pl.DataFrame({"name": ["B"], "lat": [50.1], "lon": [14.1]})
+    participant = {
+        "id": 1,
+        "name": "P1",
+        "color": "#dff0ff",
+        "start_stop": "A",
+        "end_stop": "C",
+    }
+
+    payload = build_reachability_payload(
+        sparse_matrix,
+        sparse_geo,
+        [participant],
+        "round-trip",
+    )
+
+    assert stop(payload, "B")["participant_minutes"] == [25]
+    assert stop(payload, "B")["group_max_minutes"] == 25
+    assert stop(payload, "B")["estimated"] is True
+    assert payload["estimation"] == {
+        "method": "reverse direction where a requested matrix leg is missing",
+        "estimated_stops": 1,
+    }
+
+
+def test_sparse_production_return_stop_still_has_round_trip_heatmap_coverage():
+    project_root = Path(__file__).parents[1]
+    distance_table = pl.read_parquet(project_root / "data/Prague_stops_combinations.parquet")
+    stop_geo = pl.read_parquet(project_root / "data/Prague_stops_geo.parquet")
+    participant = {
+        "id": 1,
+        "name": "P1",
+        "color": "#dff0ff",
+        "start_stop": "Vršovické náměstí",
+        "end_stop": "Škola Poštovka",
+    }
+
+    payload = build_reachability_payload(
+        distance_table,
+        stop_geo,
+        [participant],
+        "round-trip",
+    )
+
+    assert payload["coverage"] == {"total_stops": 1444, "complete_stops": 1444}
+    assert payload["estimation"]["estimated_stops"] == 1444
 
 
 def test_missing_pair_marks_group_value_unavailable():
