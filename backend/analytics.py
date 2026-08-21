@@ -51,6 +51,8 @@ _LEGACY_USER_ID_RE = re.compile(r"[A-Za-z0-9_-]{22}")
 class _Ga4HttpxLogFilter(logging.Filter):
     """Keep GA4 query credentials out of successful HTTPX request logs."""
 
+    _pub_finder_ga4_httpx_filter = True
+
     def filter(self, record: logging.LogRecord) -> bool:
         if record.name != "httpx" or not isinstance(record.args, tuple):
             return True
@@ -61,7 +63,12 @@ class _Ga4HttpxLogFilter(logging.Filter):
         return True
 
 
-logging.getLogger("httpx").addFilter(_Ga4HttpxLogFilter())
+_httpx_logger = logging.getLogger("httpx")
+if not any(
+    getattr(log_filter, "_pub_finder_ga4_httpx_filter", False)
+    for log_filter in _httpx_logger.filters
+):
+    _httpx_logger.addFilter(_Ga4HttpxLogFilter())
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ reads.
 """
 
 import asyncio
+import importlib
 import logging
 import re
 from datetime import datetime, timezone
@@ -532,3 +533,37 @@ async def test_successful_ga4_transport_redacts_the_query_credential_from_httpx_
     assert "success-secret" not in caplog.text
     assert "measurement_id=" not in caplog.text
     assert "api_secret=" not in caplog.text
+
+
+def test_reloading_analytics_keeps_one_ga4_httpx_filter():
+    httpx_logger = logging.getLogger("httpx")
+
+    importlib.reload(analytics)
+    importlib.reload(analytics)
+
+    ga4_filters = [
+        log_filter
+        for log_filter in httpx_logger.filters
+        if getattr(log_filter, "_pub_finder_ga4_httpx_filter", False)
+    ]
+    assert len(ga4_filters) == 1
+    assert type(ga4_filters[0]).__module__ == "backend.analytics"
+    assert type(ga4_filters[0]).__name__ == "_Ga4HttpxLogFilter"
+
+
+@pytest.mark.asyncio
+async def test_ga4_filter_preserves_unrelated_httpx_request_logs(caplog):
+    real_client = httpx.AsyncClient
+
+    def ordinary_response(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, request=request)
+
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        async with real_client(transport=httpx.MockTransport(ordinary_response)) as client:
+            response = await client.get("https://example.test/resource?visible=yes")
+
+    assert response.status_code == 200
+    assert (
+        'HTTP Request: GET https://example.test/resource?visible=yes "HTTP/1.1 200 OK"'
+        in caplog.text
+    )

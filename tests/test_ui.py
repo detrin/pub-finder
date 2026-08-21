@@ -224,6 +224,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert "OpenStreetMap contributors" in attribution.get_text(" ", strip=True)
     assert handoff is not None
     assert disclosure is not None
+    assert "home-estimate__method-link" in disclosure.get("class", [])
     assert "Based on typical transit times" in disclosure.get_text(" ", strip=True)
     assert page.select_one("#session-name") is not None
     assert create_form.select_one("[data-preview-hidden-fields]") is not None
@@ -232,6 +233,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
     assert "/static/home-preview.js?v=2" in home_modules
     assert "/static/home-preview.js" not in other_response.text
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=46"]') is not None
     assert preview["data-limit"] == (
         "The quick estimate supports up to six starting stops. For larger groups, start a plan."
     )
@@ -254,6 +256,27 @@ def test_home_preview_legend_styles_match_the_canvas_encoding():
     )
     assert re.search(
         r"\.home-estimate__map\s*\{[^}]*pointer-events:\s*none;",
+        css,
+        re.DOTALL,
+    )
+
+
+def test_home_preview_disclosure_wraps_without_expanding_the_handoff():
+    css = Path("static/app.css").read_text()
+
+    assert re.search(
+        r"\.home-estimate__method-link\s*\{[^}]*overflow-wrap:\s*anywhere;",
+        css,
+        re.DOTALL,
+    )
+    assert re.search(
+        r"\.home-estimate__disclosure\s*>\s*\[data-preview-handoff\]\s*\{"
+        r"[^}]*white-space:\s*nowrap;",
+        css,
+        re.DOTALL,
+    )
+    assert not re.search(
+        r"\.home-estimate__disclosure\s+a\s*\{[^}]*white-space:\s*nowrap;",
         css,
         re.DOTALL,
     )

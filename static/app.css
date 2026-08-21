@@ -2639,12 +2639,19 @@ input[data-stop-input]:not(:disabled) {
 }
 
 .home-estimate__disclosure p {
+    flex: 1 1 auto;
+    min-width: 0;
     margin: 0;
     font-size: 0.7rem;
     line-height: 1.35;
 }
 
-.home-estimate__disclosure a {
+.home-estimate__method-link {
+    color: var(--blue);
+    overflow-wrap: anywhere;
+}
+
+.home-estimate__disclosure > [data-preview-handoff] {
     flex: 0 0 auto;
     color: var(--blue);
     font-family: var(--font-mono);
