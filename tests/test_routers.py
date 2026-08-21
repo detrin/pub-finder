@@ -1,9 +1,17 @@
+import asyncio
+import re
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock
+
 import aiosqlite
 import pytest
 import pytest_asyncio
 from bs4 import BeautifulSoup
 from httpx import ASGITransport, AsyncClient
 
+import backend.app as app_module
+import routers.track as track_router
+from backend.analytics import record_visit
 from backend.app import app
 from backend.db import create_session, get_participants, init_db, join_session
 
@@ -14,7 +22,9 @@ async def setup_test_db():
     await init_db(db)
     app.state.db = db
     app.state.all_stops = []
+    app.state.analytics_tasks = set()
     yield
+    await app_module.drain_analytics_tasks(app)
     await db.close()
 
 
@@ -29,6 +39,174 @@ async def test_home_page():
     assert "Let’s meet" in response.text
     assert "Somewhere" in response.text
     assert "Náměstí Míru" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_analytics_cookie_is_secure_and_reused_across_pages():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="https://test") as client:
+        first = await client.get("/")
+        first_user_id = client.cookies.get("_uid")
+        second = await client.get("/how-it-works")
+
+    set_cookie = first.headers["set-cookie"]
+    assert first_user_id
+    assert "HttpOnly" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=lax" in set_cookie
+    assert "_uid=" not in second.headers.get("set-cookie", "")
+
+
+@pytest.mark.asyncio
+async def test_invalid_analytics_cookie_is_replaced_with_a_server_identifier():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        client.cookies.set("_uid", "attacker-chosen", domain="test.local", path="/")
+        response = await client.get("/")
+
+    replacement = client.cookies.get("_uid", domain="test.local", path="/")
+    assert replacement != "attacker-chosen"
+    assert re.fullmatch(r"[1-9]\d*\.[1-9]\d*", replacement)
+    assert "_uid=" in response.headers["set-cookie"]
+
+
+@pytest.mark.asyncio
+async def test_engagement_beacon_reuses_the_numeric_session_and_full_page_url(monkeypatch):
+    user_id = "123456789.1787313600"
+    visit = await record_visit(
+        app.state.db,
+        user_id,
+        now=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    send_events = AsyncMock()
+    monkeypatch.setattr(track_router, "send_events", send_events)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("8.8.8.8", 12345)),
+        base_url="https://test",
+        cookies={"_uid": user_id},
+    ) as client:
+        response = await client.post(
+            "/e",
+            data={"path": "/how-it-works", "engagement_time_msec": "42000"},
+        )
+        await asyncio.sleep(0)
+
+    assert response.status_code == 204
+    send_events.assert_awaited_once()
+    client_id, events = send_events.await_args.args
+    assert client_id == user_id
+    assert send_events.await_args.kwargs == {"ip_address": "8.8.8.8"}
+    assert events[0]["params"] == {
+        "page_location": "https://test/how-it-works",
+        "engagement_time_msec": 42_000,
+        "session_id": visit.session_id,
+        "session_number": visit.session_number,
+    }
+    async with app.state.db.execute(
+        "SELECT last_seen_at FROM analytics_users WHERE user_id = ?",
+        (user_id,),
+    ) as cursor:
+        last_seen_at = (await cursor.fetchone())[0]
+    assert datetime.fromisoformat(last_seen_at) > datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_engagement_beacon_rejects_an_external_page_location(monkeypatch):
+    user_id = "123456789.1787313600"
+    await record_visit(app.state.db, user_id)
+    send_events = AsyncMock()
+    monkeypatch.setattr(track_router, "send_events", send_events)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="https://test",
+        cookies={"_uid": user_id},
+    ) as client:
+        response = await client.post(
+            "/e",
+            data={"path": "https://attacker.example/private", "engagement_time_msec": "1000"},
+        )
+        await asyncio.sleep(0)
+
+    assert response.status_code == 204
+    send_events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_engagement_beacon_rejects_an_invalid_analytics_cookie(monkeypatch):
+    await record_visit(app.state.db, "attacker-chosen")
+    send_events = AsyncMock()
+    monkeypatch.setattr(track_router, "send_events", send_events)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="https://test",
+        cookies={"_uid": "attacker-chosen"},
+    ) as client:
+        response = await client.post(
+            "/e",
+            data={"path": "/how-it-works", "engagement_time_msec": "1000"},
+        )
+        await asyncio.sleep(0)
+
+    assert response.status_code == 204
+    send_events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_page_view_forwards_only_safe_campaign_attribution(monkeypatch):
+    captured = {}
+    sent = asyncio.Event()
+
+    async def capture_events(client_id, events, *, ip_address=None):
+        captured.update(client_id=client_id, events=events, ip_address=ip_address)
+        sent.set()
+
+    monkeypatch.setattr(app_module, "send_events", capture_events)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("8.8.8.8", 12345)),
+        base_url="https://test",
+    ) as client:
+        response = await client.get(
+            "/?code=secret&utm_source=newsletter&utm_medium=email&utm_campaign=summer",
+            headers={
+                "referer": "https://example.org/article?subscriber=42",
+            },
+        )
+        await asyncio.wait_for(sent.wait(), timeout=1)
+
+    assert response.status_code == 200
+    assert captured["client_id"] == client.cookies.get("_uid")
+    assert [event["name"] for event in captured["events"]] == [
+        "campaign_details",
+        "page_view",
+    ]
+    page_view = captured["events"][1]["params"]
+    assert page_view["page_location"] == (
+        "https://test/?utm_source=newsletter&utm_medium=email&utm_campaign=summer"
+    )
+    assert page_view["page_referrer"] == "https://example.org/"
+    assert captured["ip_address"] == "8.8.8.8"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "data"),
+    [
+        ("/anything/search", {}),
+        ("/session/create", {}),
+    ],
+)
+async def test_tool_tracking_requires_a_successful_known_route(monkeypatch, path, data):
+    send_events = AsyncMock()
+    monkeypatch.setattr(app_module, "send_events", send_events)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        await client.post(path, data=data)
+        await app_module.drain_analytics_tasks(app)
+
+    send_events.assert_not_awaited()
 
 
 @pytest.mark.asyncio

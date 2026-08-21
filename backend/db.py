@@ -81,7 +81,8 @@ async def init_db(db: aiosqlite.Connection):
             last_seen_at TEXT NOT NULL,
             last_seen_date TEXT NOT NULL,
             visit_count INTEGER NOT NULL DEFAULT 1,
-            country TEXT
+            country TEXT,
+            current_session_id INTEGER
         );
 
         CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_code);
@@ -120,6 +121,19 @@ async def init_db(db: aiosqlite.Connection):
     except Exception:
         await db.execute("ALTER TABLE analytics_users ADD COLUMN country TEXT")
         await db.commit()
+
+    # Migration: numeric GA4 session identifier for existing analytics databases.
+    try:
+        await db.execute("SELECT current_session_id FROM analytics_users LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE analytics_users ADD COLUMN current_session_id INTEGER")
+        await db.commit()
+    await db.execute(
+        "UPDATE analytics_users SET current_session_id = "
+        "COALESCE(CAST(strftime('%s', last_seen_at) AS INTEGER), 1) "
+        "WHERE current_session_id IS NULL"
+    )
+    await db.commit()
 
     # Google Places content is not a durable application cache. Clear records created
     # by earlier versions; place data now only lives in the active response/session.
@@ -360,14 +374,6 @@ async def get_search_results(db: aiosqlite.Connection, session_code: str) -> Opt
     return {"data": json.loads(row[0]), "created_at": row[1]}
 
 
-async def get_visit_count(db: aiosqlite.Connection, user_id: str) -> int:
-    async with db.execute(
-        "SELECT visit_count FROM analytics_users WHERE user_id = ?", (user_id,)
-    ) as cursor:
-        row = await cursor.fetchone()
-    return row[0] if row else 1
-
-
 async def get_visitor_country(db: aiosqlite.Connection, user_id: str) -> Optional[str]:
     async with db.execute(
         "SELECT country FROM analytics_users WHERE user_id = ?", (user_id,)
@@ -377,9 +383,7 @@ async def get_visitor_country(db: aiosqlite.Connection, user_id: str) -> Optiona
 
 
 async def set_visitor_country(db: aiosqlite.Connection, user_id: str, country: str) -> None:
-    await db.execute(
-        "UPDATE analytics_users SET country = ? WHERE user_id = ?", (country, user_id)
-    )
+    await db.execute("UPDATE analytics_users SET country = ? WHERE user_id = ?", (country, user_id))
     await db.commit()
 
 

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 from contextlib import asynccontextmanager
@@ -21,17 +20,19 @@ from routers.track import router as track_router
 from .analytics import (
     USER_ID_COOKIE,
     USER_ID_COOKIE_MAX_AGE,
+    drain_analytics_tasks,
     get_client_ip,
-    lookup_country,
+    is_valid_user_id,
     new_user_id,
+    page_context,
     page_view_events,
     record_visit,
+    schedule_analytics_task,
     send_events,
-    session_id_for_today,
     tool_used_event,
 )
 from .config import DATABASE_PATH, HOST, PORT
-from .db import cleanup_old_sessions, get_visitor_country, init_db, set_visitor_country
+from .db import cleanup_old_sessions, init_db
 from .i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, reset_current_locale, set_current_locale
 from .search_registry import SearchRegistry
 
@@ -61,10 +62,12 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     search_registry = SearchRegistry()
     app.state.search_registry = search_registry
+    app.state.analytics_tasks = set()
 
     yield
 
     await search_registry.shutdown()
+    await drain_analytics_tasks(app)
     await db.close()
 
 
@@ -99,11 +102,11 @@ class LocaleMiddleware(BaseHTTPMiddleware):
             reset_current_locale(token)
 
 
-_TOOL_ROUTES = {
-    ("POST", "search"): "search",
-    ("POST", "venues"): "load_venues",
-    ("POST", "create"): "create_session",
-}
+_TOOL_ROUTES = (
+    (re.compile(r"^/session/[^/]+/search$"), "search"),
+    (re.compile(r"^/session/[^/]+/venues$"), "load_venues"),
+    (re.compile(r"^/session/create$"), "create_session"),
+)
 
 # GET routes that render a full HTML page a person actually looks at. Everything
 # else under /session/* is a partial, an SSE stream, or a JSON endpoint fetched
@@ -120,65 +123,71 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         if not request.url.path.startswith("/static") and request.url.path != "/e":
-            user_id = request.cookies.get(USER_ID_COOKIE) or new_user_id()
-            is_new_cookie = USER_ID_COOKIE not in request.cookies
-            if is_new_cookie:
+            cookie_user_id = request.cookies.get(USER_ID_COOKIE)
+            user_id = cookie_user_id if is_valid_user_id(cookie_user_id) else new_user_id()
+            if user_id != cookie_user_id:
                 response.set_cookie(
                     USER_ID_COOKIE,
                     user_id,
                     max_age=USER_ID_COOKIE_MAX_AGE,
                     httponly=True,
+                    secure=True,
                     samesite="lax",
                 )
-            asyncio.create_task(self._track(request, user_id))
+            schedule_analytics_task(
+                request.app,
+                self._track(request, user_id, response.status_code),
+            )
 
         return response
 
     @staticmethod
-    async def _track(request: Request, user_id: str) -> None:
+    async def _track(request: Request, user_id: str, response_status: int) -> None:
         try:
-            await AnalyticsMiddleware._track_unsafe(request, user_id)
+            await AnalyticsMiddleware._track_unsafe(request, user_id, response_status)
         except Exception:
             logger.warning("Analytics tracking failed", exc_info=True)
 
     @staticmethod
-    async def _track_unsafe(request: Request, user_id: str) -> None:
+    async def _track_unsafe(request: Request, user_id: str, response_status: int) -> None:
         db = getattr(request.app.state, "db", None)
-        if db is None:
+        if db is None or response_status >= 400:
             return
-        is_new_user, is_new_session, session_number = await record_visit(db, user_id)
-        session_id = session_id_for_today(user_id)
-        tool_name = _TOOL_ROUTES.get((request.method, request.url.path.rsplit("/", 1)[-1]))
-
-        if tool_name:
-            events = tool_used_event(
-                tool_name=tool_name, session_id=session_id, session_number=session_number
+        tool_name = None
+        if request.method == "POST":
+            tool_name = next(
+                (name for pattern, name in _TOOL_ROUTES if pattern.fullmatch(request.url.path)),
+                None,
             )
-        elif (
+        is_page_view = (
             request.method == "GET"
             and "hx-request" not in request.headers
             and _PAGE_VIEW_ROUTES.match(request.url.path)
-        ):
-            events = page_view_events(
-                page_path=request.url.path,
-                page_title=request.url.path,
-                session_id=session_id,
-                session_number=session_number,
-                is_new_user=is_new_user,
-                is_new_session=is_new_session,
-            )
-        else:
+        )
+        if not tool_name and not is_page_view:
             return
 
-        country = await get_visitor_country(db, user_id)
-        if country is None:
-            ip = get_client_ip(request)
-            if ip:
-                country = await lookup_country(ip)
-                if country:
-                    await set_visitor_country(db, user_id, country)
+        visit = await record_visit(db, user_id)
 
-        await send_events(user_id, events, country=country)
+        if tool_name:
+            events = tool_used_event(
+                tool_name=tool_name,
+                session_id=visit.session_id,
+                session_number=visit.session_number,
+            )
+        else:
+            context = page_context(request)
+            events = page_view_events(
+                page_location=context.page_location,
+                page_title=request.url.path,
+                page_referrer=context.page_referrer,
+                campaign=context.campaign,
+                session_id=visit.session_id,
+                session_number=visit.session_number,
+                is_new_user=visit.is_new_user,
+            )
+
+        await send_events(user_id, events, ip_address=get_client_ip(request))
 
 
 app = FastAPI(lifespan=lifespan)

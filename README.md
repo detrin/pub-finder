@@ -61,6 +61,11 @@ Visit http://localhost:3000.
 | `DATABASE_PATH` | `pub_finder.db` | SQLite database path |
 | `HOST` | `0.0.0.0` | Server bind address |
 | `PORT` | `3000` | Server port |
+| `GA4_MEASUREMENT_ID` | _(empty)_ | Enables server-side GA4 collection when paired with an API secret |
+| `GA4_API_SECRET` | _(empty)_ | Measurement Protocol secret; keep outside source control |
+
+See [docs/analytics.md](docs/analytics.md) for the server-side event contract,
+GA4 custom-dimension setup, proxy configuration, and local verification.
 
 ## Project structure
 

@@ -1,15 +1,16 @@
-import asyncio
-
 from fastapi import APIRouter, Form, Request
 from starlette.responses import Response
 
 from backend.analytics import (
     USER_ID_COOKIE,
     engagement_event,
+    get_client_ip,
+    is_valid_user_id,
+    page_location_for_path,
+    schedule_analytics_task,
     send_events,
-    session_id_for_today,
+    touch_current_session,
 )
-from backend.db import get_visit_count
 
 router = APIRouter()
 
@@ -21,17 +22,22 @@ async def track_engagement(
     engagement_time_msec: int = Form(...),
 ):
     user_id = request.cookies.get(USER_ID_COOKIE)
-    if not user_id or engagement_time_msec <= 0:
+    if not is_valid_user_id(user_id) or engagement_time_msec <= 0:
         return Response(status_code=204)
 
     db = request.app.state.db
-    visit_count = await get_visit_count(db, user_id)
-    session_id = session_id_for_today(user_id)
+    session = await touch_current_session(db, user_id)
+    page_location = page_location_for_path(request, path)
+    if session is None or page_location is None:
+        return Response(status_code=204)
     events = engagement_event(
-        page_path=path,
+        page_location=page_location,
         engagement_time_msec=min(engagement_time_msec, 30 * 60 * 1000),
-        session_id=session_id,
-        session_number=visit_count,
+        session_id=session.session_id,
+        session_number=session.session_number,
     )
-    asyncio.create_task(send_events(user_id, events))
+    schedule_analytics_task(
+        request.app,
+        send_events(user_id, events, ip_address=get_client_ip(request)),
+    )
     return Response(status_code=204)

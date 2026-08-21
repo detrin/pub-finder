@@ -22,6 +22,49 @@ async def db():
 
 
 @pytest.mark.asyncio
+async def test_init_db_adds_numeric_session_id_to_existing_analytics_table():
+    legacy = await aiosqlite.connect(":memory:")
+    await legacy.execute(
+        """
+        CREATE TABLE analytics_users (
+            user_id TEXT PRIMARY KEY,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            last_seen_date TEXT NOT NULL,
+            visit_count INTEGER NOT NULL DEFAULT 1,
+            country TEXT
+        )
+        """
+    )
+    await legacy.execute(
+        "INSERT INTO analytics_users "
+        "(user_id, first_seen_at, last_seen_at, last_seen_date, visit_count) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            "123456789.1787313600",
+            "2026-08-20T12:00:00+00:00",
+            "2026-08-21T12:00:00+00:00",
+            "2026-08-21",
+            4,
+        ),
+    )
+
+    try:
+        await init_db(legacy)
+        async with legacy.execute("PRAGMA table_info(analytics_users)") as cursor:
+            columns = {row[1] for row in await cursor.fetchall()}
+        async with legacy.execute(
+            "SELECT visit_count, current_session_id FROM analytics_users"
+        ) as cursor:
+            migrated_user = await cursor.fetchone()
+    finally:
+        await legacy.close()
+
+    assert "current_session_id" in columns
+    assert migrated_user == (4, 1_787_313_600)
+
+
+@pytest.mark.asyncio
 async def test_create_session(db):
     session = await create_session(db, "Test Session", "Daniel")
     assert session["code"]
