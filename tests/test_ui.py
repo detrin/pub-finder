@@ -145,9 +145,11 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
     assert "Somewhere" in response.text
     assert 'name="session_name"' in response.text
     create_form = BeautifulSoup(response.text, "html.parser").select_one(
-        'form[hx-post="/session/create"]'
+        'form[action="/session/create"][method="post"]'
     )
     assert create_form is not None
+    assert not create_form.has_attr("hx-post")
+    assert not create_form.has_attr("hx-target")
     assert create_form.select_one('[name="creator_name"]') is None
     assert "data-join-disclosure" in response.text
     assert "data-session-history" in response.text
@@ -222,6 +224,21 @@ async def test_session_workspace_exposes_autosave_and_dialog_hooks():
     assert 'aria-live="polite"' in response.text
     assert "Find somewhere" in response.text
     assert 'hx-swap="innerHTML focus-scroll:false"' in response.text
+
+
+@pytest.mark.asyncio
+async def test_invite_button_copies_the_direct_session_url():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/session/{session['code']}")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    invite_button = page.select_one("[data-invite-copy]")
+
+    assert invite_button is not None
+    assert invite_button["data-invite-url"] == f"/session/{session['code']}"
 
 
 def test_mobile_stop_picker_stays_centered_in_the_viewport():

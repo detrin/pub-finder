@@ -50,7 +50,7 @@
 
 <section class="start-plan" aria-labelledby="start-plan-title">
     <h2 id="start-plan-title">{{ t("home.start_plan", request.state.locale) }}</h2>
-    <form hx-post="/session/create" hx-target="body">
+    <form action="/session/create" method="post">
         <label data-field>
             {{ t("home.plan_name", request.state.locale) }}
             <input type="text" name="session_name" required placeholder="Friday drinks">
