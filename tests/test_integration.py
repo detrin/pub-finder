@@ -432,6 +432,98 @@ async def _run_direct_search(monkeypatch, code, place_types):
 
 
 @pytest.mark.asyncio
+async def test_search_live_reranking_uses_only_the_best_ten_matrix_candidates(monkeypatch):
+    """A search must not send lower-ranked matrix candidates to the live provider."""
+    session = await create_session(app.state.db, "Test", "P1")
+    candidates = [f"C{i}" for i in range(12)]
+    matrix_rows = []
+    for index, candidate in enumerate(candidates):
+        for participant_stop in ("A", "B"):
+            matrix_rows.extend(
+                [
+                    {
+                        "from": participant_stop,
+                        "to": candidate,
+                        "distance_in_km": float(index + 1),
+                        "total_minutes": index + 1,
+                    },
+                    {
+                        "from": candidate,
+                        "to": participant_stop,
+                        "distance_in_km": float(index + 1),
+                        "total_minutes": index + 1,
+                    },
+                ]
+            )
+    app.state.distance_table = pl.DataFrame(matrix_rows)
+    app.state.stop_geo = pl.DataFrame(
+        {
+            "name": candidates,
+            "lat": [50.0 + index / 100 for index in range(len(candidates))],
+            "lon": [14.0 + index / 100 for index in range(len(candidates))],
+        }
+    )
+    registry = _DirectSearchRegistry()
+    app.state.search_registry = registry
+
+    # Candidate discovery is already covered separately. Reverse its output so
+    # this test also catches a naive ``candidates[:10]`` implementation.
+    monkeypatch.setattr(
+        search_router,
+        "get_optimal_stop_pairs",
+        lambda *args, **kwargs: list(reversed(candidates)),
+    )
+
+    def fake_live_reranking(
+        method,
+        stop_pairs,
+        target_stops,
+        event_datetime,
+        get_total_minutes_func,
+        **kwargs,
+    ):
+        return pl.DataFrame(
+            {
+                "Target Stop": target_stops,
+                "Worst Case Minutes": list(range(1, len(target_stops) + 1)),
+                "Total Minutes": list(range(2, len(target_stops) + 2)),
+            }
+        )
+
+    monkeypatch.setattr(
+        search_router,
+        "get_actual_time_optimal_stop_pairs",
+        fake_live_reranking,
+    )
+
+    await search_router._run_search(
+        type("Request", (), {"app": app})(),
+        session["code"],
+        "limited-search",
+        "2026-08-22",
+        "20:00",
+        "2026-08-22",
+        "23:00",
+        "minimize-worst-case",
+        "round-trip",
+        [("A", "A"), ("B", "B")],
+        ["P1", "P2"],
+        [],
+        ["pub"],
+    )
+
+    saved = await get_search_results(app.state.db, session["code"])
+    assert saved is not None
+    assert [row["Target Stop"] for row in saved["data"]["rows"]] == candidates[:10]
+    scraping_totals = [
+        update["total"]
+        for _, update in registry.updates
+        if update.get("stage") == "scraping" and "total" in update
+    ]
+    assert scraping_totals == [10]
+
+
+@pytest.mark.asyncio
 async def test_search_defers_venue_discovery_until_a_user_requests_it(monkeypatch):
     """Optimising a plan must not create billable Google Places requests."""
     session = await create_session(app.state.db, "Test", "P1")

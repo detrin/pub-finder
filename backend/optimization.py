@@ -7,6 +7,7 @@ import polars as pl
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+MISSING_TRANSIT_MINUTES = 999
 
 
 def get_geo_optimal_stop(
@@ -228,6 +229,86 @@ def get_optimal_stop_pairs(
     return list(dict.fromkeys(candidates))
 
 
+def select_live_candidate_stops(
+    distance_table: pl.DataFrame,
+    method: str,
+    stop_pairs: List[tuple[str, str]],
+    candidate_stops: List[str],
+    limit: int,
+    direction: str = "round-trip",
+) -> List[str]:
+    """Rank matrix candidates for live lookup and return at most ``limit`` stops."""
+    if limit < 1:
+        raise ValueError("Live candidate limit must be positive")
+    if method not in {"minimize-worst-case", "minimize-total"}:
+        raise ValueError(f"Unknown method: {method}")
+    if direction not in {"round-trip", "there-only", "back-only"}:
+        raise ValueError(f"Unknown direction: {direction}")
+
+    unique_candidates = list(dict.fromkeys(candidate_stops))
+    if not unique_candidates or not stop_pairs:
+        return []
+
+    ranked = pl.DataFrame(
+        {
+            "target_stop": unique_candidates,
+            "candidate_order": range(len(unique_candidates)),
+        }
+    )
+    participant_score_columns = []
+
+    for index, (start_stop, end_stop) in enumerate(stop_pairs):
+        participant = pl.DataFrame({"target_stop": unique_candidates})
+        leg_columns = []
+
+        if direction != "back-only":
+            to_column = f"to_minutes_{index}"
+            to_times = distance_table.filter(
+                (pl.col("from") == start_stop) & pl.col("to").is_in(unique_candidates)
+            ).select(
+                pl.col("to").alias("target_stop"),
+                pl.col("total_minutes").alias(to_column),
+            )
+            to_times = to_times.group_by("target_stop").agg(pl.col(to_column).min())
+            participant = participant.join(to_times, on="target_stop", how="left").with_columns(
+                pl.col(to_column).fill_null(MISSING_TRANSIT_MINUTES)
+            )
+            leg_columns.append(to_column)
+
+        if direction != "there-only":
+            from_column = f"from_minutes_{index}"
+            from_times = distance_table.filter(
+                (pl.col("to") == end_stop) & pl.col("from").is_in(unique_candidates)
+            ).select(
+                pl.col("from").alias("target_stop"),
+                pl.col("total_minutes").alias(from_column),
+            )
+            from_times = from_times.group_by("target_stop").agg(pl.col(from_column).min())
+            participant = participant.join(from_times, on="target_stop", how="left").with_columns(
+                pl.col(from_column).fill_null(MISSING_TRANSIT_MINUTES)
+            )
+            leg_columns.append(from_column)
+
+        score_column = f"participant_score_{index}"
+        participant = participant.with_columns(
+            pl.sum_horizontal(*leg_columns).alias(score_column)
+        ).select("target_stop", score_column)
+        ranked = ranked.join(participant, on="target_stop", how="inner")
+        participant_score_columns.append(score_column)
+
+    aggregate = (
+        pl.max_horizontal(*participant_score_columns)
+        if method == "minimize-worst-case"
+        else pl.sum_horizontal(*participant_score_columns)
+    )
+    return (
+        ranked.with_columns(aggregate.alias("matrix_score"))
+        .sort("matrix_score", "candidate_order")
+        .head(limit)["target_stop"]
+        .to_list()
+    )
+
+
 def get_actual_time_optimal_stop_pairs(
     method: str,
     stop_pairs: List[tuple[str, str]],
@@ -312,14 +393,16 @@ def get_actual_time_optimal_stop_pairs(
     else:
         rank_cols = [f"round_trip_{si}" for si in range(len(stop_pairs))]
 
-    # Fill null transit times with 999 so stops with partial failures still rank (just low)
+    # Fill null transit times so stops with partial failures still rank (just low)
     all_time_cols = []
     for si in range(len(stop_pairs)):
         all_time_cols.extend([f"to_minutes_{si}", f"from_minutes_{si}", f"round_trip_{si}"])
 
     df_times = pl.DataFrame(rows)
     existing_cols = set(df_times.columns)
-    fill_exprs = [pl.col(c).fill_null(999) for c in all_time_cols if c in existing_cols]
+    fill_exprs = [
+        pl.col(c).fill_null(MISSING_TRANSIT_MINUTES) for c in all_time_cols if c in existing_cols
+    ]
     if fill_exprs:
         df_times = df_times.with_columns(fill_exprs)
 

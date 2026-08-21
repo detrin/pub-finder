@@ -24,7 +24,11 @@ from backend.db import (
     update_search_results_if_current,
 )
 from backend.i18n import make_templates, translate
-from backend.optimization import get_actual_time_optimal_stop_pairs, get_optimal_stop_pairs
+from backend.optimization import (
+    get_actual_time_optimal_stop_pairs,
+    get_optimal_stop_pairs,
+    select_live_candidate_stops,
+)
 from backend.places import (
     is_open_during,
     order_pubs_for_stop,
@@ -47,6 +51,7 @@ VENUE_EXPANSION_RATE_WINDOW = 60
 PUB_DISCOVERY_STOP_LIMIT = 3
 PLACES_CONCURRENCY_LIMIT = 4
 PLACES_SEARCH_RADIUS_METERS = 500
+LIVE_TRANSIT_CANDIDATE_LIMIT = 10
 _PROGRESS_STAGES = {"starting", "candidates", "scraping", "pubs"}
 _PLACE_TYPE_LABELS = {
     "pub": "Drinks",
@@ -373,6 +378,15 @@ async def _run_search(
 
         target_stops = await registry.run_blocking(
             get_optimal_stop_pairs, distance_table, method, stop_pairs, direction=direction
+        )
+        target_stops = await registry.run_blocking(
+            select_live_candidate_stops,
+            distance_table,
+            method,
+            stop_pairs,
+            target_stops,
+            LIVE_TRANSIT_CANDIDATE_LIMIT,
+            direction=direction,
         )
 
         registry.update(
