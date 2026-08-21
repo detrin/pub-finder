@@ -13,6 +13,12 @@
         action_href="/", action_label="Start a new plan" %}
     {% include "partials/system_message.html" %}
 {% endwith %}
+{% elif error == "session_name_required" %}
+{% with kind="error", title="Give the plan a name.",
+        body="Enter a plan name before starting the session.",
+        action_href="/", action_label="Try again" %}
+    {% include "partials/system_message.html" %}
+{% endwith %}
 {% endif %}
 <section class="home-hero">
     <div class="home-hero__copy">
@@ -48,10 +54,6 @@
         <label data-field>
             {{ t("home.plan_name", request.state.locale) }}
             <input type="text" name="session_name" required placeholder="Friday drinks">
-        </label>
-        <label data-field>
-            {{ t("home.your_name", request.state.locale) }}
-            <input type="text" name="creator_name" required placeholder="Name">
         </label>
         <button type="submit">{{ t("home.start_planning", request.state.locale) }}</button>
     </form>

@@ -108,6 +108,41 @@ test("readiness requires two participants after a participant swap", async () =>
     assert.equal(status.textContent, "Add one more participant.");
 });
 
+test("readiness requires names in both initial participant slots", async () => {
+    const blankName = eventTarget({ value: "", selector: "[data-participant-name-input]" });
+    const completeStopForm = {
+        querySelector(selector) {
+            return {
+                "[name=start_stop]": eventTarget({ value: "Anděl" }),
+                "[name=end_stop]": eventTarget({ value: "Anděl" }),
+                "[data-same-start-end]": eventTarget({ checked: true }),
+            }[selector] ?? null;
+        },
+    };
+    const row = {
+        querySelector(selector) {
+            if (selector === "[data-participant-name-input]") return blankName;
+            if (selector === "form.stop-form") return completeStopForm;
+            return null;
+        },
+    };
+    const submit = eventTarget({ disabled: false });
+    const status = eventTarget({ textContent: "Everyone is ready." });
+    const root = eventTarget({
+        dataset: { readinessName: "Name each participant." },
+        querySelector(selector) {
+            return { "[data-search-submit]": submit, "[data-session-readiness]": status }[selector] ?? null;
+        },
+        querySelectorAll(selector) { return selector === ".participant-row" ? [row, row] : []; },
+        contains() { return true; },
+    });
+    const document = createDocument(root);
+    await loadSessionModule(document);
+
+    assert.equal(submit.disabled, true);
+    assert.equal(status.textContent, "Name each participant.");
+});
+
 test("same-stop changes disable the end field before autosave", async () => {
     const end = eventTarget({ disabled: false, selector: "[name=end_stop]", value: "Florenc" });
     const form = { querySelector(selector) { return selector === "[name=end_stop]" ? end : null; } };

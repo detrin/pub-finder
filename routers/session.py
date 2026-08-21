@@ -18,6 +18,7 @@ from backend.db import (
     get_session,
     join_session,
     remove_participant,
+    update_participant_name,
 )
 from backend.i18n import make_templates
 from backend.reachability import participant_color, participant_text_color
@@ -65,18 +66,15 @@ def _is_rate_limited(request: Request) -> bool:
 async def create(
     request: Request,
     session_name: str = Form(..., max_length=100),
-    creator_name: str = Form(..., max_length=MAX_NAME_LENGTH),
 ):
+    normalized_name = session_name.strip()[:100]
+    if not normalized_name:
+        return RedirectResponse(url="/?error=session_name_required", status_code=303)
     if _is_rate_limited(request):
         return RedirectResponse(url="/?error=rate_limited", status_code=303)
     db = request.app.state.db
-    session = await create_session(
-        db, session_name.strip()[:100], creator_name.strip()[:MAX_NAME_LENGTH]
-    )
-    return RedirectResponse(
-        url=f"/session/join?code={session['code']}&name={creator_name.strip()[:MAX_NAME_LENGTH]}",
-        status_code=303,
-    )
+    session = await create_session(db, normalized_name)
+    return RedirectResponse(url=f"/session/{session['code']}", status_code=303)
 
 
 @router.get("/join")
@@ -96,7 +94,20 @@ async def join(request: Request, code: str, name: str = ""):
         return RedirectResponse(url="/?error=rate_limited", status_code=303)
     result = await join_session(db, code, name.strip()[:MAX_NAME_LENGTH])
     if result is None:
-        return RedirectResponse(url="/?error=session_not_found", status_code=303)
+        session = await get_session(db, code)
+        if session is None:
+            return RedirectResponse(url="/?error=session_not_found", status_code=303)
+        participants = await get_participants(db, code)
+        return templates.TemplateResponse(
+            request,
+            "join.html",
+            {
+                "code": code,
+                "session": session,
+                "participants": participants,
+                "join_error": f"This plan already has {MAX_PARTICIPANTS} participants.",
+            },
+        )
     return RedirectResponse(url=f"/session/{code}", status_code=303)
 
 
@@ -233,6 +244,52 @@ async def add_participant_route(
     )
 
 
+@router.post("/{code}/participant-name", response_class=HTMLResponse)
+async def update_participant_name_route(
+    request: Request,
+    code: str,
+    participant_id: int = Form(...),
+    participant_name: str = Form("", max_length=MAX_NAME_LENGTH),
+):
+    db = request.app.state.db
+    participants = await get_participants(db, code)
+    name = participant_name.strip()[:MAX_NAME_LENGTH]
+    error = None
+    if _is_rate_limited(request):
+        error = "Too many requests. Please wait."
+    elif name and any(
+        participant["id"] != participant_id and participant["name"] == name
+        for participant in participants
+    ):
+        error = f"'{name}' is already in this session."
+    else:
+        updated = await update_participant_name(db, code, participant_id, name)
+        participants = await get_participants(db, code)
+        if not updated:
+            participant_exists = any(
+                participant["id"] == participant_id for participant in participants
+            )
+            duplicate_exists = name and any(
+                participant["id"] != participant_id and participant["name"] == name
+                for participant in participants
+            )
+            error = (
+                f"'{name}' is already in this session."
+                if participant_exists and duplicate_exists
+                else "Participant not found in this session."
+            )
+
+    return templates.TemplateResponse(
+        request,
+        "partials/session_participants_inner.html",
+        {
+            "session": {"code": code},
+            "participants": participants,
+            "participant_error": error,
+        },
+    )
+
+
 @router.post("/{code}/remove-participant", response_class=HTMLResponse)
 async def remove_participant_route(
     request: Request,
@@ -244,11 +301,9 @@ async def remove_participant_route(
     error = None
     if _is_rate_limited(request):
         error = "Too many requests. Please wait."
-    elif len(participants) <= 1:
-        error = "Cannot remove the last participant."
-    else:
-        await remove_participant(db, participant_id, code)
-        participants = await get_participants(db, code)
+    elif not await remove_participant(db, participant_id, code):
+        error = "Cannot remove either of the two required participant slots."
+    participants = await get_participants(db, code)
     return templates.TemplateResponse(
         request,
         "partials/session_participants_inner.html",

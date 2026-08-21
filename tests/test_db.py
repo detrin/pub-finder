@@ -1,15 +1,20 @@
+import asyncio
+
 import aiosqlite
 import pytest
 import pytest_asyncio
 
 from backend.db import (
+    add_participant,
     add_participant_stops,
     create_session,
     get_participants,
     get_session,
     init_db,
     join_session,
+    remove_participant,
     reserve_places_requests,
+    update_participant_name,
 )
 
 
@@ -85,6 +90,75 @@ async def test_join_session(db):
     participant = await join_session(db, session["code"], "Petra")
     assert participant["name"] == "Petra"
     assert participant["session_code"] == session["code"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_joins_cannot_claim_two_slots_with_the_same_name(db):
+    session = await create_session(db, "Test Session")
+
+    await asyncio.gather(
+        join_session(db, session["code"], "Alice"),
+        join_session(db, session["code"], "Alice"),
+    )
+
+    participants = await get_participants(db, session["code"])
+    assert [participant["name"] for participant in participants] == ["Alice", ""]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_name_edits_cannot_create_duplicate_names(db):
+    session = await create_session(db, "Test Session")
+    participants = await get_participants(db, session["code"])
+
+    results = await asyncio.gather(
+        update_participant_name(db, session["code"], participants[0]["id"], "Alice"),
+        update_participant_name(db, session["code"], participants[1]["id"], "Alice"),
+    )
+
+    saved = await get_participants(db, session["code"])
+    assert results.count(True) == 1
+    assert [participant["name"] for participant in saved].count("Alice") == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_removals_preserve_two_participant_slots(db):
+    session = await create_session(db, "Test Session", "Alice")
+    bob = await add_participant(db, session["code"], "Bob")
+    carol = await add_participant(db, session["code"], "Carol")
+
+    results = await asyncio.gather(
+        remove_participant(db, bob["id"], session["code"]),
+        remove_participant(db, carol["id"], session["code"]),
+    )
+
+    assert results.count(True) == 1
+    assert len(await get_participants(db, session["code"])) == 2
+
+
+@pytest.mark.asyncio
+async def test_concurrent_additions_cannot_exceed_twenty_participants(db):
+    session = await create_session(db, "Test Session", "P1")
+    for index in range(2, 20):
+        await add_participant(db, session["code"], f"P{index}")
+
+    await asyncio.gather(
+        add_participant(db, session["code"], "P20"),
+        add_participant(db, session["code"], "P21"),
+    )
+
+    assert len(await get_participants(db, session["code"])) == 20
+
+
+@pytest.mark.asyncio
+async def test_invite_join_cannot_exceed_twenty_participants(db):
+    session = await create_session(db, "Test Session", "P1")
+    for index in range(2, 21):
+        await add_participant(db, session["code"], f"P{index}")
+
+    participant = await join_session(db, session["code"], "Overflow")
+
+    assert participant is None
+    assert len(await get_participants(db, session["code"])) == 20
 
 
 @pytest.mark.asyncio

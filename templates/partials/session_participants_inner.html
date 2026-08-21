@@ -14,15 +14,26 @@
         {% set participant_color_value = p.id | participant_color %}
         <article class="participant-row" style="--participant-color: {{ participant_color_value }}; --participant-ink: {{ participant_color_value | participant_text_color }}">
             <div class="participant-row__heading">
-                <span class="participant-initial" aria-hidden="true">{{ p.name[:1] | upper }}</span>
-                <h3>{{ p.name }}</h3>
+                <span class="participant-initial" aria-hidden="true">{{ p.name[:1] | upper if p.name else loop.index }}</span>
+                <form class="participant-name-form"
+                    hx-post="/session/{{ session.code }}/participant-name"
+                    hx-trigger="change target:[data-participant-name-input]"
+                    hx-sync="this:replace"
+                    hx-target="#session-participants-inner"
+                    hx-swap="innerHTML">
+                    <input type="hidden" name="participant_id" value="{{ p.id }}">
+                    <label class="visually-hidden" for="participant-name-{{ p.id }}">{{ t("session.name_placeholder") }}</label>
+                    <input id="participant-name-{{ p.id }}" type="text" name="participant_name"
+                        value="{{ p.name }}" maxlength="50" placeholder="{{ t('session.name_placeholder') }}"
+                        autocomplete="name" data-participant-name-input>
+                </form>
                 <div class="participant-row__actions">
                     <span class="participant-save-state">
                         <span id="stop-save-status-{{ p.id }}" class="stop-save-status save-state htmx-indicator" role="status" aria-live="polite">{{ t("session.saving") }}</span>
                         {% if p.start_stop %}<span class="save-state save-state--saved">{{ t("session.saved") }}</span>{% endif %}
                     </span>
-                    {% if participants | length > 1 %}
-                    <button type="button" class="participant-remove" data-remove-participant data-participant-id="{{ p.id }}" data-participant-name="{{ p.name }}" aria-label="{{ t('session.remove') }} {{ p.name }}">{{ t("session.remove") }}</button>
+                    {% if participants | length > 2 %}
+                    <button type="button" class="participant-remove" data-remove-participant data-participant-id="{{ p.id }}" data-participant-name="{{ p.name or t('session.participant') }}" aria-label="{{ t('session.remove') }} {{ p.name or t('session.participant') }}">{{ t("session.remove") }}</button>
                     {% endif %}
                 </div>
             </div>

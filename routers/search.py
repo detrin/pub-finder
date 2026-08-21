@@ -260,6 +260,16 @@ async def search(
             },
         )
 
+    if any(not participant["name"].strip() for participant in participants):
+        return templates.TemplateResponse(
+            request,
+            "partials/results_table.html",
+            {
+                "error": "Name each participant before searching.",
+                "results": None,
+            },
+        )
+
     incomplete_participant = next(
         (
             participant

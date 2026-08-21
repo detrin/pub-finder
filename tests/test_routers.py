@@ -13,7 +13,7 @@ import backend.app as app_module
 import routers.track as track_router
 from backend.analytics import record_visit
 from backend.app import app
-from backend.db import create_session, get_participants, init_db, join_session
+from backend.db import add_participant, create_session, get_participants, init_db, join_session
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -255,11 +255,92 @@ async def test_create_session():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/session/create",
-            data={"session_name": "Test Session", "creator_name": "Daniel"},
+            data={"session_name": "Test Session"},
             follow_redirects=False,
         )
     assert response.status_code == 303
-    assert "/session/" in response.headers["location"]
+    code = response.headers["location"].removeprefix("/session/")
+    assert code
+    participants = await get_participants(app.state.db, code)
+    assert [participant["name"] for participant in participants] == ["", ""]
+
+
+@pytest.mark.asyncio
+async def test_create_session_rejects_a_whitespace_only_plan_name():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/session/create",
+            data={"session_name": "   "},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?error=session_name_required"
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_blank_participant_name_can_be_saved_only_in_its_own_session():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        first_response = await client.post(
+            "/session/create",
+            data={"session_name": "First"},
+            follow_redirects=False,
+        )
+        second_response = await client.post(
+            "/session/create",
+            data={"session_name": "Second"},
+            follow_redirects=False,
+        )
+        first_code = first_response.headers["location"].removeprefix("/session/")
+        second_code = second_response.headers["location"].removeprefix("/session/")
+        first_participant = (await get_participants(app.state.db, first_code))[0]
+
+        saved_response = await client.post(
+            f"/session/{first_code}/participant-name",
+            data={
+                "participant_id": first_participant["id"],
+                "participant_name": "Alice",
+            },
+        )
+        response = await client.post(
+            f"/session/{second_code}/participant-name",
+            data={
+                "participant_id": first_participant["id"],
+                "participant_name": "Mallory",
+            },
+        )
+
+    assert saved_response.status_code == 200
+    assert response.status_code == 200
+    assert "Participant not found in this session" in response.text
+    first_participants = await get_participants(app.state.db, first_code)
+    assert first_participants[0]["name"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_session_cannot_remove_either_of_its_two_required_slots():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/session/create",
+            data={"session_name": "Test Session"},
+            follow_redirects=False,
+        )
+        code = create_response.headers["location"].removeprefix("/session/")
+        participant = (await get_participants(app.state.db, code))[0]
+
+        response = await client.post(
+            f"/session/{code}/remove-participant",
+            data={"participant_id": participant["id"]},
+        )
+
+    assert response.status_code == 200
+    assert "Cannot remove either of the two required participant slots" in response.text
+    assert len(await get_participants(app.state.db, code)) == 2
 
 
 @pytest.mark.asyncio
@@ -278,6 +359,45 @@ async def test_join_session():
             follow_redirects=False,
         )
     assert join_resp.status_code == 303
+    participants = await get_participants(app.state.db, code)
+    assert [participant["name"] for participant in participants] == ["Petra", ""]
+
+
+@pytest.mark.asyncio
+async def test_adding_a_person_fills_an_initial_blank_slot_before_creating_another():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post(
+            "/session/create",
+            data={"session_name": "Test Session"},
+            follow_redirects=False,
+        )
+        code = create_response.headers["location"].removeprefix("/session/")
+
+        response = await client.post(
+            f"/session/{code}/add-participant",
+            data={"participant_name": "Alice"},
+        )
+
+    assert response.status_code == 200
+    participants = await get_participants(app.state.db, code)
+    assert [participant["name"] for participant in participants] == ["Alice", ""]
+
+
+@pytest.mark.asyncio
+async def test_invite_join_explains_when_the_session_is_full():
+    session = await create_session(app.state.db, "Test Session", "P1")
+    for index in range(2, 21):
+        await add_participant(app.state.db, session["code"], f"P{index}")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/session/join?code={session['code']}&name=Overflow",
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 200
+    assert "This plan already has 20 participants." in response.text
 
 
 @pytest.mark.asyncio

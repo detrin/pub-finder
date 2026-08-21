@@ -90,6 +90,35 @@ async def init_db(db: aiosqlite.Connection):
         CREATE INDEX IF NOT EXISTS idx_pub_cache_queries_fresh
             ON pub_cache_queries(stop_name, place_type, radius, cached_at);
         CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at);
+
+        CREATE TRIGGER IF NOT EXISTS participants_unique_nonempty_name_insert
+        BEFORE INSERT ON participants
+        WHEN NEW.name <> '' AND EXISTS (
+            SELECT 1 FROM participants
+            WHERE session_code = NEW.session_code AND name = NEW.name
+        )
+        BEGIN
+            SELECT RAISE(IGNORE);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS participants_max_twenty_insert
+        BEFORE INSERT ON participants
+        WHEN (
+            SELECT COUNT(*) FROM participants WHERE session_code = NEW.session_code
+        ) >= 20
+        BEGIN
+            SELECT RAISE(IGNORE);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS participants_unique_nonempty_name_update
+        BEFORE UPDATE OF name ON participants
+        WHEN NEW.name <> '' AND EXISTS (
+            SELECT 1 FROM participants
+            WHERE session_code = NEW.session_code AND name = NEW.name AND id <> OLD.id
+        )
+        BEGIN
+            SELECT RAISE(IGNORE);
+        END;
     """)
 
     # Migration: add opening_hours column if missing (for pre-existing databases)
@@ -143,17 +172,25 @@ async def init_db(db: aiosqlite.Connection):
     await db.commit()
 
 
-async def create_session(db: aiosqlite.Connection, session_name: str, creator_name: str) -> dict:
+async def create_session(
+    db: aiosqlite.Connection, session_name: str, creator_name: str = ""
+) -> dict:
     code = secrets.token_hex(16)
     now = datetime.now(timezone.utc).isoformat()
     await db.execute(
         "INSERT INTO sessions (code, name, creator_name, created_at) VALUES (?, ?, ?, ?)",
         (code, session_name, creator_name, now),
     )
-    await db.execute(
-        "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?)",
-        (code, creator_name, now),
-    )
+    if creator_name:
+        await db.execute(
+            "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?)",
+            (code, creator_name, now),
+        )
+    else:
+        await db.executemany(
+            "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?)",
+            [(code, "", now), (code, "", now)],
+        )
     await db.commit()
     return {"code": code, "name": session_name, "creator_name": creator_name, "created_at": now}
 
@@ -207,10 +244,29 @@ async def join_session(db: aiosqlite.Connection, code: str, name: str) -> Option
         return {"id": existing[0], "name": name, "session_code": code, "created_at": ""}
     now = datetime.now(timezone.utc).isoformat()
     async with db.execute(
+        "UPDATE participants SET name = ? WHERE id = ("
+        "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
+        ") AND session_code = ? RETURNING id",
+        (name, code, code),
+    ) as cursor:
+        claimed = await cursor.fetchone()
+    if claimed:
+        await db.commit()
+        return {"id": claimed[0], "name": name, "session_code": code, "created_at": now}
+    async with db.execute(
         "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?) RETURNING id",
         (code, name, now),
     ) as cursor:
         row = await cursor.fetchone()
+    if row is None:
+        async with db.execute(
+            "SELECT id FROM participants WHERE session_code = ? AND name = ?",
+            (code, name),
+        ) as cursor:
+            row = await cursor.fetchone()
+    if row is None:
+        await db.commit()
+        return None
     await db.commit()
     return {"id": row[0], "name": name, "session_code": code, "created_at": now}
 
@@ -218,7 +274,8 @@ async def join_session(db: aiosqlite.Connection, code: str, name: str) -> Option
 async def get_participants(db: aiosqlite.Connection, code: str) -> list[dict]:
     db.row_factory = aiosqlite.Row
     async with db.execute(
-        "SELECT id, name, start_stop, end_stop, same_start_end FROM participants WHERE session_code = ?",
+        "SELECT id, name, start_stop, end_stop, same_start_end FROM participants "
+        "WHERE session_code = ? ORDER BY id",
         (code,),
     ) as cursor:
         rows = await cursor.fetchall()
@@ -245,12 +302,39 @@ async def add_participant(db: aiosqlite.Connection, session_code: str, name: str
         return None
     now = datetime.now(timezone.utc).isoformat()
     async with db.execute(
+        "UPDATE participants SET name = ? WHERE id = ("
+        "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
+        ") AND session_code = ? RETURNING id",
+        (name, session_code, session_code),
+    ) as cursor:
+        claimed = await cursor.fetchone()
+    if claimed:
+        await db.commit()
+        return {"id": claimed[0], "name": name, "session_code": session_code}
+    async with db.execute(
         "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?) RETURNING id",
         (session_code, name, now),
     ) as cursor:
         row = await cursor.fetchone()
+    if row is None:
+        await db.commit()
+        return None
     await db.commit()
     return {"id": row[0], "name": name, "session_code": session_code}
+
+
+async def update_participant_name(
+    db: aiosqlite.Connection,
+    session_code: str,
+    participant_id: int,
+    name: str,
+) -> bool:
+    result = await db.execute(
+        "UPDATE participants SET name = ? WHERE id = ? AND session_code = ?",
+        (name, participant_id, session_code),
+    )
+    await db.commit()
+    return result.rowcount > 0
 
 
 async def remove_participant(
@@ -258,8 +342,10 @@ async def remove_participant(
 ) -> bool:
     """Remove a participant. Returns True if deleted."""
     result = await db.execute(
-        "DELETE FROM participants WHERE id = ? AND session_code = ?",
-        (participant_id, session_code),
+        "DELETE FROM participants WHERE id = ? AND session_code = ? AND ("
+        "SELECT COUNT(*) FROM participants WHERE session_code = ?"
+        ") > 2",
+        (participant_id, session_code, session_code),
     )
     await db.commit()
     return result.rowcount > 0

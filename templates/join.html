@@ -18,6 +18,10 @@
     </ul>
     {% endif %}
 
+    {% if join_error %}
+    <p class="workspace-error" role="status">{{ join_error }}</p>
+    {% endif %}
+
     <form class="invite-page__form" action="/session/join" method="get">
         <input type="hidden" name="code" value="{{ code }}">
         <label data-field>

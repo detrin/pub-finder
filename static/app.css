@@ -2686,6 +2686,19 @@ input[data-stop-input]:not(:disabled) {
     gap: 0.55rem;
 }
 
+.participant-name-form {
+    min-width: 0;
+    flex: 1;
+}
+
+.participant-name-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    padding: 0.35rem 0.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
 .participant-row__heading h3 {
     min-width: 0;
     margin: 0;

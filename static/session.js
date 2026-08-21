@@ -434,10 +434,19 @@ function updateReadiness(root) {
     const submit = root.querySelector("[data-search-submit]");
     const status = root.querySelector("[data-session-readiness]");
     if (!submit || !status) return;
-    const forms = [...root.querySelectorAll("form.stop-form")];
+    const rows = [...root.querySelectorAll(".participant-row")];
+    const forms = rows.length
+        ? rows.map((row) => row.querySelector("form.stop-form"))
+        : [...root.querySelectorAll("form.stop-form")];
     if (forms.length < 2) {
         submit.disabled = true;
         status.textContent = root.dataset.readinessAdd || "Add one more participant.";
+        return;
+    }
+    const unnamed = rows.find((row) => !row.querySelector("[data-participant-name-input]")?.value.trim());
+    if (unnamed) {
+        submit.disabled = true;
+        status.textContent = root.dataset.readinessName || "Name each participant.";
         return;
     }
     const incomplete = forms.find((form) => {

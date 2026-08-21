@@ -144,9 +144,37 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
     assert "Let’s meet" in response.text
     assert "Somewhere" in response.text
     assert 'name="session_name"' in response.text
-    assert 'name="creator_name"' in response.text
+    create_form = BeautifulSoup(response.text, "html.parser").select_one(
+        'form[hx-post="/session/create"]'
+    )
+    assert create_form is not None
+    assert create_form.select_one('[name="creator_name"]') is None
     assert "data-join-disclosure" in response.text
     assert "data-session-history" in response.text
+
+
+@pytest.mark.asyncio
+async def test_new_session_starts_with_two_editable_empty_participant_slots():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/session/create",
+            data={"session_name": "Friday crew"},
+            follow_redirects=False,
+        )
+        page = await client.get(create_response.headers["location"])
+
+    workspace = BeautifulSoup(page.text, "html.parser")
+    name_inputs = workspace.select("[data-participant-name-input]")
+    assert [input_element.get("value") for input_element in name_inputs] == ["", ""]
+    assert all(
+        input_element.find_parent("form")["hx-trigger"]
+        == "change target:[data-participant-name-input]"
+        for input_element in name_inputs
+    )
+    assert workspace.select_one("[data-search-submit]").has_attr("disabled")
+    assert "Name each participant." in workspace.get_text(" ", strip=True)
 
 
 @pytest.mark.asyncio
@@ -210,6 +238,7 @@ async def test_participant_card_groups_status_and_remove_in_header_actions():
     """Keep card-level status and actions together instead of in the stop grid."""
     session = await create_session(app.state.db, "Friday crew", "Daniel")
     await add_participant(app.state.db, session["code"], "Alice")
+    await add_participant(app.state.db, session["code"], "Bob")
     participant = (await get_participants(app.state.db, session["code"]))[0]
     await add_participant_stops(
         app.state.db,

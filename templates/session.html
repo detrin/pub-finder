@@ -3,9 +3,11 @@
 {% block title %}{{ session.name }} - Meet Somewhere{% endblock %}
 
 {% block content %}
-{% set readiness = namespace(missing_name='', missing_detail='', needs_participant=participants | length < 2) %}
+{% set readiness = namespace(needs_name=false, missing_name='', missing_detail='', needs_participant=participants | length < 2) %}
 {% for participant in participants %}
-    {% if not readiness.missing_name and not participant.start_stop %}
+    {% if not readiness.needs_name and not participant.name %}
+        {% set readiness.needs_name = true %}
+    {% elif not readiness.missing_name and not participant.start_stop %}
         {% set readiness.missing_name = participant.name %}
         {% set readiness.missing_detail = 'start and end stops' %}
     {% elif not readiness.missing_name and not participant.same_start_end and not participant.end_stop %}
@@ -15,6 +17,7 @@
 {% endfor %}
 <div class="session-workspace" data-session-workspace data-session-code="{{ session.code }}" data-session-name="{{ session.name }}" data-stops='{{ all_stops | tojson }}'
     data-readiness-add="{{ t('session.needs_participant') }}"
+    data-readiness-name="{{ t('session.needs_name') }}"
     data-readiness-ready="{{ t('session.ready') }}"
     data-readiness-start-and-end="{{ t('session.needs_start_and_end', name='{name}') }}"
     data-readiness-end="{{ t('session.needs_end', name='{name}') }}"
@@ -109,11 +112,11 @@
                         </div>
                     </div>
                 </div>
-                <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.needs_participant or readiness.missing_name %} disabled{% endif %}>
+                <button type="submit" id="search-btn" class="plan-panel__submit" data-search-submit{% if readiness.needs_participant or readiness.needs_name or readiness.missing_name %} disabled{% endif %}>
                     <span class="htmx-indicator">{{ t("session.searching") }}</span>
                     <span class="search-label">{{ t("session.find") }}</span>
                 </button>
-                <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.needs_participant %}{{ t("session.needs_participant") }}{% elif readiness.missing_name %}{{ t("session.needs_stops", name=readiness.missing_name, detail=readiness.missing_detail) }}{% else %}{{ t("session.ready") }}{% endif %}</p>
+                <p class="session-readiness" data-session-readiness role="status" aria-live="polite">{% if readiness.needs_participant %}{{ t("session.needs_participant") }}{% elif readiness.needs_name %}{{ t("session.needs_name") }}{% elif readiness.missing_name %}{{ t("session.needs_stops", name=readiness.missing_name, detail=readiness.missing_detail) }}{% else %}{{ t("session.ready") }}{% endif %}</p>
             </form>
         </section>
     </div>

@@ -260,6 +260,43 @@ async def test_search_requires_two_participants():
 
 
 @pytest.mark.asyncio
+async def test_search_requires_names_for_both_initial_slots_before_rate_limiting(monkeypatch):
+    called = False
+
+    def rate_limiter(_code):
+        nonlocal called
+        called = True
+        return False
+
+    monkeypatch.setattr(search_router, "_is_rate_limited", rate_limiter)
+    session = await create_session(app.state.db, "Test")
+    participants = await get_participants(app.state.db, session["code"])
+    for participant, stop in zip(participants, ("A", "B"), strict=True):
+        await add_participant_stops(
+            app.state.db,
+            session["code"],
+            participant["id"],
+            stop,
+            stop,
+        )
+
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/session/{session['code']}/search",
+            data={
+                "departure_date": tomorrow,
+                "departure_time": "20:00",
+                "return_date": tomorrow,
+                "return_time": "23:00",
+            },
+        )
+
+    assert "Name each participant before searching." in response.text
+    assert called is False
+
+
+@pytest.mark.asyncio
 async def test_search_requires_every_person_to_have_a_complete_trip_before_rate_limiting(
     monkeypatch,
 ):
