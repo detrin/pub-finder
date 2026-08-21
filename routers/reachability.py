@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
-from fastapi.responses import JSONResponse, Response
 
 from backend.db import get_search_results, get_session
 from backend.preview import (
@@ -23,6 +25,7 @@ from backend.preview import (
 from backend.reachability import VALID_DIRECTIONS, build_reachability_payload
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _CACHE_CONTROL = "private, max-age=300"
 _SNAPSHOT_FIELDS = ("id", "name", "color", "start_stop", "end_stop")
@@ -112,12 +115,25 @@ async def preview_reachability(request: Request, body: PreviewRequest) -> Respon
         ) from error
     payload = _preview_cache.get(origins)
     if payload is None:
-        payload = await run_in_threadpool(
-            build_reachability_payload,
-            request.app.state.distance_table,
-            request.app.state.stop_geo,
-            build_preview_participants(origins),
-            "there-only",
+        started = time.perf_counter()
+        try:
+            payload = await run_in_threadpool(
+                build_reachability_payload,
+                request.app.state.distance_table,
+                request.app.state.stop_geo,
+                build_preview_participants(origins),
+                "there-only",
+            )
+        except Exception as error:
+            logger.warning("Homepage preview calculation failed")
+            raise HTTPException(
+                status_code=503,
+                detail="The quick estimate is unavailable",
+                headers=_PREVIEW_HEADERS,
+            ) from error
+        logger.info(
+            "Homepage preview calculation completed in %.1f ms",
+            (time.perf_counter() - started) * 1000,
         )
         _preview_cache.set(origins, payload)
     return JSONResponse(payload, headers=_PREVIEW_HEADERS)

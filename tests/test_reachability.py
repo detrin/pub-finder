@@ -1,5 +1,8 @@
-import math
 import importlib
+import json
+import math
+import statistics
+import time
 from pathlib import Path
 
 import aiosqlite
@@ -10,6 +13,7 @@ import pytest_asyncio
 from httpx import ASGITransport
 
 import backend.reachability as reachability
+import routers.reachability as reachability_router
 from backend.app import app
 from backend.db import (
     add_participant_stops,
@@ -19,6 +23,7 @@ from backend.db import (
     save_search_results,
     update_search_results,
 )
+from backend.preview import PreviewPayloadCache, PreviewRateLimiter, build_preview_participants
 from backend.reachability import build_reachability_payload, participant_color
 
 
@@ -566,6 +571,101 @@ async def test_preview_returns_one_way_reachability_without_a_session():
 
 
 @pytest.mark.asyncio
+async def test_preview_does_not_issue_an_analytics_identifier_cookie():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/reachability/preview", json={"origins": ["A"]})
+
+    assert response.status_code == 200
+    assert "set-cookie" not in response.headers
+    async with app.state.db.execute("SELECT COUNT(*) FROM analytics_users") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_preview_returns_explicit_missing_estimates_from_sparse_matrix(monkeypatch):
+    monkeypatch.setattr(reachability_router, "_preview_cache", PreviewPayloadCache())
+    app.state.distance_table = pl.DataFrame(
+        {
+            "from": ["A"],
+            "to": ["A"],
+            "total_minutes": [0],
+        }
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/reachability/preview", json={"origins": ["A"]})
+
+    assert response.status_code == 200
+    assert stop(response.json(), "B")["participant_minutes"] == [None]
+    assert stop(response.json(), "B")["group_max_minutes"] is None
+    assert response.json()["coverage"] == {"total_stops": 3, "complete_stops": 1}
+
+
+@pytest.mark.asyncio
+async def test_preview_endpoint_cache_reuses_only_the_exact_ordered_origin_key(monkeypatch):
+    monkeypatch.setattr(reachability_router, "_preview_cache", PreviewPayloadCache())
+    monkeypatch.setattr(
+        reachability_router,
+        "_preview_limiter",
+        PreviewRateLimiter(limit=10),
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await client.post(
+            "/reachability/preview",
+            json={"origins": ["A", "C"]},
+        )
+        app.state.distance_table = matrix().with_columns(pl.lit(99).alias("total_minutes"))
+        repeated = await client.post(
+            "/reachability/preview",
+            json={"origins": ["A", "C"]},
+        )
+        distinct = await client.post(
+            "/reachability/preview",
+            json={"origins": ["A"]},
+        )
+
+    assert stop(first.json(), "B")["group_max_minutes"] == 15
+    assert repeated.json() == first.json()
+    assert stop(distinct.json(), "B")["group_max_minutes"] == 99
+
+
+@pytest.mark.asyncio
+async def test_preview_calculation_failure_is_generic_stateless_and_not_stored(
+    monkeypatch,
+    caplog,
+):
+    private_detail = "origin A triggered a private provider detail"
+
+    def fail_calculation(*args, **kwargs):
+        raise RuntimeError(private_detail)
+
+    monkeypatch.setattr(reachability_router, "_preview_cache", PreviewPayloadCache())
+    monkeypatch.setattr(reachability_router, "build_reachability_payload", fail_calculation)
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        response = await client.post("/reachability/preview", json={"origins": ["A"]})
+
+    assert response.status_code == 503
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {"detail": "The quick estimate is unavailable"}
+    assert private_detail not in response.text
+    assert private_detail not in caplog.text
+    assert "set-cookie" not in response.headers
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("body", "status"),
     [
@@ -574,6 +674,8 @@ async def test_preview_returns_one_way_reachability_without_a_session():
         ({"origins": ["A", " A "]}, 422),
         ({"origins": ["A"] * 7}, 422),
         ({"origins": "A"}, 422),
+        ({}, 422),
+        ({"origins": ["A"], "direction": "round-trip"}, 422),
     ],
 )
 async def test_preview_rejects_invalid_origins(body, status):
@@ -583,6 +685,9 @@ async def test_preview_rejects_invalid_origins(body, status):
         response = await client.post("/reachability/preview", json=body)
     assert response.status_code == status
     assert response.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in response.headers
+    async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        assert (await cursor.fetchone())[0] == 0
 
 
 @pytest.mark.asyncio
@@ -608,3 +713,38 @@ async def test_preview_limiter_uses_the_connected_client_not_a_forwarded_header(
     assert first.status_code == 200
     assert second.status_code == 429
     assert second.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in second.headers
+
+
+def test_preview_production_data_latency_benchmark_reports_distribution():
+    project_root = Path(__file__).parents[1]
+    distance_table = pl.read_parquet(project_root / "data/Prague_stops_combinations.parquet")
+    stop_geo = pl.read_parquet(project_root / "data/Prague_stops_geo.parquet")
+    origins = distance_table["from"].unique().sort().head(6).to_list()
+    results = {}
+
+    for count in (1, 6):
+        participants = build_preview_participants(origins[:count])
+        build_reachability_payload(distance_table, stop_geo, participants, "there-only")
+        samples = []
+        payload = None
+        for _ in range(20):
+            started = time.perf_counter()
+            payload = build_reachability_payload(
+                distance_table,
+                stop_geo,
+                participants,
+                "there-only",
+            )
+            samples.append((time.perf_counter() - started) * 1000)
+        ordered = sorted(samples)
+        results[count] = {
+            "p50_ms": round(statistics.median(ordered), 1),
+            "p95_ms": round(ordered[math.ceil(len(ordered) * 0.95) - 1], 1),
+            "max_ms": round(max(ordered), 1),
+            "bytes": len(json.dumps(payload, ensure_ascii=False).encode()),
+        }
+
+    print(f"preview production benchmark: {json.dumps(results, sort_keys=True)}")
+    assert set(results) == {1, 6}
+    assert all(result["bytes"] > 0 for result in results.values())

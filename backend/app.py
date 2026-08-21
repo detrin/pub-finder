@@ -120,6 +120,8 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Server-side GA4 tracking keyed off a single first-party user id cookie."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method == "POST" and request.url.path == "/reachability/preview":
+            return await call_next(request)
         response = await call_next(request)
 
         if not request.url.path.startswith("/static") and request.url.path != "/e":

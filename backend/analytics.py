@@ -48,6 +48,22 @@ _GA4_CLIENT_ID_RE = re.compile(r"[1-9]\d*\.[1-9]\d*")
 _LEGACY_USER_ID_RE = re.compile(r"[A-Za-z0-9_-]{22}")
 
 
+class _Ga4HttpxLogFilter(logging.Filter):
+    """Keep GA4 query credentials out of successful HTTPX request logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name != "httpx" or not isinstance(record.args, tuple):
+            return True
+        record.args = tuple(
+            _GA4_ENDPOINT if str(value).startswith(f"{_GA4_ENDPOINT}?") else value
+            for value in record.args
+        )
+        return True
+
+
+logging.getLogger("httpx").addFilter(_Ga4HttpxLogFilter())
+
+
 @dataclass(frozen=True)
 class VisitState:
     is_new_user: bool

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import aiosqlite
+import httpx
 import pytest
 from starlette.requests import Request
 
@@ -496,4 +497,38 @@ async def test_ga4_transport_errors_do_not_log_secrets(monkeypatch, caplog):
         )
 
     assert "top-secret" not in caplog.text
+    assert "api_secret=" not in caplog.text
     assert "RuntimeError" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_successful_ga4_transport_redacts_the_query_credential_from_httpx_logs(
+    monkeypatch,
+    caplog,
+):
+    real_client = httpx.AsyncClient
+
+    def ga4_response(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204, request=request)
+
+    monkeypatch.setattr(analytics, "GA4_MEASUREMENT_ID", "G-TEST")
+    monkeypatch.setattr(analytics, "GA4_API_SECRET", "success-secret")
+    monkeypatch.setattr(
+        analytics.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(
+            transport=httpx.MockTransport(ga4_response),
+            **kwargs,
+        ),
+    )
+
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        await analytics.send_events(
+            "123456789.1787313600",
+            [{"name": "page_view", "params": {}}],
+        )
+
+    assert "HTTP Request: POST https://www.google-analytics.com/mp/collect" in caplog.text
+    assert "success-secret" not in caplog.text
+    assert "measurement_id=" not in caplog.text
+    assert "api_secret=" not in caplog.text

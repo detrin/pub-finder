@@ -12,6 +12,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+import routers.reachability as reachability_router
 import routers.search as search_router
 from backend.app import app
 from backend.db import (
@@ -24,6 +25,7 @@ from backend.db import (
     save_search_results,
 )
 from backend.places import get_cached_pubs_for_type
+from backend.preview import PreviewPayloadCache, PreviewRateLimiter
 from backend.search_registry import SearchRegistry
 from routers.search import _search_timestamps
 
@@ -90,6 +92,61 @@ async def _create_session_with_participants(client, stops):
         await add_participant_stops(db, code, result["id"], start, end)
 
     return code
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("origins", "expected_stops"),
+    [
+        (["A"], [("A", ""), ("", "")]),
+        (["A", "B"], [("A", ""), ("B", "")]),
+    ],
+)
+async def test_preview_then_create_session_preserves_starts_without_preview_persistence(
+    monkeypatch,
+    origins,
+    expected_stops,
+):
+    """Catch preview persistence, provider calls, or a lossy/round-trip handoff."""
+    provider_calls = []
+
+    def provider_tripwire(*args, **kwargs):
+        provider_calls.append((args, kwargs))
+        raise AssertionError("The sessionless preview must not call live DPP")
+
+    monkeypatch.setattr(search_router, "get_total_minutes_with_retries", provider_tripwire)
+    monkeypatch.setattr(reachability_router, "_preview_cache", PreviewPayloadCache())
+    monkeypatch.setattr(
+        reachability_router,
+        "_preview_limiter",
+        PreviewRateLimiter(limit=10),
+    )
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        preview = await client.post("/reachability/preview", json={"origins": origins})
+        async with app.state.db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+            assert (await cursor.fetchone())[0] == 0
+        async with app.state.db.execute("SELECT COUNT(*) FROM participants") as cursor:
+            assert (await cursor.fetchone())[0] == 0
+
+        created = await client.post(
+            "/session/create",
+            data={"session_name": "Friday crew", "preview_stops": origins},
+            follow_redirects=False,
+        )
+
+    assert preview.status_code == 200
+    assert preview.headers["cache-control"] == "no-store"
+    assert [person["start_stop"] for person in preview.json()["participants"]] == origins
+    assert provider_calls == []
+    assert created.status_code == 303
+    code = created.headers["location"].removeprefix("/session/")
+    participants = await get_participants(app.state.db, code)
+    assert [(person["start_stop"], person["end_stop"]) for person in participants] == (
+        expected_stops
+    )
 
 
 # --- save_search_results serialization tests ---

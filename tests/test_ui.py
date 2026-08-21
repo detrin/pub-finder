@@ -198,6 +198,9 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     map_root = preview.select_one("[data-preview-map]")
     attribution = preview.select_one("[data-preview-attribution]")
     handoff = preview.select_one('[data-preview-handoff][href="#session-name"]')
+    disclosure = preview.select_one(
+        '.home-estimate__disclosure a[href="/how-it-works#homepage-quick-estimate"]'
+    )
     canonical_options = page.select("#home-stop-suggestions option")
     create_form = page.select_one('form[action="/session/create"]')
 
@@ -220,6 +223,8 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert attribution.find_parent("[aria-hidden='true']") is None
     assert "OpenStreetMap contributors" in attribution.get_text(" ", strip=True)
     assert handoff is not None
+    assert disclosure is not None
+    assert "Based on typical transit times" in disclosure.get_text(" ", strip=True)
     assert page.select_one("#session-name") is not None
     assert create_form.select_one("[data-preview-hidden-fields]") is not None
     assert create_form.select_one("[data-preview-carry-status]") is not None
@@ -814,6 +819,26 @@ async def test_how_it_works_uses_verified_dataset_facts():
     assert content is not None
     assert content.find("a", href="https://github.com/detrin/pub-finder") is None
     assert "Source:" not in content.get_text()
+
+
+@pytest.mark.asyncio
+async def test_how_it_works_separates_the_homepage_estimate_from_live_planning():
+    """Catch documentation that makes the sessionless estimate sound live or date-specific."""
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/how-it-works")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    section = page.select_one("#homepage-quick-estimate")
+    assert section is not None
+    assert page.select_one('.technical-page__toc a[href="#homepage-quick-estimate"]') is not None
+    assert section.get_text(" ", strip=True) == (
+        "Homepage quick estimate The homepage quick estimate uses precomputed typical one-way "
+        "transit times. It does not use a selected date, account for service changes, include a "
+        "return trip, or call live DPP or Google services. Create a plan for date-specific "
+        "journey queries and ranked meeting points."
+    )
 
 
 @pytest.mark.asyncio
