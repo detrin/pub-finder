@@ -5,6 +5,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import JSONResponse, Response
 
@@ -23,6 +26,7 @@ router = APIRouter()
 
 _CACHE_CONTROL = "private, max-age=300"
 _SNAPSHOT_FIELDS = ("id", "name", "color", "start_stop", "end_stop")
+_PREVIEW_HEADERS = {"Cache-Control": "no-store"}
 _preview_cache = PreviewPayloadCache()
 _preview_limiter = PreviewRateLimiter()
 
@@ -31,6 +35,23 @@ class PreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     origins: list[str] = Field(min_length=1, max_length=MAX_PREVIEW_ORIGINS)
+
+
+class PreviewRoute(APIRoute):
+    def get_route_handler(self):
+        route_handler = super().get_route_handler()
+
+        async def preview_route_handler(request: Request) -> Response:
+            try:
+                return await route_handler(request)
+            except RequestValidationError as error:
+                return JSONResponse(
+                    status_code=422,
+                    content={"detail": jsonable_encoder(error.errors())},
+                    headers=_PREVIEW_HEADERS,
+                )
+
+        return preview_route_handler
 
 
 def _preview_client_key(request: Request) -> str:
@@ -69,11 +90,14 @@ def _if_none_match_matches(header: str | None, etag: str) -> bool:
     return False
 
 
-@router.post("/reachability/preview")
 async def preview_reachability(request: Request, body: PreviewRequest) -> Response:
     client_key = _preview_client_key(request)
     if not _preview_limiter.allow(client_key):
-        raise HTTPException(status_code=429, detail="Too many preview requests")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many preview requests",
+            headers=_PREVIEW_HEADERS,
+        )
     try:
         origins = normalize_preview_origins(
             body.origins,
@@ -81,7 +105,11 @@ async def preview_reachability(request: Request, body: PreviewRequest) -> Respon
             reject_duplicates=True,
         )
     except PreviewValidationError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+            headers=_PREVIEW_HEADERS,
+        ) from error
     payload = _preview_cache.get(origins)
     if payload is None:
         payload = await run_in_threadpool(
@@ -92,7 +120,15 @@ async def preview_reachability(request: Request, body: PreviewRequest) -> Respon
             "there-only",
         )
         _preview_cache.set(origins, payload)
-    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+    return JSONResponse(payload, headers=_PREVIEW_HEADERS)
+
+
+router.add_api_route(
+    "/reachability/preview",
+    preview_reachability,
+    methods=["POST"],
+    route_class_override=PreviewRoute,
+)
 
 
 @router.get("/session/{code}/reachability")

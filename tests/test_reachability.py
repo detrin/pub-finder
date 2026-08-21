@@ -582,6 +582,7 @@ async def test_preview_rejects_invalid_origins(body, status):
     ) as client:
         response = await client.post("/reachability/preview", json=body)
     assert response.status_code == status
+    assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.asyncio
@@ -606,3 +607,4 @@ async def test_preview_limiter_uses_the_connected_client_not_a_forwarded_header(
 
     assert first.status_code == 200
     assert second.status_code == 429
+    assert second.headers["cache-control"] == "no-store"
