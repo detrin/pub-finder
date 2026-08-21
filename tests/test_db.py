@@ -1,5 +1,4 @@
 import asyncio
-from unittest.mock import AsyncMock
 
 import aiosqlite
 import pytest
@@ -25,6 +24,23 @@ async def db():
     await init_db(conn)
     yield conn
     await conn.close()
+
+
+async def install_failing_session_participant_trigger(db):
+    await db.executescript(
+        """
+        CREATE TRIGGER fail_named_session_participant_insert
+        BEFORE INSERT ON participants
+        WHEN EXISTS (
+            SELECT 1 FROM sessions
+            WHERE code = NEW.session_code AND name = 'Failing'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'participant insert failed');
+        END;
+        """
+    )
+    await db.commit()
 
 
 @pytest.mark.asyncio
@@ -80,21 +96,151 @@ async def test_create_session(db):
 
 @pytest.mark.asyncio
 async def test_create_session_rolls_back_session_and_participants_when_slot_insert_fails(
-    db, monkeypatch
+    db,
 ):
-    monkeypatch.setattr(
-        db,
-        "executemany",
-        AsyncMock(side_effect=RuntimeError("participant insert failed")),
-    )
+    await install_failing_session_participant_trigger(db)
 
-    with pytest.raises(RuntimeError, match="participant insert failed"):
-        await create_session(db, "Friday crew", initial_stops=("A", "B"))
+    with pytest.raises(aiosqlite.IntegrityError, match="participant insert failed"):
+        await create_session(db, "Failing", initial_stops=("A", "B"))
 
     async with db.execute("SELECT COUNT(*) FROM sessions") as cursor:
         assert (await cursor.fetchone())[0] == 0
     async with db.execute("SELECT COUNT(*) FROM participants") as cursor:
         assert (await cursor.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_session_creates_both_commit_atomically(db, monkeypatch):
+    original_execute = db.execute
+    original_commit = db.commit
+    first_savepoint_open = asyncio.Event()
+    second_savepoint_open = asyncio.Event()
+    first_committed = asyncio.Event()
+
+    async def execute(sql, parameters=None):
+        task_name = asyncio.current_task().get_name()
+        if sql.startswith("SAVEPOINT") and task_name == "first-create":
+            cursor = await original_execute(sql, parameters)
+            first_savepoint_open.set()
+            await second_savepoint_open.wait()
+            return cursor
+        if sql.startswith("SAVEPOINT") and task_name == "second-create":
+            await first_savepoint_open.wait()
+            cursor = await original_execute(sql, parameters)
+            second_savepoint_open.set()
+            await first_committed.wait()
+            return cursor
+        return await original_execute(sql, parameters)
+
+    async def commit():
+        await original_commit()
+        if asyncio.current_task().get_name() == "first-create":
+            first_committed.set()
+
+    monkeypatch.setattr(db, "execute", execute)
+    monkeypatch.setattr(db, "commit", commit)
+    first = asyncio.create_task(create_session(db, "First"), name="first-create")
+    second = asyncio.create_task(create_session(db, "Second"), name="second-create")
+
+    results = await asyncio.wait_for(
+        asyncio.gather(first, second, return_exceptions=True),
+        timeout=1,
+    )
+
+    monkeypatch.setattr(db, "execute", original_execute)
+    monkeypatch.setattr(db, "commit", original_commit)
+    assert all(isinstance(result, dict) for result in results)
+    assert [
+        (await get_session(db, result["code"]))["name"]
+        for result in results
+    ] == ["First", "Second"]
+
+
+@pytest.mark.asyncio
+async def test_failed_concurrent_session_create_cannot_undo_success(db, monkeypatch):
+    await install_failing_session_participant_trigger(db)
+    original_execute = db.execute
+    original_commit = db.commit
+    failing_savepoint_open = asyncio.Event()
+    successful_savepoint_released = asyncio.Event()
+    failure_rolled_back = asyncio.Event()
+
+    async def execute(sql, parameters=None):
+        task_name = asyncio.current_task().get_name()
+        if sql.startswith("SAVEPOINT") and task_name == "failing-create":
+            cursor = await original_execute(sql, parameters)
+            failing_savepoint_open.set()
+            await successful_savepoint_released.wait()
+            return cursor
+        if sql.startswith("SAVEPOINT") and task_name == "successful-create":
+            await failing_savepoint_open.wait()
+        cursor = await original_execute(sql, parameters)
+        if sql.startswith("RELEASE") and task_name == "successful-create":
+            successful_savepoint_released.set()
+        if sql.startswith("RELEASE") and task_name == "failing-create":
+            failure_rolled_back.set()
+        return cursor
+
+    async def commit():
+        if asyncio.current_task().get_name() == "successful-create":
+            await failure_rolled_back.wait()
+        await original_commit()
+
+    monkeypatch.setattr(db, "execute", execute)
+    monkeypatch.setattr(db, "commit", commit)
+    failing = asyncio.create_task(create_session(db, "Failing"), name="failing-create")
+    successful = asyncio.create_task(create_session(db, "Successful"), name="successful-create")
+
+    failed_result, successful_result = await asyncio.wait_for(
+        asyncio.gather(failing, successful, return_exceptions=True),
+        timeout=1,
+    )
+
+    monkeypatch.setattr(db, "execute", original_execute)
+    monkeypatch.setattr(db, "commit", original_commit)
+    assert isinstance(failed_result, aiosqlite.IntegrityError)
+    assert isinstance(successful_result, dict)
+    saved = await get_session(db, successful_result["code"])
+    assert saved is not None
+    assert saved["name"] == "Successful"
+
+
+@pytest.mark.asyncio
+async def test_session_create_is_atomic_against_an_unrelated_writer_commit(db, monkeypatch):
+    original_execute = db.execute
+    create_started = asyncio.Event()
+    writer_committed = asyncio.Event()
+
+    async def execute(sql, parameters=None):
+        cursor = await original_execute(sql, parameters)
+        if sql.startswith("SAVEPOINT") and asyncio.current_task().get_name() == "session-create":
+            await writer_committed.wait()
+        return cursor
+
+    async def create():
+        create_started.set()
+        return await create_session(db, "Friday crew")
+
+    async def write_usage():
+        await create_started.wait()
+        result = await reserve_places_requests(db, 1, daily_limit=3)
+        writer_committed.set()
+        return result
+
+    monkeypatch.setattr(db, "execute", execute)
+    created, reserved = await asyncio.wait_for(
+        asyncio.gather(
+            asyncio.create_task(create(), name="session-create"),
+            asyncio.create_task(write_usage(), name="usage-writer"),
+            return_exceptions=True,
+        ),
+        timeout=1,
+    )
+
+    monkeypatch.setattr(db, "execute", original_execute)
+    assert isinstance(created, dict)
+    assert reserved is True
+    assert await get_session(db, created["code"]) is not None
 
 
 @pytest.mark.asyncio

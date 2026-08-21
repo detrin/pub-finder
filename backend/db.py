@@ -181,41 +181,49 @@ async def create_session(
 ) -> dict:
     code = secrets.token_hex(16)
     now = datetime.now(timezone.utc).isoformat()
+    stops = tuple(initial_stops)
+    if creator_name:
+        rows = [(code, creator_name, "", "", 1, now)]
+    else:
+        slot_count = max(2, len(stops))
+        rows = [
+            (
+                code,
+                "",
+                stops[index] if index < len(stops) else "",
+                "",
+                0 if index < len(stops) else 1,
+                now,
+            )
+            for index in range(slot_count)
+        ]
     # token_hex keeps this interpolated SQLite identifier within a safe ASCII allowlist.
     savepoint = f"create_session_{secrets.token_hex(16)}"
-    await db.execute(f"SAVEPOINT {savepoint}")
-    try:
-        await db.execute(
-            "INSERT INTO sessions (code, name, creator_name, created_at) VALUES (?, ?, ?, ?)",
-            (code, session_name, creator_name, now),
-        )
-        if creator_name:
-            rows = [(code, creator_name, "", "", 1, now)]
-        else:
-            slot_count = max(2, len(initial_stops))
-            rows = [
-                (
-                    code,
-                    "",
-                    initial_stops[index] if index < len(initial_stops) else "",
-                    "",
-                    0 if index < len(initial_stops) else 1,
-                    now,
-                )
-                for index in range(slot_count)
-            ]
-        await db.executemany(
-            "INSERT INTO participants "
-            "(session_code, name, start_stop, end_stop, same_start_end, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            rows,
-        )
-    except Exception:
-        await db.execute(f"ROLLBACK TO {savepoint}")
-        await db.execute(f"RELEASE {savepoint}")
-        raise
-    await db.execute(f"RELEASE {savepoint}")
-    await db.commit()
+
+    def write_session():
+        connection = db._conn
+        connection.execute(f"SAVEPOINT {savepoint}")
+        try:
+            connection.execute(
+                "INSERT INTO sessions (code, name, creator_name, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (code, session_name, creator_name, now),
+            )
+            connection.executemany(
+                "INSERT INTO participants "
+                "(session_code, name, start_stop, end_stop, same_start_end, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+        except Exception:
+            connection.execute(f"ROLLBACK TO {savepoint}")
+            connection.execute(f"RELEASE {savepoint}")
+            raise
+        connection.execute(f"RELEASE {savepoint}")
+        connection.commit()
+
+    # One worker-queue item prevents every other operation on this connection from interleaving.
+    await db._execute(write_session)
     return {"code": code, "name": session_name, "creator_name": creator_name, "created_at": now}
 
 
