@@ -10,6 +10,7 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     const canvasOperations = [];
     const createdGroups = [];
     const mapListeners = new Map();
+    const mapOptions = [];
     let mapRemoveCount = 0;
     let cancelledFrames = 0;
     let failSizeRead = false;
@@ -37,6 +38,10 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         fill() {
             canvasOperations.push({ type: "dot", fillStyle: this.fillStyle });
         },
+        createPattern(source, repetition) {
+            canvasOperations.push({ type: "pattern", repetition, source });
+            return "missing-hatch";
+        },
         globalAlpha: 1,
         fillStyle: "",
     };
@@ -60,8 +65,25 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         },
     };
     const document = {
+        canvasCount: 0,
         createElement(tagName) {
-            if (tagName === "canvas") return canvas;
+            if (tagName === "canvas") {
+                this.canvasCount += 1;
+                if (this.canvasCount === 1) return canvas;
+                return {
+                    height: 0,
+                    width: 0,
+                    getContext() {
+                        return {
+                            beginPath() {},
+                            fillRect() {},
+                            lineTo() {},
+                            moveTo() {},
+                            stroke() {},
+                        };
+                    },
+                };
+            }
             return {
                 children: [],
                 append(...children) {
@@ -163,7 +185,8 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
             createdGroups.push(group);
             return group;
         },
-        map() {
+        map(_root, options) {
+            mapOptions.push(options ?? {});
             return map;
         },
         tileLayer() {
@@ -180,6 +203,7 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         leaflet,
         map,
         mapListeners,
+        mapOptions,
         root,
         cancelAnimationFrame() {
             cancelledFrames += 1;
@@ -252,6 +276,28 @@ test("payload mode creates a reusable map without fetching", async () => {
     controller.setPayload({ participants: [], stops: [] });
     assert.equal(participantLayer.layers.length, 0);
     assert.equal(harness.createdGroups[0], participantLayer);
+});
+
+test("decorative mode disables every Leaflet interaction and built-in control", async () => {
+    const harness = createHarness();
+    await createReachabilityMap(harness.root, {
+        interactive: false,
+        leaflet: harness.leaflet,
+        payload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    assert.deepEqual(harness.mapOptions, [{
+        attributionControl: false,
+        boxZoom: false,
+        doubleClickZoom: false,
+        dragging: false,
+        keyboard: false,
+        scrollWheelZoom: false,
+        touchZoom: false,
+        zoomControl: false,
+    }]);
 });
 
 test("malformed replacement payloads leave the current map state intact", async () => {
@@ -349,15 +395,28 @@ test("clearField hides stale heat values while retaining origin markers", async 
     assert.deepEqual(harness.createdGroups[0].layers, participantMarkers);
 });
 
-test("controller leaves the farthest travel-time band transparent", async () => {
-    const harness = createHarness();
+test("controller renders four fixed travel bands and hatches explicit missing estimates", async () => {
+    const harness = createHarness({ width: 5 });
     const fetchCalls = [];
+    const completeBandPayload = {
+        ...payload,
+        stops: [
+            ...payload.stops,
+            {
+                name: "Missing",
+                lat: 0.5,
+                lon: 4.5,
+                participant_minutes: [null],
+                group_max_minutes: null,
+            },
+        ],
+    };
     const controller = await createReachabilityMap(harness.root, {
         leaflet: harness.leaflet,
         reachabilityUrl: "/session/code/reachability",
         fetch: async (url, options) => {
             fetchCalls.push({ url, options });
-            return { ok: true, json: async () => payload };
+            return { ok: true, json: async () => completeBandPayload };
         },
         requestAnimationFrame: harness.requestAnimationFrame,
         cancelAnimationFrame: harness.cancelAnimationFrame,
@@ -383,9 +442,12 @@ test("controller leaves the farthest travel-time band transparent", async () => 
     assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.fillStyle))], [
         "#4dc694",
         "#ffd447",
-        "#ff8a47",
+        "#ff6658",
+        "#dff0ff",
+        "missing-hatch",
     ]);
     assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.48]);
+    assert.equal(harness.canvasOperations.filter((operation) => operation.type === "pattern").length, 1);
     assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 4);
 
     controller.setParticipant(7);

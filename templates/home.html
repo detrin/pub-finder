@@ -93,6 +93,9 @@
             <p class="home-estimate__status" aria-live="polite" aria-atomic="true" data-preview-status></p>
 
             <div class="home-estimate__map" aria-hidden="true" data-preview-map></div>
+            <p class="home-estimate__attribution" data-preview-attribution>
+                <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
+            </p>
 
             <ul
                 class="home-estimate__legend"
@@ -148,5 +151,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/home-preview.js?v=1"></script>
+<script type="module" src="/static/home-preview.js?v=2"></script>
 {% endblock %}

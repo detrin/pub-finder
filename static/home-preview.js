@@ -1,7 +1,7 @@
 import {
     createReachabilityMap,
     validateReachabilityPayload,
-} from "./reachability-map.js";
+} from "./reachability-map.js?v=5";
 
 const EMPTY_PAYLOAD = Object.freeze({
     participants: Object.freeze([]),
@@ -21,7 +21,7 @@ const DEFAULT_COPY = Object.freeze({
     groupHeading: "Shared reach for {count} starting points",
     groupPrompt: "Colour shows the longest estimated journey among the selected starts.",
     invalid: "Choose a stop from the Prague stop list.",
-    limit: "The quick estimate supports up to six starting stops.",
+    limit: "The quick estimate supports up to six starting stops. For larger groups, start a plan.",
     oneHeading: "Approximate reach from {stop}",
     onePrompt: "Add another stop to see where everyone can reach.",
     remove: "Remove {stop}",
@@ -139,7 +139,8 @@ export async function createHomePreview(root, dependencies = {}) {
     let filteredStops = [];
     let activeOption = -1;
     let destroyed = false;
-    const map = await createMap(mapRoot, { payload: EMPTY_PAYLOAD });
+    const nativeSuggestionList = search.getAttribute?.("list");
+    const map = await createMap(mapRoot, { interactive: false, payload: EMPTY_PAYLOAD });
 
     function listen(element, type, handler, registry = listeners) {
         element?.addEventListener?.(type, handler);
@@ -386,6 +387,7 @@ export async function createHomePreview(root, dependencies = {}) {
         detachAll(selectionListeners);
         detachAll(statusListeners);
         detachAll(listeners);
+        if (nativeSuggestionList) search.setAttribute("list", nativeSuggestionList);
         map.destroy?.();
         initializations.delete(root);
     }
@@ -421,6 +423,7 @@ export async function createHomePreview(root, dependencies = {}) {
     options.hidden = true;
     renderSelections();
     renderEmpty();
+    search.removeAttribute?.("list");
     return { addOrigin, destroy, removeOrigin };
 }
 

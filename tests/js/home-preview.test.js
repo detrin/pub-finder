@@ -125,12 +125,13 @@ function createPreviewHarness(stops) {
         failure: "The quick estimate is unavailable. You can still create a plan.",
         coverage: "No estimate is available from {stop}. Remove it to continue.",
         duplicate: "That stop is already selected.",
-        limit: "The quick estimate supports up to six starting stops.",
+        limit: "The quick estimate supports up to six starting stops. For larger groups, start a plan.",
         invalid: "Choose a stop from the Prague stop list.",
         remove: "Remove {stop}",
         carry: "{count} selected starts will be added to this plan.",
     };
     const search = document.createElement("input");
+    search.setAttribute("list", "home-stop-suggestions");
     const options = document.createElement("ul");
     const selections = document.createElement("ul");
     const status = document.createElement("p");
@@ -168,10 +169,12 @@ function createPreviewHarness(stops) {
         setPayload(payload) { this.payloads.push(payload); },
     };
     let createMapCount = 0;
+    let mapOptions = null;
     const createMap = async (target, optionsArgument) => {
         createMapCount += 1;
         assert.equal(target, mapRoot);
         assert.deepEqual(optionsArgument.payload, { participants: [], stops: [] });
+        mapOptions = optionsArgument;
         return map;
     };
 
@@ -192,6 +195,7 @@ function createPreviewHarness(stops) {
         selections,
         status,
         get createMapCount() { return createMapCount; },
+        get mapOptions() { return mapOptions; },
         get hiddenInputs() { return hiddenFields.children; },
         async flush() {
             await new Promise((resolve) => setImmediate(resolve));
@@ -248,6 +252,31 @@ test("first stop renders individual reach and second stop renders shared reach",
     assert.equal(harness.prompt.textContent, "Colour shows the longest estimated journey among the selected starts.");
 });
 
+test("successful takeover disables native suggestions and creates a decorative map", async () => {
+    const harness = createPreviewHarness(["Anděl"]);
+    await createHomePreview(harness.root, {
+        fetch: async () => {},
+        createMap: harness.createMap,
+    });
+
+    assert.equal(harness.search.getAttribute("list"), null);
+    assert.equal(harness.mapOptions.interactive, false);
+});
+
+test("failed takeover leaves native stop suggestions available", async () => {
+    const harness = createPreviewHarness(["Anděl"]);
+
+    await assert.rejects(
+        createHomePreview(harness.root, {
+            fetch: async () => {},
+            createMap: async () => { throw new Error("map unavailable"); },
+        }),
+        { message: "map unavailable" },
+    );
+
+    assert.equal(harness.search.getAttribute("list"), "home-stop-suggestions");
+});
+
 test("only canonical unique stops are selected and duplicates issue no request", async () => {
     const harness = createPreviewHarness(["Anděl"]);
     const requests = deferredFetches();
@@ -275,7 +304,10 @@ test("a seventh unique stop is rejected without recalculation", async () => {
 
     for (const stop of stops.slice(0, 6)) assert.equal(controller.addOrigin(stop), true);
     assert.equal(controller.addOrigin("G"), false);
-    assert.equal(harness.status.textContent, "The quick estimate supports up to six starting stops.");
+    assert.equal(
+        harness.status.textContent,
+        "The quick estimate supports up to six starting stops. For larger groups, start a plan.",
+    );
     assert.equal(requests.requests.length, 6);
     assert.equal(JSON.parse(requests.requests.at(-1).options.body).origins.length, 6);
 });
@@ -564,9 +596,11 @@ test("destroy evicts initialization so the same root can initialize again", asyn
 
     const [first] = await initHomePreview(target, dependencies);
     first.destroy();
+    assert.equal(harness.search.getAttribute("list"), "home-stop-suggestions");
     const [second] = await initHomePreview(target, dependencies);
 
     assert.notEqual(first, second);
     assert.equal(harness.createMapCount, 2);
+    assert.equal(harness.search.getAttribute("list"), null);
     assert.equal(harness.map.destroyCount, 1);
 });

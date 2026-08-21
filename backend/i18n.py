@@ -39,7 +39,9 @@ TRANSLATIONS = {
         "home.preview_duplicate": "That stop is already selected.",
         "home.preview_failure": "The quick estimate is unavailable. You can still create a plan.",
         "home.preview_invalid": "Choose a stop from the Prague stop list.",
-        "home.preview_limit": "The quick estimate supports up to six starting stops.",
+        "home.preview_limit": (
+            "The quick estimate supports up to six starting stops. For larger groups, start a plan."
+        ),
         "home.preview_remove": "Remove {stop}",
         "home.preview_updated_group": "Estimate updated for {count} starting stops.",
         "home.preview_updated_one": "Estimate updated for one starting stop.",
@@ -145,7 +147,10 @@ TRANSLATIONS = {
         "home.preview_duplicate": "Tato zastávka už je vybraná.",
         "home.preview_failure": "Rychlý odhad není dostupný. Plán můžete přesto vytvořit.",
         "home.preview_invalid": "Vyberte zastávku ze seznamu pražských zastávek.",
-        "home.preview_limit": "Rychlý odhad podporuje nejvýše šest výchozích zastávek.",
+        "home.preview_limit": (
+            "Rychlý odhad podporuje nejvýše šest výchozích zastávek. "
+            "Větší skupiny mohou pokračovat vytvořením plánu."
+        ),
         "home.preview_remove": "Odebrat zastávku {stop}",
         "home.preview_updated_group": "Odhad byl aktualizován pro {count} výchozích míst.",
         "home.preview_updated_one": "Odhad byl aktualizován pro jednu výchozí zastávku.",

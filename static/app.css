@@ -2553,6 +2553,7 @@ input[data-stop-input]:not(:disabled) {
     border: 2px solid var(--ink);
     border-radius: 7px;
     background: var(--map-control-surface);
+    pointer-events: none;
     transition: opacity 120ms ease;
 }
 
@@ -2560,13 +2561,14 @@ input[data-stop-input]:not(:disabled) {
     opacity: 0.58;
 }
 
-.home-estimate__map .leaflet-control-attribution {
-    background: color-mix(in srgb, var(--map-control-surface) 88%, transparent);
-    color: var(--ink);
+.home-estimate__attribution {
+    margin: 0.2rem 0 0;
     font-family: var(--font-mono);
+    font-size: 0.58rem;
+    text-align: right;
 }
 
-.home-estimate__map .leaflet-control-attribution a {
+.home-estimate__attribution a {
     color: var(--blue);
 }
 

@@ -5,8 +5,15 @@ const DEFAULT_ZOOM = 12;
 const DEFAULT_THRESHOLD = 35;
 const DEFAULT_STEP = 15;
 const MAX_RENDER_GRID_SIZE = 96;
-const BAND_COLORS = ["#4dc694", "#ffd447", "#ff8a47"];
+const BAND_COLORS = [
+    ["--mint", "#4dc694"],
+    ["--yellow", "#ffd447"],
+    ["--coral", "#ff6658"],
+    ["--sky-surface", "#dff0ff"],
+];
 const BAND_OPACITY = 0.48;
+const MISSING_PATTERN_SIZE = 6;
+const MISSING_MARKER_SIZE = 12;
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function errorMessage(error) {
@@ -210,7 +217,7 @@ export class ReachabilityMapController {
     }
 
     clearField() {
-        this.layerValues = this.payload.stops.map(() => null);
+        this.layerValues = [];
         this.hideField();
     }
 
@@ -388,11 +395,19 @@ export class ReachabilityMapController {
         const scaleX = gridWidth / cssWidth;
         const scaleY = gridHeight / cssHeight;
         const observedPoints = [];
+        const missingPoints = [];
 
         this.payload.stops.forEach((stop, index) => {
             const value = this.layerValues[index];
-            if (!Number.isFinite(value)) return;
             const point = this.map.latLngToContainerPoint([stop.lat, stop.lon]);
+            if (value === null) {
+                missingPoints.push({
+                    outputX: point.x * pixelRatio,
+                    outputY: point.y * pixelRatio,
+                });
+                return;
+            }
+            if (!Number.isFinite(value)) return;
             observedPoints.push({
                 x: point.x * scaleX,
                 y: point.y * scaleY,
@@ -411,30 +426,49 @@ export class ReachabilityMapController {
             this.map.containerPointToLayerPoint([0, 0]),
         );
         this.context.clearRect(0, 0, outputWidth, outputHeight);
-        if (observedPoints.length === 0) {
+        if (observedPoints.length === 0 && missingPoints.length === 0) {
             this.canvas.hidden = true;
             return;
         }
 
-        const grid = interpolateGrid(observedPoints, gridWidth, gridHeight);
-        const minX = Math.min(...observedPoints.map((point) => point.x));
-        const maxX = Math.max(...observedPoints.map((point) => point.x));
-        const minY = Math.min(...observedPoints.map((point) => point.y));
-        const maxY = Math.max(...observedPoints.map((point) => point.y));
-        for (let y = 0; y < grid.height; y += 1) {
-            for (let x = 0; x < grid.width; x += 1) {
-                const centerX = x + 0.5;
-                const centerY = y + 0.5;
-                if (centerX < minX || centerX > maxX || centerY < minY || centerY > maxY) continue;
-                const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
-                if (band == null || band >= BAND_COLORS.length) continue;
-                this.context.fillStyle = BAND_COLORS[band];
-                this.context.globalAlpha = BAND_OPACITY;
-                const left = Math.floor(x * outputWidth / grid.width);
-                const top = Math.floor(y * outputHeight / grid.height);
-                const right = Math.ceil((x + 1) * outputWidth / grid.width);
-                const bottom = Math.ceil((y + 1) * outputHeight / grid.height);
-                this.context.fillRect(left, top, right - left, bottom - top);
+        if (observedPoints.length > 0) {
+            const grid = interpolateGrid(observedPoints, gridWidth, gridHeight);
+            const minX = Math.min(...observedPoints.map((point) => point.x));
+            const maxX = Math.max(...observedPoints.map((point) => point.x));
+            const minY = Math.min(...observedPoints.map((point) => point.y));
+            const maxY = Math.max(...observedPoints.map((point) => point.y));
+            const bandColors = BAND_COLORS.map(([property, fallback]) => (
+                this.styleColor(property, fallback)
+            ));
+            for (let y = 0; y < grid.height; y += 1) {
+                for (let x = 0; x < grid.width; x += 1) {
+                    const centerX = x + 0.5;
+                    const centerY = y + 0.5;
+                    if (centerX < minX || centerX > maxX || centerY < minY || centerY > maxY) continue;
+                    const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
+                    if (band == null || band >= bandColors.length) continue;
+                    this.context.fillStyle = bandColors[band];
+                    this.context.globalAlpha = BAND_OPACITY;
+                    const left = Math.floor(x * outputWidth / grid.width);
+                    const top = Math.floor(y * outputHeight / grid.height);
+                    const right = Math.ceil((x + 1) * outputWidth / grid.width);
+                    const bottom = Math.ceil((y + 1) * outputHeight / grid.height);
+                    this.context.fillRect(left, top, right - left, bottom - top);
+                }
+            }
+        }
+
+        if (missingPoints.length > 0) {
+            this.context.globalAlpha = BAND_OPACITY;
+            this.context.fillStyle = this.missingPattern(pixelRatio);
+            const missingSize = MISSING_MARKER_SIZE * pixelRatio;
+            for (const point of missingPoints) {
+                this.context.fillRect(
+                    point.outputX - missingSize / 2,
+                    point.outputY - missingSize / 2,
+                    missingSize,
+                    missingSize,
+                );
             }
         }
 
@@ -456,11 +490,40 @@ export class ReachabilityMapController {
     }
 
     inkColor() {
+        return this.styleColor("--ink", "#17191c");
+    }
+
+    styleColor(property, fallback) {
         const getStyle = this.document.defaultView?.getComputedStyle ?? globalThis.getComputedStyle;
         const value = typeof getStyle === "function"
-            ? getStyle(this.root).getPropertyValue("--ink").trim()
+            ? getStyle(this.root).getPropertyValue(property).trim()
             : "";
-        return value || "#17191c";
+        return value || fallback;
+    }
+
+    missingPattern(pixelRatio) {
+        const size = MISSING_PATTERN_SIZE * pixelRatio;
+        const tile = this.document.createElement("canvas");
+        tile.width = size;
+        tile.height = size;
+        const context = tile.getContext?.("2d");
+        if (!context || typeof this.context.createPattern !== "function") {
+            return this.styleColor("--muted", "#686d71");
+        }
+        context.fillStyle = this.styleColor("--paper", "#fffefa");
+        context.fillRect(0, 0, size, size);
+        context.strokeStyle = this.styleColor("--muted", "#686d71");
+        context.lineWidth = Math.max(1, pixelRatio);
+        context.beginPath();
+        context.moveTo(-size / 2, size / 2);
+        context.lineTo(size / 2, -size / 2);
+        context.moveTo(0, size);
+        context.lineTo(size, 0);
+        context.moveTo(size / 2, size * 1.5);
+        context.lineTo(size * 1.5, size / 2);
+        context.stroke();
+        return this.context.createPattern(tile, "repeat")
+            ?? this.styleColor("--muted", "#686d71");
     }
 
     destroy() {
@@ -517,7 +580,20 @@ export async function createReachabilityMap(root, options = {}) {
         }
     }
 
-    const map = leaflet.map(root).setView(options.center ?? DEFAULT_CENTER, options.zoom ?? DEFAULT_ZOOM);
+    const interactive = options.interactive !== false;
+    const mapOptions = interactive ? undefined : {
+        attributionControl: false,
+        boxZoom: false,
+        doubleClickZoom: false,
+        dragging: false,
+        keyboard: false,
+        scrollWheelZoom: false,
+        touchZoom: false,
+        zoomControl: false,
+    };
+    const map = leaflet.map(root, mapOptions)
+        .setView(options.center ?? DEFAULT_CENTER, options.zoom ?? DEFAULT_ZOOM);
+    if (!interactive) root.removeAttribute?.("tabindex");
     leaflet.tileLayer(options.tileUrl ?? TILE_URL, {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 19,

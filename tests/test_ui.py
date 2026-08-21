@@ -195,6 +195,8 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     selections = preview.select_one("ul[data-preview-selections]")
     status = preview.select_one('[data-preview-status][aria-live="polite"]')
     legend = preview.select_one("[data-preview-legend]")
+    map_root = preview.select_one("[data-preview-map]")
+    attribution = preview.select_one("[data-preview-attribution]")
     handoff = preview.select_one('[data-preview-handoff][href="#session-name"]')
     canonical_options = page.select("#home-stop-suggestions option")
     create_form = page.select_one('form[action="/session/create"]')
@@ -204,16 +206,52 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert selections is not None
     assert status is not None
     assert legend.name == "ul"
-    assert len(legend.select("li")) == 5
+    assert [swatch.get("class", [])[-1] for swatch in legend.select(".home-estimate__swatch")] == [
+        "home-estimate__swatch--short",
+        "home-estimate__swatch--medium",
+        "home-estimate__swatch--long",
+        "home-estimate__swatch--longest",
+        "home-estimate__swatch--missing",
+    ]
     assert "no estimate" in legend.get_text(" ", strip=True)
+    assert map_root["aria-hidden"] == "true"
+    assert map_root.select_one("a, button, input, [tabindex]") is None
+    assert attribution is not None
+    assert attribution.find_parent("[aria-hidden='true']") is None
+    assert "OpenStreetMap contributors" in attribution.get_text(" ", strip=True)
     assert handoff is not None
     assert page.select_one("#session-name") is not None
     assert create_form.select_one("[data-preview-hidden-fields]") is not None
     assert create_form.select_one("[data-preview-carry-status]") is not None
     assert [option["value"] for option in canonical_options] == ["A", "B"]
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
-    assert "/static/home-preview.js?v=1" in home_modules
+    assert "/static/home-preview.js?v=2" in home_modules
     assert "/static/home-preview.js" not in other_response.text
+    assert preview["data-limit"] == (
+        "The quick estimate supports up to six starting stops. For larger groups, start a plan."
+    )
+
+
+def test_home_preview_legend_styles_match_the_canvas_encoding():
+    css = Path("static/app.css").read_text()
+
+    for selector, value in (
+        ("short", "var(--mint)"),
+        ("medium", "var(--yellow)"),
+        ("long", "var(--coral)"),
+        ("longest", "var(--sky-surface)"),
+    ):
+        assert f".home-estimate__swatch--{selector} {{ background: {value}; }}" in css
+    assert re.search(
+        r"\.home-estimate__swatch--missing\s*\{[^}]*repeating-linear-gradient\(",
+        css,
+        re.DOTALL,
+    )
+    assert re.search(
+        r"\.home-estimate__map\s*\{[^}]*pointer-events:\s*none;",
+        css,
+        re.DOTALL,
+    )
 
 
 @pytest.mark.asyncio
@@ -243,7 +281,10 @@ async def test_home_preview_and_plan_support_copy_is_localized_in_czech():
 
     assert preview["data-updating"] == "Aktualizuji odhad…"
     assert preview["data-duplicate"] == "Tato zastávka už je vybraná."
-    assert preview["data-limit"] == "Rychlý odhad podporuje nejvýše šest výchozích zastávek."
+    assert preview["data-limit"] == (
+        "Rychlý odhad podporuje nejvýše šest výchozích zastávek. "
+        "Větší skupiny mohou pokračovat vytvořením plánu."
+    )
     assert preview["data-failure"] == ("Rychlý odhad není dostupný. Plán můžete přesto vytvořit.")
     assert preview["data-coverage"] == (
         "Pro zastávku {stop} není odhad dostupný. Odeberte ji a pokračujte."
