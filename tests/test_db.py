@@ -16,6 +16,7 @@ from backend.db import (
     reserve_places_requests,
     update_participant_name,
 )
+from backend.places import cache_pubs_for_type
 
 
 @pytest_asyncio.fixture
@@ -241,6 +242,113 @@ async def test_session_create_is_atomic_against_an_unrelated_writer_commit(db, m
     assert isinstance(created, dict)
     assert reserved is True
     assert await get_session(db, created["code"]) is not None
+
+
+@pytest.mark.asyncio
+async def test_session_create_waits_for_an_open_writer_transaction_to_roll_back(db, monkeypatch):
+    await db.executescript(
+        """
+        CREATE TRIGGER fail_cache_query_insert
+        BEFORE INSERT ON pub_cache_queries
+        BEGIN
+            SELECT RAISE(ABORT, 'cache query insert failed');
+        END;
+        """
+    )
+    await db.commit()
+    original_execute = db.execute
+    partial_cache_write = asyncio.Event()
+    create_started = asyncio.Event()
+
+    async def execute(sql, parameters=None):
+        cursor = await original_execute(sql, parameters)
+        if sql.startswith("INSERT INTO pub_cache "):
+            partial_cache_write.set()
+            await create_started.wait()
+        return cursor
+
+    async def create_after_partial_write():
+        await partial_cache_write.wait()
+        create_started.set()
+        return await create_session(db, "Friday crew")
+
+    pub = {
+        "place_id": "place-1",
+        "name": "Test pub",
+        "lat": 50.0,
+        "lon": 14.0,
+        "rating": 4.0,
+        "rating_count": 10,
+        "price_level": 1,
+        "google_maps_url": "https://maps.google.com/",
+        "opening_hours": None,
+        "primary_type": "pub",
+    }
+    monkeypatch.setattr(db, "execute", execute)
+    cache_result, create_result = await asyncio.wait_for(
+        asyncio.gather(
+            asyncio.create_task(
+                cache_pubs_for_type(db, "Muzeum", "pub", 500, [pub]),
+                name="cache-writer",
+            ),
+            asyncio.create_task(create_after_partial_write(), name="session-create"),
+            return_exceptions=True,
+        ),
+        timeout=1,
+    )
+
+    monkeypatch.setattr(db, "execute", original_execute)
+    assert isinstance(cache_result, aiosqlite.IntegrityError)
+    assert isinstance(create_result, dict)
+    async with db.execute("SELECT COUNT(*) FROM pub_cache") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+    saved = await get_session(db, create_result["code"])
+    assert saved is not None
+    assert saved["name"] == "Friday crew"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_writer_rolls_back_before_releasing_transaction_ownership(db, monkeypatch):
+    original_execute = db.execute
+    partial_cache_write = asyncio.Event()
+    hold_writer = asyncio.Event()
+
+    async def execute(sql, parameters=None):
+        cursor = await original_execute(sql, parameters)
+        if sql.startswith("INSERT INTO pub_cache "):
+            partial_cache_write.set()
+            await hold_writer.wait()
+        return cursor
+
+    pub = {
+        "place_id": "place-1",
+        "name": "Test pub",
+        "lat": 50.0,
+        "lon": 14.0,
+        "rating": 4.0,
+        "rating_count": 10,
+        "price_level": 1,
+        "google_maps_url": "https://maps.google.com/",
+        "opening_hours": None,
+        "primary_type": "pub",
+    }
+    monkeypatch.setattr(db, "execute", execute)
+    writer = asyncio.create_task(
+        cache_pubs_for_type(db, "Muzeum", "pub", 500, [pub]),
+        name="cancelled-cache-writer",
+    )
+    await asyncio.wait_for(partial_cache_write.wait(), timeout=1)
+    writer.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await writer
+
+    monkeypatch.setattr(db, "execute", original_execute)
+    assert db.in_transaction is False
+    async with db.execute("SELECT COUNT(*) FROM pub_cache") as cursor:
+        assert (await cursor.fetchone())[0] == 0
+    session = await asyncio.wait_for(create_session(db, "Friday crew"), timeout=1)
+    assert await get_session(db, session["code"]) is not None
 
 
 @pytest.mark.asyncio

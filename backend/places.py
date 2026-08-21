@@ -9,6 +9,7 @@ import aiosqlite
 import httpx
 
 from backend.config import GOOGLE_PLACES_API_KEY
+from backend.db import connection_transaction
 
 PRICE_LEVEL_MAP = {
     "PRICE_LEVEL_FREE": 0,
@@ -272,53 +273,14 @@ async def get_cached_pubs_for_type(
 
 async def cache_pubs(db: aiosqlite.Connection, stop_name: str, pubs: list[dict]):
     """Cache pubs for a stop in SQLite."""
-    for pub in pubs:
-        hours_json = json.dumps(pub["opening_hours"]) if pub.get("opening_hours") else None
-        await db.execute(
-            "INSERT OR REPLACE INTO pub_cache "
-            "(stop_name, place_id, name, lat, lon, rating, rating_count, price_level, "
-            "google_maps_url, opening_hours, primary_type, cached_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-            (
-                stop_name,
-                pub["place_id"],
-                pub["name"],
-                pub["lat"],
-                pub["lon"],
-                pub["rating"],
-                pub["rating_count"],
-                pub.get("price_level"),
-                pub["google_maps_url"],
-                hours_json,
-                pub.get("primary_type", ""),
-            ),
-        )
-    await db.commit()
-
-
-async def cache_pubs_for_type(
-    db: aiosqlite.Connection,
-    stop_name: str,
-    place_type: str,
-    radius: int,
-    pubs: list[dict],
-) -> None:
-    """Atomically cache one completed Google Places query, including empty results."""
-    try:
-        await db.execute("BEGIN")
+    async with connection_transaction(db):
         for pub in pubs:
             hours_json = json.dumps(pub["opening_hours"]) if pub.get("opening_hours") else None
             await db.execute(
-                "INSERT INTO pub_cache "
+                "INSERT OR REPLACE INTO pub_cache "
                 "(stop_name, place_id, name, lat, lon, rating, rating_count, price_level, "
                 "google_maps_url, opening_hours, primary_type, cached_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) "
-                "ON CONFLICT(stop_name, place_id) DO UPDATE SET "
-                "name = excluded.name, lat = excluded.lat, lon = excluded.lon, "
-                "rating = excluded.rating, rating_count = excluded.rating_count, "
-                "price_level = excluded.price_level, google_maps_url = excluded.google_maps_url, "
-                "opening_hours = excluded.opening_hours, primary_type = excluded.primary_type, "
-                "cached_at = excluded.cached_at",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
                 (
                     stop_name,
                     pub["place_id"],
@@ -333,23 +295,65 @@ async def cache_pubs_for_type(
                     pub.get("primary_type", ""),
                 ),
             )
-        await db.execute(
-            "DELETE FROM pub_cache_matches WHERE stop_name = ? AND place_type = ? AND radius = ?",
-            (stop_name, place_type, radius),
-        )
-        await db.executemany(
-            "INSERT INTO pub_cache_matches (stop_name, place_type, radius, place_id) "
-            "VALUES (?, ?, ?, ?)",
-            [(stop_name, place_type, radius, pub["place_id"]) for pub in pubs],
-        )
-        await db.execute(
-            "INSERT INTO pub_cache_queries (stop_name, place_type, radius, cached_at) "
-            "VALUES (?, ?, ?, datetime('now')) "
-            "ON CONFLICT(stop_name, place_type, radius) DO UPDATE SET "
-            "cached_at = excluded.cached_at",
-            (stop_name, place_type, radius),
-        )
         await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
+
+
+async def cache_pubs_for_type(
+    db: aiosqlite.Connection,
+    stop_name: str,
+    place_type: str,
+    radius: int,
+    pubs: list[dict],
+) -> None:
+    """Atomically cache one completed Google Places query, including empty results."""
+    async with connection_transaction(db):
+        try:
+            await db.execute("BEGIN")
+            for pub in pubs:
+                hours_json = json.dumps(pub["opening_hours"]) if pub.get("opening_hours") else None
+                await db.execute(
+                    "INSERT INTO pub_cache "
+                    "(stop_name, place_id, name, lat, lon, rating, rating_count, price_level, "
+                    "google_maps_url, opening_hours, primary_type, cached_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) "
+                    "ON CONFLICT(stop_name, place_id) DO UPDATE SET "
+                    "name = excluded.name, lat = excluded.lat, lon = excluded.lon, "
+                    "rating = excluded.rating, rating_count = excluded.rating_count, "
+                    "price_level = excluded.price_level, google_maps_url = excluded.google_maps_url, "
+                    "opening_hours = excluded.opening_hours, primary_type = excluded.primary_type, "
+                    "cached_at = excluded.cached_at",
+                    (
+                        stop_name,
+                        pub["place_id"],
+                        pub["name"],
+                        pub["lat"],
+                        pub["lon"],
+                        pub["rating"],
+                        pub["rating_count"],
+                        pub.get("price_level"),
+                        pub["google_maps_url"],
+                        hours_json,
+                        pub.get("primary_type", ""),
+                    ),
+                )
+            await db.execute(
+                "DELETE FROM pub_cache_matches "
+                "WHERE stop_name = ? AND place_type = ? AND radius = ?",
+                (stop_name, place_type, radius),
+            )
+            await db.executemany(
+                "INSERT INTO pub_cache_matches (stop_name, place_type, radius, place_id) "
+                "VALUES (?, ?, ?, ?)",
+                [(stop_name, place_type, radius, pub["place_id"]) for pub in pubs],
+            )
+            await db.execute(
+                "INSERT INTO pub_cache_queries (stop_name, place_type, radius, cached_at) "
+                "VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(stop_name, place_type, radius) DO UPDATE SET "
+                "cached_at = excluded.cached_at",
+                (stop_name, place_type, radius),
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise

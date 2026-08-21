@@ -1,12 +1,28 @@
+import asyncio
 import logging
 import secrets
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def connection_transaction(db: aiosqlite.Connection) -> AsyncIterator[None]:
+    lock = getattr(db, "_transaction_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        db._transaction_lock = lock
+    async with lock:
+        try:
+            yield
+        except BaseException:
+            await asyncio.shield(db.rollback())
+            raise
 
 
 async def init_db(db: aiosqlite.Connection):
@@ -222,8 +238,9 @@ async def create_session(
         connection.execute(f"RELEASE {savepoint}")
         connection.commit()
 
-    # One worker-queue item prevents every other operation on this connection from interleaving.
-    await db._execute(write_session)
+    # The lock excludes other write units; one queue item also excludes standalone reads.
+    async with connection_transaction(db):
+        await db._execute(write_session)
     return {"code": code, "name": session_name, "creator_name": creator_name, "created_at": now}
 
 
@@ -233,14 +250,16 @@ async def reserve_places_requests(
     """Atomically reserve Google Places calls without exceeding the daily application cap."""
     if request_count <= 0:
         return True
-    cursor = await db.execute(
-        "INSERT INTO places_daily_usage (usage_date, request_count) "
-        "VALUES (date('now'), ?) "
-        "ON CONFLICT(usage_date) DO UPDATE SET request_count = request_count + excluded.request_count "
-        "WHERE request_count + excluded.request_count <= ?",
-        (request_count, daily_limit),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        cursor = await db.execute(
+            "INSERT INTO places_daily_usage (usage_date, request_count) "
+            "VALUES (date('now'), ?) "
+            "ON CONFLICT(usage_date) DO UPDATE SET "
+            "request_count = request_count + excluded.request_count "
+            "WHERE request_count + excluded.request_count <= ?",
+            (request_count, daily_limit),
+        )
+        await db.commit()
     return cursor.rowcount == 1
 
 
@@ -266,41 +285,42 @@ async def join_session(db: aiosqlite.Connection, code: str, name: str) -> Option
     session = await get_session(db, code)
     if session is None:
         return None
-    # Check if participant already exists in this session
-    async with db.execute(
-        "SELECT id FROM participants WHERE session_code = ? AND name = ?",
-        (code, name),
-    ) as cursor:
-        existing = await cursor.fetchone()
-    if existing:
-        return {"id": existing[0], "name": name, "session_code": code, "created_at": ""}
-    now = datetime.now(timezone.utc).isoformat()
-    async with db.execute(
-        "UPDATE participants SET name = ? WHERE id = ("
-        "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
-        ") AND session_code = ? RETURNING id",
-        (name, code, code),
-    ) as cursor:
-        claimed = await cursor.fetchone()
-    if claimed:
-        await db.commit()
-        return {"id": claimed[0], "name": name, "session_code": code, "created_at": now}
-    async with db.execute(
-        "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?) RETURNING id",
-        (code, name, now),
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row is None:
+    async with connection_transaction(db):
         async with db.execute(
             "SELECT id FROM participants WHERE session_code = ? AND name = ?",
             (code, name),
         ) as cursor:
+            existing = await cursor.fetchone()
+        if existing:
+            return {"id": existing[0], "name": name, "session_code": code, "created_at": ""}
+        now = datetime.now(timezone.utc).isoformat()
+        async with db.execute(
+            "UPDATE participants SET name = ? WHERE id = ("
+            "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
+            ") AND session_code = ? RETURNING id",
+            (name, code, code),
+        ) as cursor:
+            claimed = await cursor.fetchone()
+        if claimed:
+            await db.commit()
+            return {"id": claimed[0], "name": name, "session_code": code, "created_at": now}
+        async with db.execute(
+            "INSERT INTO participants (session_code, name, created_at) "
+            "VALUES (?, ?, ?) RETURNING id",
+            (code, name, now),
+        ) as cursor:
             row = await cursor.fetchone()
-    if row is None:
+        if row is None:
+            async with db.execute(
+                "SELECT id FROM participants WHERE session_code = ? AND name = ?",
+                (code, name),
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row is None:
+            await db.commit()
+            return None
         await db.commit()
-        return None
-    await db.commit()
-    return {"id": row[0], "name": name, "session_code": code, "created_at": now}
+        return {"id": row[0], "name": name, "session_code": code, "created_at": now}
 
 
 async def get_participants(db: aiosqlite.Connection, code: str) -> list[dict]:
@@ -325,34 +345,36 @@ async def get_participants(db: aiosqlite.Connection, code: str) -> list[dict]:
 
 async def add_participant(db: aiosqlite.Connection, session_code: str, name: str) -> Optional[dict]:
     """Add a participant to a session. Returns None if name is duplicate."""
-    async with db.execute(
-        "SELECT id FROM participants WHERE session_code = ? AND name = ?",
-        (session_code, name),
-    ) as cursor:
-        existing = await cursor.fetchone()
-    if existing:
-        return None
-    now = datetime.now(timezone.utc).isoformat()
-    async with db.execute(
-        "UPDATE participants SET name = ? WHERE id = ("
-        "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
-        ") AND session_code = ? RETURNING id",
-        (name, session_code, session_code),
-    ) as cursor:
-        claimed = await cursor.fetchone()
-    if claimed:
+    async with connection_transaction(db):
+        async with db.execute(
+            "SELECT id FROM participants WHERE session_code = ? AND name = ?",
+            (session_code, name),
+        ) as cursor:
+            existing = await cursor.fetchone()
+        if existing:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        async with db.execute(
+            "UPDATE participants SET name = ? WHERE id = ("
+            "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
+            ") AND session_code = ? RETURNING id",
+            (name, session_code, session_code),
+        ) as cursor:
+            claimed = await cursor.fetchone()
+        if claimed:
+            await db.commit()
+            return {"id": claimed[0], "name": name, "session_code": session_code}
+        async with db.execute(
+            "INSERT INTO participants (session_code, name, created_at) "
+            "VALUES (?, ?, ?) RETURNING id",
+            (session_code, name, now),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            await db.commit()
+            return None
         await db.commit()
-        return {"id": claimed[0], "name": name, "session_code": session_code}
-    async with db.execute(
-        "INSERT INTO participants (session_code, name, created_at) VALUES (?, ?, ?) RETURNING id",
-        (session_code, name, now),
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row is None:
-        await db.commit()
-        return None
-    await db.commit()
-    return {"id": row[0], "name": name, "session_code": session_code}
+        return {"id": row[0], "name": name, "session_code": session_code}
 
 
 async def update_participant_name(
@@ -361,11 +383,12 @@ async def update_participant_name(
     participant_id: int,
     name: str,
 ) -> bool:
-    result = await db.execute(
-        "UPDATE participants SET name = ? WHERE id = ? AND session_code = ?",
-        (name, participant_id, session_code),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "UPDATE participants SET name = ? WHERE id = ? AND session_code = ?",
+            (name, participant_id, session_code),
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -373,13 +396,14 @@ async def remove_participant(
     db: aiosqlite.Connection, participant_id: int, session_code: str
 ) -> bool:
     """Remove a participant. Returns True if deleted."""
-    result = await db.execute(
-        "DELETE FROM participants WHERE id = ? AND session_code = ? AND ("
-        "SELECT COUNT(*) FROM participants WHERE session_code = ?"
-        ") > 2",
-        (participant_id, session_code, session_code),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "DELETE FROM participants WHERE id = ? AND session_code = ? AND ("
+            "SELECT COUNT(*) FROM participants WHERE session_code = ?"
+            ") > 2",
+            (participant_id, session_code, session_code),
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -392,12 +416,13 @@ async def add_participant_stops(
     same_start_end: bool | None = None,
 ) -> bool:
     same = start_stop == end_stop if same_start_end is None else same_start_end
-    result = await db.execute(
-        "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? "
-        "WHERE id = ? AND session_code = ?",
-        (start_stop, end_stop, int(same), participant_id, session_code),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? "
+            "WHERE id = ? AND session_code = ?",
+            (start_stop, end_stop, int(same), participant_id, session_code),
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -406,18 +431,21 @@ async def save_search_results(db: aiosqlite.Connection, session_code: str, resul
     import json
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.execute(
-        "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) VALUES (?, ?, ?)",
-        (session_code, json.dumps(results_data, default=str), now),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        await db.execute(
+            "INSERT OR REPLACE INTO search_results "
+            "(session_code, results_json, created_at) VALUES (?, ?, ?)",
+            (session_code, json.dumps(results_data, default=str), now),
+        )
+        await db.commit()
 
 
 async def begin_search(db: aiosqlite.Connection, session_code: str, search_id: str) -> bool:
-    result = await db.execute(
-        "UPDATE sessions SET active_search_id = ? WHERE code = ?", (search_id, session_code)
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "UPDATE sessions SET active_search_id = ? WHERE code = ?", (search_id, session_code)
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -428,13 +456,14 @@ async def save_search_results_if_active(
     import json
 
     now = datetime.now(timezone.utc).isoformat()
-    result = await db.execute(
-        "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) "
-        "SELECT ?, ?, ? WHERE EXISTS ("
-        "SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?) ",
-        (session_code, json.dumps(results_data, default=str), now, session_code, search_id),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "INSERT OR REPLACE INTO search_results (session_code, results_json, created_at) "
+            "SELECT ?, ?, ? WHERE EXISTS ("
+            "SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?) ",
+            (session_code, json.dumps(results_data, default=str), now, session_code, search_id),
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -442,11 +471,12 @@ async def update_search_results(db: aiosqlite.Connection, session_code: str, res
     """Update persisted search data without changing when the search was run."""
     import json
 
-    await db.execute(
-        "UPDATE search_results SET results_json = ? WHERE session_code = ?",
-        (json.dumps(results_data, default=str), session_code),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        await db.execute(
+            "UPDATE search_results SET results_json = ? WHERE session_code = ?",
+            (json.dumps(results_data, default=str), session_code),
+        )
+        await db.commit()
 
 
 async def update_search_results_if_current(
@@ -460,21 +490,22 @@ async def update_search_results_if_current(
     """Update an expansion only if it still belongs to the search that started it."""
     import json
 
-    result = await db.execute(
-        "UPDATE search_results SET results_json = ? "
-        "WHERE session_code = ? AND created_at = ? "
-        "AND COALESCE(json_extract(results_json, '$.search_id'), '') = ? "
-        "AND EXISTS (SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?)",
-        (
-            json.dumps(results_data, default=str),
-            session_code,
-            created_at,
-            search_id,
-            session_code,
-            search_id,
-        ),
-    )
-    await db.commit()
+    async with connection_transaction(db):
+        result = await db.execute(
+            "UPDATE search_results SET results_json = ? "
+            "WHERE session_code = ? AND created_at = ? "
+            "AND COALESCE(json_extract(results_json, '$.search_id'), '') = ? "
+            "AND EXISTS (SELECT 1 FROM sessions WHERE code = ? AND active_search_id = ?)",
+            (
+                json.dumps(results_data, default=str),
+                session_code,
+                created_at,
+                search_id,
+                session_code,
+                search_id,
+            ),
+        )
+        await db.commit()
     return result.rowcount > 0
 
 
@@ -501,24 +532,28 @@ async def get_visitor_country(db: aiosqlite.Connection, user_id: str) -> Optiona
 
 
 async def set_visitor_country(db: aiosqlite.Connection, user_id: str, country: str) -> None:
-    await db.execute("UPDATE analytics_users SET country = ? WHERE user_id = ?", (country, user_id))
-    await db.commit()
+    async with connection_transaction(db):
+        await db.execute(
+            "UPDATE analytics_users SET country = ? WHERE user_id = ?", (country, user_id)
+        )
+        await db.commit()
 
 
 async def cleanup_old_sessions(db: aiosqlite.Connection, max_age_days: int = 30):
     """Delete sessions and their participants older than max_age_days."""
-    cursor = await db.execute(
-        "SELECT code FROM sessions WHERE created_at < datetime('now', ?)",
-        (f"-{max_age_days} days",),
-    )
-    old_sessions = await cursor.fetchall()
-    if not old_sessions:
-        return 0
-    codes = [row[0] for row in old_sessions]
-    placeholders = ",".join("?" for _ in codes)
-    await db.execute(f"DELETE FROM participants WHERE session_code IN ({placeholders})", codes)
-    await db.execute(f"DELETE FROM search_results WHERE session_code IN ({placeholders})", codes)
-    await db.execute(f"DELETE FROM sessions WHERE code IN ({placeholders})", codes)
-    await db.commit()
+    async with connection_transaction(db):
+        cursor = await db.execute(
+            "SELECT code FROM sessions WHERE created_at < datetime('now', ?)",
+            (f"-{max_age_days} days",),
+        )
+        old_sessions = await cursor.fetchall()
+        if not old_sessions:
+            return 0
+        codes = [row[0] for row in old_sessions]
+        placeholders = ",".join("?" for _ in codes)
+        await db.execute(f"DELETE FROM participants WHERE session_code IN ({placeholders})", codes)
+        await db.execute(f"DELETE FROM search_results WHERE session_code IN ({placeholders})", codes)
+        await db.execute(f"DELETE FROM sessions WHERE code IN ({placeholders})", codes)
+        await db.commit()
     logger.info("Cleaned up %d sessions older than %d days", len(codes), max_age_days)
     return len(codes)

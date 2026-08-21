@@ -14,6 +14,7 @@ import httpx
 from starlette.requests import Request
 
 from .config import GA4_API_SECRET, GA4_MEASUREMENT_ID
+from .db import connection_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,8 @@ async def record_visit(
     """
     now = now or datetime.now(timezone.utc)
     async with _visit_lock(db):
-        return await _record_visit_locked(db, user_id, now)
+        async with connection_transaction(db):
+            return await _record_visit_locked(db, user_id, now)
 
 
 async def _record_visit_locked(
@@ -263,19 +265,20 @@ async def touch_current_session(
     """Record browser engagement without starting a new analytics session."""
     now = now or datetime.now(timezone.utc)
     async with _visit_lock(db):
-        session = await get_current_session(db, user_id)
-        if session is None:
-            return None
-        now_iso = now.isoformat()
-        await db.execute(
-            "UPDATE analytics_users SET "
-            "last_seen_at = CASE WHEN last_seen_at < ? THEN ? ELSE last_seen_at END, "
-            "last_seen_date = CASE WHEN last_seen_at < ? THEN ? ELSE last_seen_date END "
-            "WHERE user_id = ?",
-            (now_iso, now_iso, now_iso, now.date().isoformat(), user_id),
-        )
-        await db.commit()
-        return session
+        async with connection_transaction(db):
+            session = await get_current_session(db, user_id)
+            if session is None:
+                return None
+            now_iso = now.isoformat()
+            await db.execute(
+                "UPDATE analytics_users SET "
+                "last_seen_at = CASE WHEN last_seen_at < ? THEN ? ELSE last_seen_at END, "
+                "last_seen_date = CASE WHEN last_seen_at < ? THEN ? ELSE last_seen_date END "
+                "WHERE user_id = ?",
+                (now_iso, now_iso, now_iso, now.date().isoformat(), user_id),
+            )
+            await db.commit()
+            return session
 
 
 def _visit_lock(db: aiosqlite.Connection) -> asyncio.Lock:
