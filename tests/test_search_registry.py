@@ -176,3 +176,31 @@ async def test_registry_shutdown_waits_for_owned_blocking_worker():
     await shutdown_task
 
     assert exited.is_set()
+
+
+@pytest.mark.asyncio
+async def test_registry_queues_blocking_search_work_at_capacity():
+    registry = SearchRegistry()
+    first_started = threading.Event()
+    first_release = threading.Event()
+    second_started = threading.Event()
+
+    def first_work():
+        first_started.set()
+        first_release.wait(timeout=2)
+
+    def second_work():
+        second_started.set()
+
+    first = asyncio.create_task(registry.run_blocking(first_work))
+    assert await asyncio.to_thread(first_started.wait, 1)
+
+    second = asyncio.create_task(registry.run_blocking(second_work))
+    await asyncio.sleep(0.05)
+    assert not second_started.is_set()
+
+    first_release.set()
+    await asyncio.gather(first, second)
+
+    assert second_started.is_set()
+    await registry.shutdown()

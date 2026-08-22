@@ -242,7 +242,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
     assert "/static/home-preview.js?v=6" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=52"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=53"]') is not None
     assert (
         page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=8"]')
         is not None
@@ -345,6 +345,25 @@ def test_home_preview_disclosure_wraps_without_expanding_the_handoff():
         css,
         re.DOTALL,
     )
+
+
+def test_home_preview_handoff_is_a_full_width_primary_control():
+    css = Path("static/app.css").read_text()
+    rule = re.search(
+        r"\.home-estimate__disclosure\s*>\s*\[data-preview-handoff\]\s*\{(?P<body>[^}]*)}",
+        css,
+        re.DOTALL,
+    )
+
+    assert rule is not None
+    declarations = rule.group("body")
+    assert "display: flex;" in declarations
+    assert "width: 100%;" in declarations
+    assert "min-height: 48px;" in declarations
+    assert "padding: 0.75rem 1rem;" in declarations
+    assert "border: 2px solid var(--ink);" in declarations
+    assert "background: var(--yellow);" in declarations
+    assert "box-shadow: var(--control-shadow);" in declarations
 
 
 @pytest.mark.asyncio

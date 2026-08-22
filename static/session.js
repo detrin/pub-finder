@@ -75,12 +75,20 @@ function bindStopPicker(root) {
     function selectStop(stop) {
         const input = resolveActiveInput();
         if (input) {
+            const form = input.closest("form");
             input.value = stop;
+            if (
+                input.name === "start_stop"
+                && form?.querySelector("[data-same-start-end]")?.checked
+            ) {
+                const endStop = form.querySelector("[name=end_stop]");
+                if (endStop) endStop.value = stop;
+            }
             pendingFocus = {
                 participantId: activeParticipantId,
                 fieldName: activeFieldName,
                 stop,
-                sourceForm: input.closest("form"),
+                sourceForm: form,
             };
             input.dispatchEvent(new Event("change", { bubbles: true }));
         }
@@ -199,7 +207,11 @@ function bindReturnCheckboxes(root) {
     root.addEventListener("change", (event) => {
         const checkbox = event.target.closest("[data-same-start-end]");
         if (!checkbox || !root.contains(checkbox)) return;
-        const endStop = checkbox.closest("form")?.querySelector("[name=end_stop]");
+        const form = checkbox.closest("form");
+        const endStop = form?.querySelector("[name=end_stop]");
+        if (endStop && checkbox.checked) {
+            endStop.value = form.querySelector("[name=start_stop]")?.value ?? "";
+        }
         if (endStop) endStop.disabled = checkbox.checked;
     }, true);
 }

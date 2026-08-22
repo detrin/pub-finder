@@ -487,6 +487,26 @@ async def test_add_stops_persists_return_choice_when_stops_are_equal(db):
 
 
 @pytest.mark.asyncio
+async def test_add_stops_mirrors_the_end_when_same_start_end_is_enabled(db):
+    session = await create_session(db, "Test Session", "Daniel")
+    participant = (await get_participants(db, session["code"]))[0]
+
+    await add_participant_stops(
+        db,
+        session["code"],
+        participant["id"],
+        start_stop="Anděl",
+        end_stop="Florenc",
+        same_start_end=True,
+    )
+
+    saved = (await get_participants(db, session["code"]))[0]
+    assert saved["start_stop"] == "Anděl"
+    assert saved["end_stop"] == "Anděl"
+    assert saved["same_start_end"] is True
+
+
+@pytest.mark.asyncio
 async def test_add_stops_cannot_update_participant_from_another_session(db):
     first = await create_session(db, "First", "Alice")
     second = await create_session(db, "Second", "Bob")

@@ -40,7 +40,10 @@ class SearchRegistry:
         self._progress_lock = Lock()
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._active_searches: dict[str, str] = {}
-        self._worker_pool = ThreadPoolExecutor(thread_name_prefix="pub-finder-search")
+        self._worker_pool = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="pub-finder-search",
+        )
         self._worker_futures: set[Future[Any]] = set()
         self._worker_lock = Lock()
         self._accepting_work = True

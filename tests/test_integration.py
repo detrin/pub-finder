@@ -28,7 +28,6 @@ from backend.db import (
 from backend.places import get_cached_pubs_for_type
 from backend.preview import PreviewPayloadCache, PreviewRateLimiter
 from backend.search_registry import SearchRegistry
-from routers.search import _search_timestamps
 
 
 @pytest_asyncio.fixture
@@ -67,7 +66,6 @@ async def setup_app():
     app.state.stop_geo = stop_geo
     registry = SearchRegistry(result_ttl_seconds=1)
     app.state.search_registry = registry
-    _search_timestamps.clear()
     search_router._places_request_tasks.clear()
 
     yield db
@@ -360,15 +358,7 @@ async def test_search_requires_two_participants():
 
 
 @pytest.mark.asyncio
-async def test_search_requires_names_for_both_initial_slots_before_rate_limiting(monkeypatch):
-    called = False
-
-    def rate_limiter(_code):
-        nonlocal called
-        called = True
-        return False
-
-    monkeypatch.setattr(search_router, "_is_rate_limited", rate_limiter)
+async def test_search_requires_names_for_both_initial_slots_before_starting_work():
     session = await create_session(app.state.db, "Test")
     participants = await get_participants(app.state.db, session["code"])
     for participant, stop in zip(participants, ("A", "B"), strict=True):
@@ -393,23 +383,13 @@ async def test_search_requires_names_for_both_initial_slots_before_rate_limiting
         )
 
     assert "Name each participant before searching." in response.text
-    assert called is False
+    assert app.state.search_registry.task_count == 0
 
 
 @pytest.mark.asyncio
-async def test_search_requires_every_person_to_have_a_complete_trip_before_rate_limiting(
-    monkeypatch,
-):
-    """An incomplete second participant cannot start or consume a search."""
+async def test_search_requires_every_person_to_have_a_complete_trip_before_starting_work():
+    """An incomplete second participant cannot start a search."""
     transport = ASGITransport(app=app)
-    called = False
-
-    def rate_limiter(_code):
-        nonlocal called
-        called = True
-        return False
-
-    monkeypatch.setattr(search_router, "_is_rate_limited", rate_limiter)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         code = await _create_session_with_participants(client, [("A", "A"), ("B", "")])
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -424,7 +404,7 @@ async def test_search_requires_every_person_to_have_a_complete_trip_before_rate_
         )
 
     assert "P2 needs start and end stops." in response.text
-    assert called is False
+    assert app.state.search_registry.task_count == 0
 
 
 async def _wait_for_search(search_id, session_code, timeout=10):
@@ -1316,8 +1296,8 @@ async def test_search_results_saved_to_db():
 
 
 @pytest.mark.asyncio
-async def test_search_rate_limiting():
-    """Rate limiter blocks after 3 searches within 60 seconds."""
+async def test_repeated_search_requests_are_all_accepted():
+    """A rapid replacement search is accepted instead of rejected."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         code = await _create_session_with_participants(client, [("A", "A"), ("B", "B")])
@@ -1335,19 +1315,20 @@ async def test_search_rate_limiting():
                 "routers.search.search_pubs_near_stop", new_callable=AsyncMock, return_value=[]
             ):
                 search_ids = []
-                for _ in range(3):
+                responses = []
+                for _ in range(4):
                     search_response = await client.post(
                         f"/session/{code}/search",
                         data=search_data,
                     )
+                    responses.append(search_response)
                     search_ids.append(_extract_search_id(search_response.text))
+                assert await _wait_for_search(search_ids[-1], code)
 
-                # 4th search should be rate limited
-                resp = await client.post(f"/session/{code}/search", data=search_data)
-                assert all([await _wait_for_search(search_id, code) for search_id in search_ids])
-
-    assert resp.status_code == 200
-    assert "Too many searches" in resp.text
+    assert all(response.status_code == 200 for response in responses)
+    assert all(search_ids)
+    assert len(set(search_ids)) == 4
+    assert all("Too many searches" not in response.text for response in responses)
 
 
 @pytest.mark.asyncio

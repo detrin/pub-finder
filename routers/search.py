@@ -39,13 +39,9 @@ from backend.utils import get_total_minutes_with_retries, validate_date_time
 
 logger = logging.getLogger(__name__)
 
-# Simple per-session rate limiter: max 3 searches per 60 seconds
-_search_timestamps: dict[str, list[float]] = defaultdict(list)
 _venue_expansion_timestamps: dict[str, list[float]] = defaultdict(list)
 _venue_expansion_locks: dict[str, asyncio.Lock] = {}
 _places_request_tasks: dict[tuple[float, float, str, int], asyncio.Task[list[dict]]] = {}
-SEARCH_RATE_LIMIT = 3
-SEARCH_RATE_WINDOW = 60  # seconds
 VENUE_EXPANSION_RATE_LIMIT = 3
 VENUE_EXPANSION_RATE_WINDOW = 60
 PUB_DISCOVERY_STOP_LIMIT = 3
@@ -59,17 +55,6 @@ _PLACE_TYPE_LABELS = {
     "cafe": "Coffee",
     "restaurant": "Food",
 }
-
-
-def _is_rate_limited(session_code: str) -> bool:
-    now = _time.monotonic()
-    timestamps = _search_timestamps[session_code]
-    # Prune old entries
-    _search_timestamps[session_code] = [t for t in timestamps if now - t < SEARCH_RATE_WINDOW]
-    if len(_search_timestamps[session_code]) >= SEARCH_RATE_LIMIT:
-        return True
-    _search_timestamps[session_code].append(now)
-    return False
 
 
 def _is_venue_expansion_rate_limited(session_code: str) -> bool:
@@ -285,16 +270,6 @@ async def search(
             "partials/results_table.html",
             {
                 "error": f"{incomplete_participant['name']} needs start and end stops.",
-                "results": None,
-            },
-        )
-
-    if _is_rate_limited(code):
-        return templates.TemplateResponse(
-            request,
-            "partials/results_table.html",
-            {
-                "error": "Too many searches. Please wait a minute before trying again.",
                 "results": None,
             },
         )

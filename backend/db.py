@@ -415,6 +415,8 @@ async def add_participant_stops(
     same_start_end: bool | None = None,
 ) -> bool:
     same = start_stop == end_stop if same_start_end is None else same_start_end
+    if same:
+        end_stop = start_stop
     async with connection_transaction(db):
         result = await db.execute(
             "UPDATE participants SET start_stop = ?, end_stop = ?, same_start_end = ? "

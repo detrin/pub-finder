@@ -144,8 +144,13 @@ test("readiness requires names in both initial participant slots", async () => {
 });
 
 test("same-stop changes disable the end field before autosave", async () => {
+    const start = eventTarget({ selector: "[name=start_stop]", value: "Anděl" });
     const end = eventTarget({ disabled: false, selector: "[name=end_stop]", value: "Florenc" });
-    const form = { querySelector(selector) { return selector === "[name=end_stop]" ? end : null; } };
+    const form = {
+        querySelector(selector) {
+            return { "[name=start_stop]": start, "[name=end_stop]": end }[selector] ?? null;
+        },
+    };
     const checkbox = eventTarget({
         checked: true,
         selector: "[data-same-start-end]",
@@ -159,11 +164,12 @@ test("same-stop changes disable the end field before autosave", async () => {
     await loadSessionModule(document);
     fire(root, "change", { target: checkbox });
     assert.equal(end.disabled, true);
+    assert.equal(end.value, "Anděl");
 
     checkbox.checked = false;
     fire(root, "change", { target: checkbox });
     assert.equal(end.disabled, false);
-    assert.equal(end.value, "Florenc");
+    assert.equal(end.value, "Anděl");
 });
 
 test("SSE participant swaps wait for autosave and focused form inputs", async () => {
@@ -370,6 +376,8 @@ test("stop selection resolves the latest replacement field once", async () => {
     });
     const original = eventTarget({ name: "start_stop", value: "", selector: "[data-stop-input]" });
     const replacement = eventTarget({ name: "start_stop", value: "", selector: "[name=start_stop]" });
+    const end = eventTarget({ name: "end_stop", value: "" });
+    const same = eventTarget({ checked: true });
     let changes = 0;
     replacement.dispatchEvent = (event) => {
         assert.equal(event.type, "change");
@@ -378,14 +386,22 @@ test("stop selection resolves the latest replacement field once", async () => {
     };
     function participantForm(input) {
         const id = eventTarget({ value: "1" });
-        return {
+        const form = {
             querySelector(selector) {
-                return { "[name=participant_id]": id, "[name=start_stop]": input }[selector] ?? null;
+                return {
+                    "[name=participant_id]": id,
+                    "[name=start_stop]": input,
+                    "[name=end_stop]": end,
+                    "[data-same-start-end]": same,
+                }[selector] ?? null;
             },
         };
+        input.closest = (selector) => (
+            selector === "form" ? form : (selector === input.selector ? input : null)
+        );
+        return form;
     }
     const originalForm = participantForm(original);
-    original.closest = (selector) => selector === "form" ? originalForm : (selector === "[data-stop-input]" ? original : null);
     forms = [originalForm];
     const root = eventTarget({
         dataset: { stops: '["Muzeum"]' },
@@ -402,6 +418,7 @@ test("stop selection resolves the latest replacement field once", async () => {
     fire(list.children[0], "click");
 
     assert.equal(replacement.value, "Muzeum");
+    assert.equal(end.value, "Muzeum");
     assert.equal(changes, 1);
 });
 
