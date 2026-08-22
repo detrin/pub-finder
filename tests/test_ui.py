@@ -421,7 +421,7 @@ async def test_home_explains_invalid_preview_carry_over():
 
 
 @pytest.mark.asyncio
-async def test_new_session_starts_with_two_editable_empty_participant_slots():
+async def test_new_session_starts_with_two_editable_named_participant_slots():
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -434,14 +434,17 @@ async def test_new_session_starts_with_two_editable_empty_participant_slots():
 
     workspace = BeautifulSoup(page.text, "html.parser")
     name_inputs = workspace.select("[data-participant-name-input]")
-    assert [input_element.get("value") for input_element in name_inputs] == ["", ""]
+    assert [input_element.get("value") for input_element in name_inputs] == [
+        "Person 1",
+        "Person 2",
+    ]
     assert all(
         input_element.find_parent("form")["hx-trigger"]
         == "change target:[data-participant-name-input]"
         for input_element in name_inputs
     )
     assert workspace.select_one("[data-search-submit]").has_attr("disabled")
-    assert "Name each participant." in workspace.get_text(" ", strip=True)
+    assert "Person 1 needs start and end stops." in workspace.get_text(" ", strip=True)
 
 
 @pytest.mark.asyncio

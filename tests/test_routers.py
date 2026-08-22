@@ -277,14 +277,14 @@ async def test_create_session():
     code = response.headers["location"].removeprefix("/session/")
     assert code
     participants = await get_participants(app.state.db, code)
-    assert [participant["name"] for participant in participants] == ["", ""]
+    assert [participant["name"] for participant in participants] == ["Person 1", "Person 2"]
     assert [participant["start_stop"] for participant in participants] == ["", ""]
     assert [participant["end_stop"] for participant in participants] == ["", ""]
     assert [participant["same_start_end"] for participant in participants] == [True, True]
 
 
 @pytest.mark.asyncio
-async def test_create_session_carries_preview_origins_into_unnamed_slots():
+async def test_create_session_carries_preview_origins_into_named_slots():
     app.state.all_stops = ["A", "B", "C"]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
@@ -298,7 +298,11 @@ async def test_create_session_carries_preview_origins_into_unnamed_slots():
 
     code = response.headers["location"].removeprefix("/session/")
     participants = await get_participants(app.state.db, code)
-    assert [person["name"] for person in participants] == ["", "", ""]
+    assert [person["name"] for person in participants] == [
+        "Person 1",
+        "Person 2",
+        "Person 3",
+    ]
     assert [person["start_stop"] for person in participants] == ["A", "B", "C"]
     assert [person["end_stop"] for person in participants] == ["A", "B", "C"]
     assert [person["same_start_end"] for person in participants] == [True, True, True]
@@ -316,7 +320,7 @@ async def test_create_session_with_one_preview_origin_keeps_two_slots():
 
     code = response.headers["location"].removeprefix("/session/")
     participants = await get_participants(app.state.db, code)
-    assert [person["name"] for person in participants] == ["", ""]
+    assert [person["name"] for person in participants] == ["Person 1", "Person 2"]
     assert [person["start_stop"] for person in participants] == ["A", ""]
     assert [person["end_stop"] for person in participants] == ["A", ""]
     assert [person["same_start_end"] for person in participants] == [True, True]
@@ -470,11 +474,11 @@ async def test_join_session():
         )
     assert join_resp.status_code == 303
     participants = await get_participants(app.state.db, code)
-    assert [participant["name"] for participant in participants] == ["Petra", ""]
+    assert [participant["name"] for participant in participants] == ["Petra", "Person 2"]
 
 
 @pytest.mark.asyncio
-async def test_adding_a_person_fills_an_initial_blank_slot_before_creating_another():
+async def test_adding_a_person_fills_an_initial_dummy_slot_before_creating_another():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_response = await client.post(
@@ -491,7 +495,7 @@ async def test_adding_a_person_fills_an_initial_blank_slot_before_creating_anoth
 
     assert response.status_code == 200
     participants = await get_participants(app.state.db, code)
-    assert [participant["name"] for participant in participants] == ["Alice", ""]
+    assert [participant["name"] for participant in participants] == ["Alice", "Person 2"]
 
 
 @pytest.mark.asyncio

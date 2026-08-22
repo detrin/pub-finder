@@ -24,6 +24,7 @@ from backend.db import (
     init_db,
     join_session,
     save_search_results,
+    update_participant_name,
 )
 from backend.places import get_cached_pubs_for_type
 from backend.preview import PreviewPayloadCache, PreviewRateLimiter
@@ -361,6 +362,12 @@ async def test_search_requires_two_participants():
 async def test_search_requires_names_for_both_initial_slots_before_starting_work():
     session = await create_session(app.state.db, "Test")
     participants = await get_participants(app.state.db, session["code"])
+    await update_participant_name(
+        app.state.db,
+        session["code"],
+        participants[0]["id"],
+        "",
+    )
     for participant, stop in zip(participants, ("A", "B"), strict=True):
         await add_participant_stops(
             app.state.db,

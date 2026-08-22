@@ -93,6 +93,8 @@ async def test_create_session(db):
     assert session["code"]
     assert len(session["code"]) == 32
     assert session["creator_name"] == "Daniel"
+    participants = await get_participants(db, session["code"])
+    assert [participant["name"] for participant in participants] == ["Daniel"]
 
 
 @pytest.mark.asyncio
@@ -376,7 +378,7 @@ async def test_concurrent_joins_cannot_claim_two_slots_with_the_same_name(db):
     )
 
     participants = await get_participants(db, session["code"])
-    assert [participant["name"] for participant in participants] == ["Alice", ""]
+    assert [participant["name"] for participant in participants] == ["Alice", "Person 2"]
 
 
 @pytest.mark.asyncio

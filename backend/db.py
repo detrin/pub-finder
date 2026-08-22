@@ -9,6 +9,39 @@ from typing import Optional
 import aiosqlite
 
 logger = logging.getLogger(__name__)
+_GENERATED_PARTICIPANT_NAMES = frozenset(f"Person {index}" for index in range(1, 21))
+
+
+def _is_generated_participant_name(name: str) -> bool:
+    return name in _GENERATED_PARTICIPANT_NAMES
+
+
+async def _claim_available_participant_slot(
+    db: aiosqlite.Connection,
+    session_code: str,
+    name: str,
+) -> int | None:
+    async with db.execute(
+        "SELECT id, name FROM participants WHERE session_code = ? ORDER BY id",
+        (session_code,),
+    ) as cursor:
+        participants = await cursor.fetchall()
+    slot = next(
+        (
+            participant
+            for participant in participants
+            if not participant[1] or _is_generated_participant_name(participant[1])
+        ),
+        None,
+    )
+    if slot is None:
+        return None
+    async with db.execute(
+        "UPDATE participants SET name = ? WHERE id = ? AND session_code = ? RETURNING id",
+        (name, slot[0], session_code),
+    ) as cursor:
+        claimed = await cursor.fetchone()
+    return claimed[0] if claimed else None
 
 
 @asynccontextmanager
@@ -205,7 +238,7 @@ async def create_session(
         rows = [
             (
                 code,
-                "",
+                f"Person {index + 1}",
                 stops[index] if index < len(stops) else "",
                 stops[index] if index < len(stops) else "",
                 1,
@@ -293,16 +326,10 @@ async def join_session(db: aiosqlite.Connection, code: str, name: str) -> Option
         if existing:
             return {"id": existing[0], "name": name, "session_code": code, "created_at": ""}
         now = datetime.now(timezone.utc).isoformat()
-        async with db.execute(
-            "UPDATE participants SET name = ? WHERE id = ("
-            "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
-            ") AND session_code = ? RETURNING id",
-            (name, code, code),
-        ) as cursor:
-            claimed = await cursor.fetchone()
-        if claimed:
+        claimed_id = await _claim_available_participant_slot(db, code, name)
+        if claimed_id is not None:
             await db.commit()
-            return {"id": claimed[0], "name": name, "session_code": code, "created_at": now}
+            return {"id": claimed_id, "name": name, "session_code": code, "created_at": now}
         async with db.execute(
             "INSERT INTO participants (session_code, name, created_at) "
             "VALUES (?, ?, ?) RETURNING id",
@@ -353,16 +380,10 @@ async def add_participant(db: aiosqlite.Connection, session_code: str, name: str
         if existing:
             return None
         now = datetime.now(timezone.utc).isoformat()
-        async with db.execute(
-            "UPDATE participants SET name = ? WHERE id = ("
-            "SELECT id FROM participants WHERE session_code = ? AND name = '' ORDER BY id LIMIT 1"
-            ") AND session_code = ? RETURNING id",
-            (name, session_code, session_code),
-        ) as cursor:
-            claimed = await cursor.fetchone()
-        if claimed:
+        claimed_id = await _claim_available_participant_slot(db, session_code, name)
+        if claimed_id is not None:
             await db.commit()
-            return {"id": claimed[0], "name": name, "session_code": session_code}
+            return {"id": claimed_id, "name": name, "session_code": session_code}
         async with db.execute(
             "INSERT INTO participants (session_code, name, created_at) "
             "VALUES (?, ?, ?) RETURNING id",
