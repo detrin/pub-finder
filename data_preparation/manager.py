@@ -53,7 +53,7 @@ def run(
     default_wait_time=5,
     extra_wait_time=0,
     waiting_num_tasks=10,
-    num_processes=30,
+    num_processes=3,
 ):
     """Core manager logic, callable from CLI."""
     num_tasks_options = [5000, 10000, 25000, 50000]
@@ -82,7 +82,7 @@ def main():
     parser.add_argument("--default-wait-time", type=int, default=5)
     parser.add_argument("--extra-wait-time", type=int, default=0)
     parser.add_argument("--waiting-num-tasks", type=int, default=10)
-    parser.add_argument("--num-processes", type=int, default=30)
+    parser.add_argument("--num-processes", type=int, default=3)
     args = parser.parse_args()
     run(
         threshold_error_rate=args.threshold_error_rate,

@@ -5,6 +5,7 @@ Usage:
     python -m data_preparation scrape     -- Scrape transit times for stop pairs
     python -m data_preparation manage     -- Adaptive scraping with bandit-based scheduling
     python -m data_preparation prepare    -- Prepare geographic stop data from GPS JSON files
+    python -m data_preparation benchmark-rate -- Probe DPP rate limits with escalating concurrency
     python -m data_preparation bandit-sim -- Run a bandit simulation (for testing algorithms)
 """
 
@@ -38,6 +39,21 @@ def cmd_prepare(args):
     from .prepare_geo_data import main
 
     main(json_dir=args.json_dir, stops_file=args.stops_file, output_file=args.output)
+
+
+def cmd_benchmark_rate(args):
+    from .benchmark_rate_limit import run
+
+    run(
+        stops_file=args.stops_file,
+        out_file=args.out,
+        max_concurrency=args.max_concurrency,
+        tier_seconds=args.tier_seconds,
+        grace_seconds=args.grace_seconds,
+        failure_threshold=args.failure_threshold,
+        timeout_s=args.timeout,
+        seed=args.seed,
+    )
 
 
 def cmd_bandit_sim(args):
@@ -89,7 +105,7 @@ def main():
     )
     sp_scrape.add_argument("--results", default="results.json", help="Path to results JSON")
     sp_scrape.add_argument(
-        "--num-processes", type=int, default=5, help="Number of parallel processes"
+        "--num-processes", type=int, default=3, help="Number of parallel processes"
     )
     sp_scrape.add_argument("--num-tasks", type=int, default=None, help="Limit number of tasks")
     sp_scrape.set_defaults(func=cmd_scrape)
@@ -123,6 +139,20 @@ def main():
     )
     sp_prepare.add_argument("--output", default="data/Prague_stops_geo.csv", help="Output CSV path")
     sp_prepare.set_defaults(func=cmd_prepare)
+
+    # --- benchmark-rate ---
+    sp_bench = subparsers.add_parser(
+        "benchmark-rate", help="Probe DPP rate limits with escalating concurrency"
+    )
+    sp_bench.add_argument("--stops-file", default="data/Prague_stops.txt")
+    sp_bench.add_argument("--out", default="benchmark_report.json")
+    sp_bench.add_argument("--max-concurrency", type=int, default=6)
+    sp_bench.add_argument("--tier-seconds", type=float, default=20.0)
+    sp_bench.add_argument("--grace-seconds", type=float, default=4.0)
+    sp_bench.add_argument("--failure-threshold", type=float, default=0.2)
+    sp_bench.add_argument("--timeout", type=int, default=15)
+    sp_bench.add_argument("--seed", type=int, default=42)
+    sp_bench.set_defaults(func=cmd_benchmark_rate)
 
     # --- bandit-sim ---
     sp_sim = subparsers.add_parser("bandit-sim", help="Run a bandit algorithm simulation")

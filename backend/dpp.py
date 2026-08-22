@@ -1,8 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 
+ROUTE_URL = "https://spojeni.dpp.cz/"
 
-def get_route_info(start_place: str, end_place: str, date: str, time: str) -> int:
+
+def route_request_kwargs(start_place: str, end_place: str, date: str, time: str) -> dict:
     cookies = {
         "consent_analytics_storage": "denied",
         "consent_is_set": "true",
@@ -38,8 +40,16 @@ def get_route_info(start_place: str, end_place: str, date: str, time: str) -> in
         "f_time": time,
     }
 
-    url = "https://spojeni.dpp.cz/"
-    response = requests.get(url, params=params, cookies=cookies, headers=headers, timeout=15)
+    return {
+        "cookies": cookies,
+        "headers": headers,
+        "params": params,
+    }
+
+
+def get_route_info(start_place: str, end_place: str, date: str, time: str) -> int:
+    kwargs = route_request_kwargs(start_place, end_place, date, time)
+    response = requests.get(ROUTE_URL, timeout=15, **kwargs)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.content, "html.parser")
