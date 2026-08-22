@@ -28,7 +28,10 @@ TRANSLATIONS = {
         "home.preview_group": "Shared reach for {count} starting points",
         "home.preview_one_prompt": "Add another stop to see where everyone can reach.",
         "home.preview_group_prompt": "Colour shows the longest estimated journey among the selected starts.",
-        "home.preview_disclosure": "Based on typical transit times. No selected date, service changes, or trip home.",
+        "home.preview_disclosure": (
+            "Stop-to-stop transit times plus estimated walking from the nearest stop. "
+            "No selected date, service changes, or trip home."
+        ),
         "home.preview_handoff": "Plan with live DPP times ↓",
         "home.legend_label": "Approximate one-way journey time bands",
         "home.legend_20": "up to 20 min",
@@ -63,10 +66,10 @@ TRANSLATIONS = {
         "home.try_again": "Try again",
         "how.homepage_quick_estimate_title": "Homepage quick estimate",
         "how.homepage_quick_estimate_body": (
-            "The homepage quick estimate uses precomputed typical one-way transit times. "
-            "It does not use a selected date, account for service changes, include a return "
-            "trip, or call live DPP or Google services. Create a plan for date-specific "
-            "journey queries and ranked meeting points."
+            "The homepage quick estimate uses precomputed typical one-way transit times and "
+            "adds estimated walking from the nearest stop. It does not use a selected date, "
+            "account for service changes, include a return trip, or call live DPP or Google "
+            "services. Create a plan for date-specific journey queries and ranked meeting points."
         ),
         "feedback.page_title": "Feedback",
         "feedback.eyebrow": "Field report",
@@ -172,7 +175,10 @@ TRANSLATIONS = {
         "home.preview_group": "Společný dosah pro {count} výchozích míst",
         "home.preview_one_prompt": "Přidejte další zastávku a podívejte se, kam se dostanou všichni.",
         "home.preview_group_prompt": "Barva ukazuje nejdelší odhadovanou cestu z vybraných výchozích míst.",
-        "home.preview_disclosure": "Podle obvyklých časů veřejné dopravy, bez zvoleného data, změn v provozu a cesty zpět.",
+        "home.preview_disclosure": (
+            "Časy veřejné dopravy mezi zastávkami plus odhad chůze od nejbližší zastávky, "
+            "bez zvoleného data, změn v provozu a cesty zpět."
+        ),
         "home.preview_handoff": "Plánovat podle aktuálních časů DPP ↓",
         "home.legend_label": "Pásma přibližné doby cesty jedním směrem",
         "home.legend_20": "do 20 min",
@@ -209,9 +215,10 @@ TRANSLATIONS = {
         "how.homepage_quick_estimate_title": "Rychlý odhad na úvodní stránce",
         "how.homepage_quick_estimate_body": (
             "Rychlý odhad na úvodní stránce používá předem vypočítané obvyklé doby cest "
-            "veřejnou dopravou jedním směrem. Nevyužívá zvolené datum, nezohledňuje změny "
-            "v provozu, nezahrnuje cestu zpět ani nevolá aktuální služby DPP či Googlu. "
-            "Pro dotazy na cesty k určitému datu a seřazená místa setkání vytvořte plán."
+            "veřejnou dopravou jedním směrem a přidává odhad chůze od nejbližší zastávky. "
+            "Nevyužívá zvolené datum, nezohledňuje změny v provozu, nezahrnuje cestu zpět ani "
+            "nevolá aktuální služby DPP či Googlu. Pro dotazy na cesty k určitému datu a "
+            "seřazená místa setkání vytvořte plán."
         ),
         "feedback.page_title": "Zpětná vazba",
         "feedback.eyebrow": "Hlášení z terénu",

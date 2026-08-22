@@ -1,4 +1,8 @@
-import { classifyTime, interpolateGrid, selectLayerValues } from "./reachability-core.js";
+import {
+    classifyTime,
+    estimateNearestStopGrid,
+    selectLayerValues,
+} from "./reachability-core.js?v=2";
 
 const DEFAULT_CENTER = [50.0755, 14.4378];
 const DEFAULT_ZOOM = 12;
@@ -15,6 +19,9 @@ const BAND_COLORS = [
 const BAND_OPACITY = 0.48;
 const MISSING_PATTERN_SIZE = 6;
 const MISSING_MARKER_SIZE = 12;
+const STOP_CLICK_RADIUS = 8;
+const WALKING_METERS_PER_MINUTE = 5000 / 60;
+const WALKING_ROUTE_FACTOR = 1.2;
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function errorMessage(error) {
@@ -197,6 +204,8 @@ export class ReachabilityMapController {
         }
         this.redrawListener = () => this.scheduleRedraw();
         this.map.on("move zoom resize", this.redrawListener);
+        this.stopClickListener = (event) => this.openStopEstimate(event);
+        this.map.on("click", this.stopClickListener);
         this.themeListener = () => this.scheduleRedraw();
         this.document.addEventListener?.("themechange", this.themeListener);
 
@@ -357,6 +366,31 @@ export class ReachabilityMapController {
         this.participantMarkers.forEach((marker) => marker.bringToFront?.());
     }
 
+    openStopEstimate(event) {
+        const clickPoint = event?.containerPoint;
+        if (!Number.isFinite(clickPoint?.x) || !Number.isFinite(clickPoint?.y)) return;
+        let nearestIndex = -1;
+        let nearestDistanceSquared = STOP_CLICK_RADIUS * STOP_CLICK_RADIUS;
+        this.payload.stops.forEach((stop, index) => {
+            const value = this.layerValues[index];
+            if (!Number.isFinite(value)) return;
+            const point = this.map.latLngToContainerPoint([stop.lat, stop.lon]);
+            const distanceSquared = (point.x - clickPoint.x) ** 2 + (point.y - clickPoint.y) ** 2;
+            if (distanceSquared <= nearestDistanceSquared) {
+                nearestIndex = index;
+                nearestDistanceSquared = distanceSquared;
+            }
+        });
+        if (nearestIndex < 0) return;
+        const stop = this.payload.stops[nearestIndex];
+        const value = this.layerValues[nearestIndex];
+        const minutes = Number.isInteger(value) ? String(value) : value.toFixed(1);
+        this.leaflet.popup()
+            .setLatLng([stop.lat, stop.lon])
+            .setContent(popupContent(this.document, stop.name, [`${minutes} min`]))
+            .openOn(this.map);
+    }
+
     scheduleRedraw() {
         if (this.destroyed || this.frameId != null || !this.context) return;
         this.frameId = this.requestFrame(() => {
@@ -397,12 +431,19 @@ export class ReachabilityMapController {
         const gridHeight = Math.max(1, Math.round(cssHeight * gridScale));
         const scaleX = gridWidth / cssWidth;
         const scaleY = gridHeight / cssHeight;
+        const fieldPoints = [];
         const observedPoints = [];
         const missingPoints = [];
 
         this.payload.stops.forEach((stop, index) => {
             const value = this.layerValues[index];
             const point = this.map.latLngToContainerPoint([stop.lat, stop.lon]);
+            const fieldPoint = {
+                x: point.x * scaleX,
+                y: point.y * scaleY,
+                value,
+            };
+            fieldPoints.push(fieldPoint);
             if (value === null) {
                 missingPoints.push({
                     outputX: point.x * pixelRatio,
@@ -412,11 +453,9 @@ export class ReachabilityMapController {
             }
             if (!Number.isFinite(value)) return;
             observedPoints.push({
-                x: point.x * scaleX,
-                y: point.y * scaleY,
+                ...fieldPoint,
                 outputX: point.x * pixelRatio,
                 outputY: point.y * pixelRatio,
-                value,
             });
         });
 
@@ -434,20 +473,27 @@ export class ReachabilityMapController {
             return;
         }
 
-        if (observedPoints.length > 0) {
-            const grid = interpolateGrid(observedPoints, gridWidth, gridHeight);
-            const minX = Math.min(...observedPoints.map((point) => point.x));
-            const maxX = Math.max(...observedPoints.map((point) => point.x));
-            const minY = Math.min(...observedPoints.map((point) => point.y));
-            const maxY = Math.max(...observedPoints.map((point) => point.y));
+        if (fieldPoints.length > 0) {
+            const horizontalGridUnit = cssWidth / gridWidth;
+            const mapCenterY = cssHeight / 2;
+            const gridUnitMeters = this.map.distance(
+                this.map.containerPointToLatLng([0, mapCenterY]),
+                this.map.containerPointToLatLng([horizontalGridUnit, mapCenterY]),
+            );
+            const walkingMinutesPerGridUnit = gridUnitMeters
+                * WALKING_ROUTE_FACTOR
+                / WALKING_METERS_PER_MINUTE;
+            const grid = estimateNearestStopGrid(
+                fieldPoints,
+                gridWidth,
+                gridHeight,
+                walkingMinutesPerGridUnit,
+            );
             const bandColors = BAND_COLORS.map(([property, fallback]) => (
                 this.styleColor(property, fallback)
             ));
             for (let y = 0; y < grid.height; y += 1) {
                 for (let x = 0; x < grid.width; x += 1) {
-                    const centerX = x + 0.5;
-                    const centerY = y + 0.5;
-                    if (centerX < minX || centerX > maxX || centerY < minY || centerY > maxY) continue;
                     const band = classifyTime(grid.values[y * grid.width + x], this.threshold, this.step);
                     if (band == null || band >= bandColors.length) continue;
                     this.context.fillStyle = bandColors[band];
@@ -533,6 +579,7 @@ export class ReachabilityMapController {
         if (this.destroyed) return;
         this.destroyed = true;
         this.map.off("move zoom resize", this.redrawListener);
+        this.map.off("click", this.stopClickListener);
         this.document.removeEventListener?.("themechange", this.themeListener);
         if (this.frameId != null) {
             this.cancelFrame(this.frameId);

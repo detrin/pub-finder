@@ -234,17 +234,17 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert handoff is not None
     assert disclosure is not None
     assert "home-estimate__method-link" in disclosure.get("class", [])
-    assert "Based on typical transit times" in disclosure.get_text(" ", strip=True)
+    assert "estimated walking from the nearest stop" in disclosure.get_text(" ", strip=True)
     assert page.select_one("#session-name") is not None
     assert create_form.select_one("[data-preview-hidden-fields]") is not None
     assert create_form.select_one("[data-preview-carry-status]") is not None
     assert [option["value"] for option in canonical_options] == ["A", "B"]
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
-    assert "/static/home-preview.js?v=5" in home_modules
+    assert "/static/home-preview.js?v=6" in home_modules
     assert "/static/home-preview.js" not in other_response.text
     assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=51"]') is not None
     assert (
-        page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=7"]')
+        page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=8"]')
         is not None
     )
     assert preview["data-limit"] == (
@@ -635,6 +635,7 @@ async def test_saved_results_render_split_workspace_and_reachability_url():
     assert "data-participants=" in response.text
     assert "Longest journey" in response.text
     assert "Approximate from typical transit times" in response.text
+    assert "Each map location uses its nearest stop and adds an estimated walk" in response.text
 
 
 @pytest.mark.asyncio
@@ -907,6 +908,8 @@ async def test_how_it_works_uses_verified_dataset_facts():
     assert "2,083,035" in response.text
     assert "precomputed typical times" in response.text
     assert "live DPP" in response.text
+    assert "nearest stop" in response.text
+    assert "5 km/h" in response.text
     assert "1,463" not in response.text
     content = BeautifulSoup(response.text, "html.parser").select_one(".technical-page__content")
     assert content is not None
@@ -928,9 +931,10 @@ async def test_how_it_works_separates_the_homepage_estimate_from_live_planning()
     assert page.select_one('.technical-page__toc a[href="#homepage-quick-estimate"]') is not None
     assert section.get_text(" ", strip=True) == (
         "Homepage quick estimate The homepage quick estimate uses precomputed typical one-way "
-        "transit times. It does not use a selected date, account for service changes, include a "
-        "return trip, or call live DPP or Google services. Create a plan for date-specific "
-        "journey queries and ranked meeting points."
+        "transit times and adds estimated walking from the nearest stop. It does not use a "
+        "selected date, account for service changes, include a return trip, or call live DPP or "
+        "Google services. Create a plan for date-specific journey queries and ranked meeting "
+        "points."
     )
 
 
@@ -950,10 +954,10 @@ async def test_how_it_works_localizes_the_homepage_method_note_in_czech():
     assert toc_link.get_text(" ", strip=True) == "Rychlý odhad na úvodní stránce"
     assert section.get_text(" ", strip=True) == (
         "Rychlý odhad na úvodní stránce Rychlý odhad na úvodní stránce používá předem "
-        "vypočítané obvyklé doby cest veřejnou dopravou jedním směrem. Nevyužívá zvolené "
-        "datum, nezohledňuje změny v provozu, nezahrnuje cestu zpět ani nevolá aktuální "
-        "služby DPP či Googlu. Pro dotazy na cesty k určitému datu a seřazená místa setkání "
-        "vytvořte plán."
+        "vypočítané obvyklé doby cest veřejnou dopravou jedním směrem a přidává odhad chůze "
+        "od nejbližší zastávky. Nevyužívá zvolené datum, nezohledňuje změny v provozu, "
+        "nezahrnuje cestu zpět ani nevolá aktuální služby DPP či Googlu. Pro dotazy na cesty "
+        "k určitému datu a seřazená místa setkání vytvořte plán."
     )
     assert "Homepage quick estimate" not in section.get_text(" ", strip=True)
 

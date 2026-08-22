@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { interpolateGrid } from "../../static/reachability-core.js";
+import { estimateNearestStopGrid } from "../../static/reachability-core.js";
 import { createReachabilityMap, validateReachabilityPayload } from "../../static/reachability-map.js";
 
-function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
+function createHarness({ width = 4, height = 1, pixelRatio = 1, metersPerPixel = 0 } = {}) {
     const events = [];
     const frameQueue = [];
     const canvasOperations = [];
@@ -12,6 +12,7 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
     const documentListeners = new Map();
     const mapListeners = new Map();
     const mapOptions = [];
+    const popupCalls = [];
     const themeColors = new Map();
     let mapRemoveCount = 0;
     let cancelledFrames = 0;
@@ -135,8 +136,14 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         },
     };
     const map = {
+        containerPointToLatLng([x, y]) {
+            return { lat: y, lng: x };
+        },
         containerPointToLayerPoint(point) {
             return point;
+        },
+        distance(first, second) {
+            return Math.hypot(first.lat - second.lat, first.lng - second.lng) * metersPerPixel;
         },
         fitBounds() {},
         getPanes() {
@@ -215,6 +222,23 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
             mapOptions.push(options ?? {});
             return map;
         },
+        popup() {
+            const popup = {
+                setContent(content) {
+                    this.content = content;
+                    return this;
+                },
+                setLatLng(latLng) {
+                    this.latLng = latLng;
+                    return this;
+                },
+                openOn(ownerMap) {
+                    popupCalls.push({ content: this.content, latLng: this.latLng, ownerMap });
+                    return this;
+                },
+            };
+            return popup;
+        },
         tileLayer() {
             return { addTo() {} };
         },
@@ -230,6 +254,7 @@ function createHarness({ width = 4, height = 1, pixelRatio = 1 } = {}) {
         map,
         mapListeners,
         mapOptions,
+        popupCalls,
         root,
         dispatchThemeChange() {
             document.dispatchEvent(new CustomEvent("themechange"));
@@ -502,6 +527,84 @@ test("controller renders five shared travel bands and hatches explicit missing e
     assert.equal(harness.createdGroups[2].layers.length, 1);
 });
 
+test("field adds estimated walking time from the nearest stop", async () => {
+    const harness = createHarness({ width: 1, height: 1, metersPerPixel: 1000 });
+    const walkingPayload = {
+        participants: [],
+        stops: [{
+            name: "Stop",
+            lat: 0.5,
+            lon: 0,
+            participant_minutes: [],
+            group_max_minutes: 20,
+        }],
+    };
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload: walkingPayload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    harness.runFrame();
+
+    const fieldCell = harness.canvasOperations.find(({ type }) => type === "fillRect");
+    assert.equal(fieldCell.fillStyle, "#4dc694");
+});
+
+test("field does not borrow a farther stop estimate across a missing nearest stop", async () => {
+    const harness = createHarness({ width: 1, height: 1 });
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload: {
+            participants: [],
+            stops: [
+                {
+                    name: "Missing",
+                    lat: 0.5,
+                    lon: 0.5,
+                    participant_minutes: [],
+                    group_max_minutes: null,
+                },
+                {
+                    name: "Far",
+                    lat: 0.5,
+                    lon: 10,
+                    participant_minutes: [],
+                    group_max_minutes: 20,
+                },
+            ],
+        },
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    harness.runFrame();
+
+    const paintedBands = harness.canvasOperations.filter(({ type, fillStyle }) => (
+        type === "fillRect" && fillStyle !== "missing-hatch"
+    ));
+    assert.equal(paintedBands.length, 0);
+});
+
+test("clicking a stop dot shows that stop's exact travel time", async () => {
+    const harness = createHarness();
+    await createReachabilityMap(harness.root, {
+        leaflet: harness.leaflet,
+        payload,
+        requestAnimationFrame: harness.requestAnimationFrame,
+        cancelAnimationFrame: harness.cancelAnimationFrame,
+    });
+
+    harness.mapListeners.get("click")({ containerPoint: { x: 1.5, y: 0.5 } });
+
+    assert.equal(harness.popupCalls.length, 1);
+    const popup = harness.popupCalls[0];
+    assert.deepEqual(popup.latLng, [0.5, 1.5]);
+    assert.equal(popup.content.children[0].textContent, "B");
+    assert.equal(popup.content.children[2].textContent, "50 min");
+});
+
 test("non-square maps render circular observation dots at scaled output coordinates", async () => {
     const harness = createHarness({ width: 340, height: 654, pixelRatio: 2 });
     const tallPayload = {
@@ -532,7 +635,7 @@ test("non-square maps render circular observation dots at scaled output coordina
     const fieldCell = harness.canvasOperations.find(({ type }) => type === "fillRect");
     assert.ok(Math.abs(fieldCell.width - fieldCell.height) <= 1);
 
-    const boundedGrid = interpolateGrid([{ x: 1, y: 1, value: 20 }], 340, 654);
+    const boundedGrid = estimateNearestStopGrid([{ x: 1, y: 1, value: 20 }], 340, 654, 1);
     assert.deepEqual([boundedGrid.width, boundedGrid.height], [96, 96]);
 });
 

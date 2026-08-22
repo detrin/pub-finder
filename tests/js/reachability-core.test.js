@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
     classifyTime,
-    interpolateGrid,
+    estimateNearestStopGrid,
     selectLayerValues,
 } from "../../static/reachability-core.js";
 
@@ -50,54 +50,45 @@ test("time bands reject invalid observations and band settings", () => {
     assert.equal(classifyTime(20, 35, 0), null);
 });
 
-test("interpolation uses inverse-distance travel time values", () => {
-    const grid = interpolateGrid([
+test("map cells use the nearest stop time plus walking instead of blending stops", () => {
+    const grid = estimateNearestStopGrid([
         { x: 0, y: 0.5, value: 10 },
         { x: 1, y: 0.5, value: 30 },
-    ], 1, 1);
+    ], 1, 1, 12);
 
     assert.equal(grid.width, 1);
     assert.equal(grid.height, 1);
-    assert.ok(Math.abs(grid.values[0] - 20) < 1e-9);
+    assert.equal(grid.values[0], 16);
 });
 
-test("interpolation returns an exact observed travel time at a stop", () => {
-    const grid = interpolateGrid([
+test("map cells stay unavailable when their nearest stop has no estimate", () => {
+    const grid = estimateNearestStopGrid([
+        { x: 0.5, y: 0.5, value: null },
+        { x: 10, y: 0.5, value: 20 },
+    ], 1, 1, 1);
+
+    assert.ok(Number.isNaN(grid.values[0]));
+});
+
+test("nearest-stop estimation returns the exact travel time at a stop", () => {
+    const grid = estimateNearestStopGrid([
         { x: 0.5, y: 0.5, value: 27 },
         { x: 10, y: 10, value: 90 },
-    ], 1, 1);
+    ], 1, 1, 5);
 
     assert.equal(grid.values[0], 27);
 });
 
-test("interpolation caps the working grid at 96 by 96", () => {
-    const grid = interpolateGrid([{ x: 0.5, y: 0.5, value: 27 }], 160, 120);
+test("nearest-stop estimation caps the working grid at 96 by 96", () => {
+    const grid = estimateNearestStopGrid([{ x: 0.5, y: 0.5, value: 27 }], 160, 120, 1);
 
     assert.equal(grid.width, 96);
     assert.equal(grid.height, 96);
     assert.equal(grid.values.length, 96 * 96);
 });
 
-test("interpolation uses only the nearest eight valid observations", () => {
-    const nearby = Array.from({ length: 8 }, (_, index) => ({
-        x: 0.5 + (index + 1) * 0.01,
-        y: 0.5,
-        value: 24,
-    }));
-    const grid = interpolateGrid([
-        ...nearby,
-        { x: 40, y: 40, value: 9000 },
-        { x: 0.5, y: 0.5, value: null },
-    ], 1, 1);
-
-    assert.ok(Math.abs(grid.values[0] - 24) < 1e-9);
-});
-
-test("interpolation marks cells unavailable when no travel times are observed", () => {
-    const grid = interpolateGrid([
-        { x: 0.5, y: 0.5, value: null },
-        { x: 0.5, y: 0.5, value: Number.NaN },
-    ], 1, 1);
+test("nearest-stop estimation marks cells unavailable when no stops are observed", () => {
+    const grid = estimateNearestStopGrid([], 1, 1, 1);
 
     assert.ok(Number.isNaN(grid.values[0]));
 });

@@ -1,7 +1,7 @@
 import {
     createReachabilityMap,
     validateReachabilityPayload,
-} from "./reachability-map.js?v=7";
+} from "./reachability-map.js?v=8";
 
 const EMPTY_PAYLOAD = Object.freeze({
     participants: Object.freeze([]),

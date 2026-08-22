@@ -2,7 +2,7 @@
 
 Meet Somewhere ranks Prague meeting points using public transport journey times for every person in a group. It can minimize the longest individual journey or total group travel time, then show nearby pubs, bars, cafes, and restaurants.
 
-The optional reachability layer is derived from 2,083,035 precomputed directional stop pairs. It is approximate. Ranked results use live DPP queries for the selected departure and return times.
+The optional reachability layer is derived from 2,083,035 precomputed directional stop pairs. Each map location uses the nearest stop's time plus approximate walking at 5 km/h with a 1.2 street-detour factor. Ranked results use live DPP queries for the selected departure and return times.
 
 Try the live demo at https://pub-finder.hermandaniel.com.
 

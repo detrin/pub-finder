@@ -72,12 +72,13 @@
         <section id="heatmap">
             <h2>Heatmap</h2>
             <p>The reachability layer is <strong>Approximate from typical transit times</strong>. For everyone, it uses <code>G(t) = max_i T_i(t)</code>; a 35-minute threshold shows stops where every participant's approximate journey is at most 35 minutes.</p>
-            <p>Changing the participant, threshold, or visibility does not make live DPP or Google API requests. Stop points remain visible so the observed data is clear.</p>
+            <p>Each map location uses its nearest stop and adds an estimated walk to <code>G(t)</code>. Walking uses straight-line distance with a 1.2 street-detour factor at 5 km/h. Click a stop point to see its unadjusted stop time.</p>
+            <p>Changing the participant, threshold, or visibility does not make live DPP or Google API requests. Stop points remain visible so the source data is clear.</p>
         </section>
 
         <section id="limitations">
             <h2>Limitations</h2>
-            <p>The heatmap interpolates observed stop values. It is not precise continuous transit coverage. Use the ranked results for live-refined journeys and exact participant times.</p>
+            <p>The walking estimate does not follow the street network, and the underlying transit matrix is not live. Use the ranked results for live-refined journeys and exact participant times.</p>
         </section>
     </article>
 </div>

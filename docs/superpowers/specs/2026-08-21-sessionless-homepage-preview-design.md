@@ -146,7 +146,7 @@ Add a homepage-specific controller responsible for:
 - Empty, loading, ready, and error states.
 - Textual accessibility announcements.
 
-Reuse the existing reachability payload validator, interpolation, time classification, map markers, and `ReachabilityMapController`. Refactor the map factory only as much as required to allow a validated payload to be supplied or replaced without requiring a session reachability URL. Do not duplicate interpolation or color-band logic in a homepage script.
+Reuse the existing reachability payload validator, nearest-stop walking estimate, time classification, map markers, and `ReachabilityMapController`. Refactor the map factory only as much as required to allow a validated payload to be supplied or replaced without requiring a session reachability URL. Do not duplicate the estimate or color-band logic in a homepage script.
 
 Leaflet remains responsible for map geometry and OpenStreetMap attribution. The homepage map introduces tile requests as soon as it initializes; retain visible attribution and document this behavior in the site's privacy notice when that notice is added.
 
@@ -187,7 +187,7 @@ Session creation and participant initialization must be atomic. A validation fai
 - Implement the stop search as a labelled ARIA combobox with `aria-expanded`, `aria-controls`, listbox semantics, arrow-key navigation, Enter selection, and Escape dismissal.
 - Render origins as a semantic list. Each remove button has an accessible name such as `Remove Anděl`.
 - Match chip labels to map markers with letters or numbers; do not rely on color alone.
-- Treat the interpolated canvas as decorative. Provide the current state, metric, and time-band meaning in text.
+- Treat the estimated canvas as decorative. Provide the current state, metric, and time-band meaning in text.
 - Announce concise updates such as `Estimate updated for three starting stops` through `aria-live="polite"`.
 - Preserve visible focus, reduced-motion behavior, light and dark themes, and existing 44 px control targets.
 - Do not automatically move focus after a map update.

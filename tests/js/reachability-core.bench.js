@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 
-import { interpolateGrid } from "../../static/reachability-core.js";
+import { estimateNearestStopGrid } from "../../static/reachability-core.js";
 
 const stops = Array.from({ length: 1444 }, (_, index) => ({
     x: (index % 38) * (95 / 37),
@@ -9,13 +9,13 @@ const stops = Array.from({ length: 1444 }, (_, index) => ({
     value: 12 + ((index * 17) % 79),
 }));
 
-interpolateGrid(stops, 96, 96);
-interpolateGrid(stops, 96, 96);
+estimateNearestStopGrid(stops, 96, 96, 1);
+estimateNearestStopGrid(stops, 96, 96, 1);
 
 let grid;
 const samples = Array.from({ length: 3 }, () => {
     const started = performance.now();
-    grid = interpolateGrid(stops, 96, 96);
+    grid = estimateNearestStopGrid(stops, 96, 96, 1);
     return performance.now() - started;
 });
 const elapsed = Math.min(...samples);
