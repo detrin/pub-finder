@@ -242,7 +242,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
     assert "/static/home-preview.js?v=5" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=50"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=51"]') is not None
     assert (
         page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=7"]')
         is not None
@@ -272,6 +272,25 @@ def test_home_preview_legend_styles_match_the_canvas_encoding():
     assert map_rule is not None
     assert "pointer-events: none" not in map_rule.group("body")
     assert re.search(r"\.home-estimate__map \.leaflet-control-attribution\s*\{", css)
+
+
+def test_home_preview_marker_letters_center_inside_the_leaflet_dots():
+    css = Path("static/app.css").read_text()
+    marker_rule = re.search(
+        r"\.home-estimate__map \.participant-marker-label\s*\{(?P<body>[^}]*)}",
+        css,
+        re.DOTALL,
+    )
+
+    assert marker_rule is not None
+    declarations = marker_rule.group("body")
+    assert "display: flex;" in declarations
+    assert "align-items: center;" in declarations
+    assert "justify-content: center;" in declarations
+    assert "width: 16px;" in declarations
+    assert "height: 16px;" in declarations
+    assert "padding: 0;" in declarations
+    assert "line-height: 1;" in declarations
 
 
 def test_home_and_results_use_the_same_travel_time_legend():

@@ -2876,11 +2876,13 @@ input[data-stop-input]:not(:disabled) {
 }
 
 .home-estimate__map .participant-marker-label {
-    display: grid;
-    width: 1.2rem;
-    height: 1.2rem;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
     margin: 0;
+    padding: 0;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -2888,6 +2890,7 @@ input[data-stop-input]:not(:disabled) {
     font-family: var(--font-mono);
     font-size: 0.68rem;
     font-weight: 500;
+    line-height: 1;
 }
 
 [data-theme="dark"] .home-estimate__map .leaflet-tile-pane {
