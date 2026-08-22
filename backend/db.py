@@ -207,8 +207,8 @@ async def create_session(
                 code,
                 "",
                 stops[index] if index < len(stops) else "",
-                "",
-                0 if index < len(stops) else 1,
+                stops[index] if index < len(stops) else "",
+                1,
                 now,
             )
             for index in range(slot_count)

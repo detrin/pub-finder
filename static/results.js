@@ -90,16 +90,6 @@ function bindReachabilityControls(root) {
             controller?.setParticipant(participantId);
         });
     });
-
-    const threshold = root.querySelector("[data-threshold]");
-    const output = root.querySelector("[data-threshold-value]");
-    threshold?.addEventListener("input", () => {
-        if (activeRoot !== root || root.dataset.reachabilityUnavailable === "true") return;
-        const minutes = Number(threshold.value);
-        if (!Number.isFinite(minutes)) return;
-        if (output) output.textContent = `${minutes} min`;
-        controller?.setThreshold(minutes);
-    });
 }
 
 function selectedParticipant(root) {
@@ -112,18 +102,16 @@ function selectedParticipant(root) {
 function synchronizeController(root) {
     if (!controller || activeRoot !== root) return;
     const data = readMapData(root);
-    const threshold = Number(root.querySelector("[data-threshold]")?.value);
     controller.setResults(rankedStops(root));
     controller.setVenues(data.venues);
     controller.setParticipant(selectedParticipant(root));
-    if (Number.isFinite(threshold)) controller.setThreshold(threshold);
 }
 
 function showReachabilityError(root) {
     const message = root.querySelector("[data-reachability-error]");
     if (message) message.hidden = false;
     root.dataset.reachabilityUnavailable = "true";
-    root.querySelectorAll("[data-participant-id], [data-threshold]").forEach((control) => {
+    root.querySelectorAll("[data-participant-id]").forEach((control) => {
         control.disabled = true;
     });
 }

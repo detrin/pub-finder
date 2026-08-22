@@ -92,11 +92,6 @@ function makeRoot(name = "B") {
     daniel.setAttribute("aria-pressed", "false");
     everyone.parent = root;
     daniel.parent = root;
-    const threshold = new FakeElement();
-    threshold.value = "35";
-    threshold.parent = root;
-    const output = new FakeElement();
-    output.parent = root;
     const mapView = new FakeElement({ mobileViewTarget: "map" });
     const listView = new FakeElement({ mobileViewTarget: "list" });
     mapView.setAttribute("aria-pressed", "true");
@@ -109,8 +104,6 @@ function makeRoot(name = "B") {
     root.selectorMap.set("[data-reachability-error]", error);
     root.selectorMap.set('[data-result-detail="1"]', firstDetail);
     root.selectorMap.set('[data-result-detail="2"]', secondDetail);
-    root.selectorMap.set("[data-threshold]", threshold);
-    root.selectorMap.set("[data-threshold-value]", output);
     root.selectorLists.set("[data-rank]", [firstButton, secondButton]);
     root.selectorLists.set("[data-result-detail]", [firstDetail, secondDetail]);
     root.selectorLists.set("[data-participant-id]", [everyone, daniel]);
@@ -126,8 +119,6 @@ function makeRoot(name = "B") {
         secondDetail,
         everyone,
         daniel,
-        threshold,
-        output,
         mapView,
         listView,
     };
@@ -166,12 +157,10 @@ function fakeController() {
         destroyed: 0,
         participantCalls: [],
         resultCalls: [],
-        thresholdCalls: [],
         venueCalls: [],
         destroy() { this.destroyed += 1; },
         setParticipant(value) { this.participantCalls.push(value); },
         setResults(value) { this.resultCalls.push(value); },
-        setThreshold(value) { this.thresholdCalls.push(value); },
         setVenues(value) { this.venueCalls.push(value); },
     };
 }
@@ -233,7 +222,7 @@ test("new result initialization aborts and destroys a stale asynchronous control
     assert.equal(newestController.resultCalls.length, resultCallsBeforeStaleClick);
 });
 
-test("rank, participant, threshold, and mobile handlers use the assigned controller", async () => {
+test("rank, participant, and mobile handlers use the assigned controller", async () => {
     const assigned = fakeController();
     let createCalls = 0;
     const { module } = await loadResultsModule(async () => {
@@ -256,10 +245,6 @@ test("rank, participant, threshold, and mobile handlers use the assigned control
     fixture.daniel.dispatch("click");
     assert.equal(assigned.participantCalls.at(-1), 7);
     assert.equal(fixture.daniel.getAttribute("aria-pressed"), "true");
-    fixture.threshold.value = "50";
-    fixture.threshold.dispatch("input");
-    assert.equal(assigned.thresholdCalls.at(-1), 50);
-    assert.equal(fixture.output.textContent, "50 min");
     fixture.listView.dispatch("click");
     assert.equal(fixture.root.dataset.mobileView, "list");
     assert.equal(fixture.listView.getAttribute("aria-pressed"), "true");
@@ -297,12 +282,9 @@ test("reachability failure makes participant controls safe no-ops", async () => 
     fixture.map.dispatch("reachability:error");
 
     fixture.daniel.dispatch("click");
-    fixture.threshold.value = "50";
-    fixture.threshold.dispatch("input");
 
     assert.equal(fixture.root.dataset.reachabilityUnavailable, "true");
     assert.equal(participantAttempts, 1);
-    assert.equal(assigned.thresholdCalls.length, 0);
 });
 
 test("state changed while map creation is pending is synchronized after assignment", async () => {
@@ -316,8 +298,6 @@ test("state changed while map creation is pending is synchronized after assignme
     ]);
     fixture.secondButton.dispatch("click");
     fixture.daniel.dispatch("click");
-    fixture.threshold.value = "55";
-    fixture.threshold.dispatch("input");
 
     const assigned = fakeController();
     creation.resolve(assigned);
@@ -328,7 +308,6 @@ test("state changed while map creation is pending is synchronized after assignme
         { name: "Late Cafe", lat: 50.15, lon: 14.15 },
     ]);
     assert.equal(assigned.participantCalls.at(-1), 7);
-    assert.equal(assigned.thresholdCalls.at(-1), 55);
 });
 
 test("venue out-of-band data updates markers without rebuilding the map", async () => {

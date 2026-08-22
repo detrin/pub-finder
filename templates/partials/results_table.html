@@ -48,13 +48,6 @@
                 {% endfor %}
             </div>
 
-            <label class="threshold-control">
-                <span>Maximum time <output data-threshold-value>35 min</output></span>
-                <input type="range" min="15" max="90" step="5" value="35" data-threshold>
-            </label>
-            {% with legend_class="reach-legend", preview_legend=false %}
-                {% include "partials/travel_time_legend.html" %}
-            {% endwith %}
             {% with kind="warning", title="Approximate transit layer unavailable.",
                     body="Ranked results remain available.",
                     action_href="/session/" ~ session_code ~ "/results", action_label="Reload results",
@@ -148,6 +141,9 @@
 
     <section id="results-map-panel" class="results-map-panel" aria-label="Meeting point map">
         <div id="map" data-results-map></div>
+        {% with legend_class="reach-legend", preview_legend=false %}
+            {% include "partials/travel_time_legend.html" %}
+        {% endwith %}
         <div class="map-caption">
             <p class="map-source">Approximate from typical transit times</p>
             <p>

@@ -141,8 +141,8 @@ async def test_homepage_display_then_preview_has_no_identity_persistence_or_live
 @pytest.mark.parametrize(
     ("origins", "expected_stops"),
     [
-        (["A"], [("A", ""), ("", "")]),
-        (["A", "B"], [("A", ""), ("B", "")]),
+        (["A"], [("A", "A"), ("", "")]),
+        (["A", "B"], [("A", "A"), ("B", "B")]),
     ],
 )
 async def test_preview_then_create_session_preserves_starts_without_preview_persistence(

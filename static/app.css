@@ -1973,36 +1973,12 @@ input[data-stop-input]:not(:disabled) {
     box-shadow: 2px 2px 0 var(--ink);
 }
 
-.threshold-control {
-    display: grid;
-    gap: 0.4rem;
-    color: var(--ink);
-    font-size: 0.72rem;
-}
-
-.threshold-control > span {
-    display: flex;
-    justify-content: space-between;
-}
-
-.threshold-control output {
-    font-weight: 500;
-}
-
-.threshold-control input {
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    accent-color: var(--lilac);
-    background: transparent;
-}
-
 .reach-legend {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 0.3rem 0.65rem;
-    margin-top: 0.35rem;
+    margin: 0.55rem 0 0;
     color: var(--muted);
     font-size: 0.62rem;
 }

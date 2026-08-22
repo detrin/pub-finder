@@ -242,7 +242,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
     assert "/static/home-preview.js?v=6" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=51"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=52"]') is not None
     assert (
         page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=8"]')
         is not None
@@ -728,14 +728,28 @@ async def test_participant_reachability_selector_is_a_pressed_button_group():
 
 
 @pytest.mark.asyncio
-async def test_results_threshold_keeps_a_44px_pointer_target():
+async def test_results_map_places_fixed_travel_time_legend_below_the_map():
+    session = await create_session(app.state.db, "Friday crew", "Daniel")
+    await save_search_results(app.state.db, session["code"], saved_result_fixture())
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.get("/static/app.css")
+        response = await client.get(f"/session/{session['code']}/results")
 
-    threshold_rule = response.text.split(".threshold-control input {", 1)[1].split("}", 1)[0]
-    assert "min-height: 44px;" in threshold_rule
+    page = BeautifulSoup(response.text, "html.parser")
+    map_panel = page.select_one(".results-map-panel")
+    map_root = map_panel.select_one("[data-results-map]")
+    time_legend = map_panel.select_one(".travel-time-legend")
+    marker_legend = map_panel.select_one(".map-marker-legend")
+
+    assert page.select_one("[data-threshold]") is None
+    assert time_legend.get_text(" ", strip=True).split() == [
+        "up", "to", "20", "min", "21–35", "min", "36–50", "min",
+        "51–65", "min", "over", "65", "min", "no", "estimate",
+    ]
+    panel_elements = list(map_panel.descendants)
+    assert panel_elements.index(map_root) < panel_elements.index(time_legend)
+    assert panel_elements.index(time_legend) < panel_elements.index(marker_legend)
 
 
 @pytest.mark.asyncio

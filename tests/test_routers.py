@@ -300,8 +300,8 @@ async def test_create_session_carries_preview_origins_into_unnamed_slots():
     participants = await get_participants(app.state.db, code)
     assert [person["name"] for person in participants] == ["", "", ""]
     assert [person["start_stop"] for person in participants] == ["A", "B", "C"]
-    assert [person["end_stop"] for person in participants] == ["", "", ""]
-    assert [person["same_start_end"] for person in participants] == [False, False, False]
+    assert [person["end_stop"] for person in participants] == ["A", "B", "C"]
+    assert [person["same_start_end"] for person in participants] == [True, True, True]
 
 
 @pytest.mark.asyncio
@@ -318,8 +318,8 @@ async def test_create_session_with_one_preview_origin_keeps_two_slots():
     participants = await get_participants(app.state.db, code)
     assert [person["name"] for person in participants] == ["", ""]
     assert [person["start_stop"] for person in participants] == ["A", ""]
-    assert [person["end_stop"] for person in participants] == ["", ""]
-    assert [person["same_start_end"] for person in participants] == [False, True]
+    assert [person["end_stop"] for person in participants] == ["A", ""]
+    assert [person["same_start_end"] for person in participants] == [True, True]
 
 
 @pytest.mark.asyncio
