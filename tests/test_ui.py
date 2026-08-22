@@ -233,7 +233,7 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
     assert "/static/home-preview.js?v=3" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=46"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=47"]') is not None
     assert preview["data-limit"] == (
         "The quick estimate supports up to six starting stops. For larger groups, start a plan."
     )
@@ -889,20 +889,59 @@ async def test_how_it_works_localizes_the_homepage_method_note_in_czech():
 
 
 @pytest.mark.asyncio
-async def test_feedback_keeps_google_form_and_gives_factual_report_instructions():
+async def test_feedback_uses_accessible_native_formspree_form():
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.get("/feedback")
 
-    assert (
-        "https://docs.google.com/forms/d/e/1FAIpQLSfAjnlpuEmWlHQj9sGgSqjgKx0DFjj_jr3hOwMx5-laZrJG3w/viewform?embedded=true"
-        in response.text
+    page = BeautifulSoup(response.text, "html.parser")
+    form = page.select_one(
+        'form.feedback-form[action="https://formspree.io/f/myegvedj"][method="post"]'
     )
-    assert (
-        "what you expected, what happened, your browser and device, and the session code"
-        in response.text
+    assert form is not None
+    assert page.select_one("iframe") is None
+    assert "docs.google.com/forms" not in response.text
+
+    feedback_type = form.select_one('select[name="feedback_type"][required]')
+    assert feedback_type is not None
+    assert [option.get("value") for option in feedback_type.select("option")] == [
+        "",
+        "problem",
+        "wrong_result",
+        "suggestion",
+        "other",
+    ]
+    assert form.select_one('input[type="email"][name="email"]') is not None
+    assert form.select_one('input[name="session_code"][maxlength="64"]') is not None
+    assert form.select_one('textarea[name="message"][required][maxlength="4000"]') is not None
+    assert form.select_one('button[type="submit"]') is not None
+
+    for control_id in ("feedback-type", "feedback-email", "feedback-session", "feedback-message"):
+        assert form.select_one(f'label[for="{control_id}"]') is not None
+        assert form.select_one(f"#{control_id}") is not None
+
+    assert "sent to Formspree" in page.get_text(" ", strip=True)
+    assert "sensitive personal information" in page.get_text(" ", strip=True)
+
+
+@pytest.mark.asyncio
+async def test_feedback_form_copy_is_localized_in_czech():
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set("language", "cs")
+        response = await client.get("/feedback")
+
+    page = BeautifulSoup(response.text, "html.parser")
+    assert page.select_one("h1").get_text(" ", strip=True) == "Napište, co se stalo"
+    assert page.select_one('label[for="feedback-message"]').get_text(" ", strip=True) == (
+        "Co se stalo nebo co by mělo fungovat lépe?"
     )
+    assert page.select_one('button[type="submit"]').get_text(" ", strip=True) == (
+        "Odeslat zpětnou vazbu"
+    )
+    assert "Google" not in page.get_text(" ", strip=True)
 
 
 @pytest.mark.asyncio

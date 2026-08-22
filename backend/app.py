@@ -155,7 +155,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.google.com; "
             "connect-src 'self'; "
             "font-src 'self'; "
-            "frame-src https://docs.google.com; "
+            "form-action 'self' https://formspree.io; "
+            "frame-src 'none'; "
             "frame-ancestors 'none'"
         )
         return response

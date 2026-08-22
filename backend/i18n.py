@@ -64,6 +64,34 @@ TRANSLATIONS = {
             "trip, or call live DPP or Google services. Create a plan for date-specific "
             "journey queries and ranked meeting points."
         ),
+        "feedback.page_title": "Feedback",
+        "feedback.eyebrow": "Field report",
+        "feedback.title": "Tell us what happened",
+        "feedback.intro": (
+            "Report a problem, a result that looked wrong, or an idea that would make planning easier."
+        ),
+        "feedback.useful_details": "Useful details",
+        "feedback.detail_expected": "What you expected and what actually happened",
+        "feedback.detail_context": "Your browser and device",
+        "feedback.detail_session": "The plan code, if the feedback concerns a specific plan",
+        "feedback.type": "Feedback type",
+        "feedback.type_choose": "Choose one",
+        "feedback.type_problem": "Something broke",
+        "feedback.type_wrong_result": "A result looked wrong",
+        "feedback.type_suggestion": "Suggestion",
+        "feedback.type_other": "Other",
+        "feedback.email": "Email",
+        "feedback.optional": "Optional",
+        "feedback.email_hint": "Add an email only if you would like a reply.",
+        "feedback.session_code": "Plan code",
+        "feedback.session_hint": "You can find it at the end of the plan link.",
+        "feedback.message": "What happened or what should work better?",
+        "feedback.message_hint": "Include the steps you took and enough detail to reproduce the issue.",
+        "feedback.privacy": (
+            "Your feedback is sent to Formspree, a third-party form service. "
+            "Do not include sensitive personal information."
+        ),
+        "feedback.send": "Send feedback",
         "session.plan": "Plan",
         "session.invite": "Invite",
         "session.people": "People",
@@ -180,6 +208,34 @@ TRANSLATIONS = {
             "v provozu, nezahrnuje cestu zpět ani nevolá aktuální služby DPP či Googlu. "
             "Pro dotazy na cesty k určitému datu a seřazená místa setkání vytvořte plán."
         ),
+        "feedback.page_title": "Zpětná vazba",
+        "feedback.eyebrow": "Hlášení z terénu",
+        "feedback.title": "Napište, co se stalo",
+        "feedback.intro": (
+            "Nahlaste problém, podezřelý výsledek nebo nápad, který by usnadnil plánování."
+        ),
+        "feedback.useful_details": "Co nám pomůže",
+        "feedback.detail_expected": "Co jste očekávali a co se skutečně stalo",
+        "feedback.detail_context": "Váš prohlížeč a zařízení",
+        "feedback.detail_session": "Kód plánu, pokud se zpětná vazba týká konkrétního plánu",
+        "feedback.type": "Typ zpětné vazby",
+        "feedback.type_choose": "Vyberte možnost",
+        "feedback.type_problem": "Něco nefunguje",
+        "feedback.type_wrong_result": "Výsledek vypadá nesprávně",
+        "feedback.type_suggestion": "Návrh",
+        "feedback.type_other": "Jiné",
+        "feedback.email": "E-mail",
+        "feedback.optional": "Nepovinné",
+        "feedback.email_hint": "E-mail přidejte pouze v případě, že chcete odpověď.",
+        "feedback.session_code": "Kód plánu",
+        "feedback.session_hint": "Najdete ho na konci odkazu na plán.",
+        "feedback.message": "Co se stalo nebo co by mělo fungovat lépe?",
+        "feedback.message_hint": "Popište provedené kroky a přidejte dostatek údajů pro zopakování problému.",
+        "feedback.privacy": (
+            "Zpětná vazba se odesílá službě Formspree, která formulář zpracovává. "
+            "Neuvádějte citlivé osobní údaje."
+        ),
+        "feedback.send": "Odeslat zpětnou vazbu",
         "session.plan": "Plán",
         "session.invite": "Pozvat",
         "session.people": "Lidé",

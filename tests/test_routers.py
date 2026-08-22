@@ -614,13 +614,15 @@ async def test_update_stops_cannot_modify_participant_from_another_session():
 
 
 @pytest.mark.asyncio
-async def test_feedback_csp_allows_google_form_and_blocks_inline_handlers():
+async def test_feedback_csp_allows_formspree_posts_and_blocks_third_party_frames():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/feedback")
 
     policy = response.headers["content-security-policy"]
-    assert "frame-src https://docs.google.com" in policy
+    assert "form-action 'self' https://formspree.io" in policy
+    assert "frame-src 'none'" in policy
+    assert "docs.google.com" not in policy
     assert "script-src-attr 'none'" in policy
 
 
