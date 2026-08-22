@@ -34,8 +34,31 @@
         <p>{{ t("home.description", request.state.locale) }}</p>
     </div>
 
+    <div class="home-convergence" aria-label="{{ t('home.lets_meet', request.state.locale) }}">
+        <svg viewBox="0 0 440 270" role="img" aria-hidden="true">
+            <text class="home-convergence__title" x="226" y="25" text-anchor="middle">{{ t("home.lets_meet", request.state.locale) }}</text>
+            <path class="home-convergence__line-outline" d="M45 65C108 68 155 105 226 140" />
+            <path class="home-convergence__line home-convergence__line--blue" d="M45 65C108 68 155 105 226 140" />
+            <path class="home-convergence__line-outline home-convergence__line-outline--coral" d="M50 222C115 190 157 157 226 140" />
+            <path class="home-convergence__line home-convergence__line--coral" d="M50 222C115 190 157 157 226 140" />
+            <path class="home-convergence__line-outline home-convergence__line-outline--yellow" d="M388 52C361 97 305 126 226 140" />
+            <path class="home-convergence__line home-convergence__line--yellow" d="M388 52C361 97 305 126 226 140" />
+            <circle class="home-convergence__person" cx="45" cy="65" r="13" />
+            <circle class="home-convergence__person" cx="50" cy="222" r="13" />
+            <circle class="home-convergence__person" cx="388" cy="52" r="13" />
+            <circle class="home-convergence__meet" cx="226" cy="140" r="20" />
+            <circle class="home-convergence__meet-core" cx="226" cy="140" r="5" />
+            <text class="home-convergence__label" x="226" y="181" text-anchor="middle">{{ t("home.somewhere", request.state.locale) }}</text>
+            <text class="home-convergence__time" x="45" y="37" text-anchor="middle">18 min</text>
+            <text class="home-convergence__time" x="50" y="255" text-anchor="middle">24 min</text>
+            <text class="home-convergence__time" x="388" y="24" text-anchor="middle">21 min</text>
+        </svg>
+    </div>
+</section>
+
+<div class="home-planning-flow">
     <section
-        class="home-preview home-estimate"
+        class="home-estimate"
         aria-labelledby="home-estimate-title"
         data-home-preview
         data-stops='{{ all_stops | tojson }}'
@@ -60,69 +83,74 @@
             <span class="home-estimate__badge">{{ t("home.approximate_one_way", request.state.locale) }}</span>
         </header>
         <div class="home-estimate__body">
-            <div class="home-estimate__combobox">
-                <label for="home-stop-search">{{ t("home.starting_stops", request.state.locale) }}</label>
-                <input
-                    id="home-stop-search"
-                    type="search"
-                    role="combobox"
-                    list="home-stop-suggestions"
-                    placeholder="{{ t('home.add_prague_stop', request.state.locale) }}"
-                    autocomplete="off"
-                    aria-autocomplete="list"
-                    aria-expanded="false"
-                    aria-controls="home-stop-options"
-                    data-preview-search
-                >
-                <datalist id="home-stop-suggestions">
-                    {% for stop in all_stops %}<option value="{{ stop }}"></option>{% endfor %}
-                </datalist>
-                <ul id="home-stop-options" class="home-estimate__options" role="listbox" hidden data-preview-options></ul>
-            </div>
-
-            <ul
-                class="home-estimate__selections"
-                aria-label="{{ t('home.selected_stops', request.state.locale) }}"
-                data-preview-selections
-            ></ul>
-
-            <div class="home-estimate__state">
-                <h2 data-preview-heading>{{ t("home.preview_empty", request.state.locale) }}</h2>
-                <p data-preview-prompt></p>
-            </div>
-            <p class="home-estimate__status" aria-live="polite" aria-atomic="true" data-preview-status></p>
-
-            <div class="home-estimate__map" aria-hidden="true" data-preview-map></div>
-            <p class="home-estimate__attribution" data-preview-attribution>
-                <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
-            </p>
-
-            <ul
-                class="home-estimate__legend"
-                aria-label="{{ t('home.legend_label', request.state.locale) }}"
-                data-preview-legend
-            >
-                <li><span class="home-estimate__swatch home-estimate__swatch--short"></span>{{ t("home.legend_about_35", request.state.locale) }}</li>
-                <li><span class="home-estimate__swatch home-estimate__swatch--medium"></span>{{ t("home.legend_36_50", request.state.locale) }}</li>
-                <li><span class="home-estimate__swatch home-estimate__swatch--long"></span>{{ t("home.legend_51_65", request.state.locale) }}</li>
-                <li><span class="home-estimate__swatch home-estimate__swatch--longest"></span>{{ t("home.legend_over_65", request.state.locale) }}</li>
-                <li><span class="home-estimate__swatch home-estimate__swatch--missing"></span>{{ t("home.legend_no_estimate", request.state.locale) }}</li>
-            </ul>
-
-            <div class="home-estimate__disclosure">
-                <p>
-                    <a
-                        class="home-estimate__method-link"
-                        href="/how-it-works#homepage-quick-estimate"
+            <div class="home-estimate__controls">
+                <div class="home-estimate__combobox">
+                    <label for="home-stop-search">{{ t("home.starting_stops", request.state.locale) }}</label>
+                    <input
+                        id="home-stop-search"
+                        type="search"
+                        role="combobox"
+                        list="home-stop-suggestions"
+                        placeholder="{{ t('home.add_prague_stop', request.state.locale) }}"
+                        autocomplete="off"
+                        aria-autocomplete="list"
+                        aria-expanded="false"
+                        aria-controls="home-stop-options"
+                        data-preview-search
                     >
-                        {{ t("home.preview_disclosure", request.state.locale) }}
-                    </a>
-                </p>
-                <a href="#session-name" data-preview-handoff>{{ t("home.preview_handoff", request.state.locale) }}</a>
+                    <datalist id="home-stop-suggestions">
+                        {% for stop in all_stops %}<option value="{{ stop }}"></option>{% endfor %}
+                    </datalist>
+                    <ul id="home-stop-options" class="home-estimate__options" role="listbox" hidden data-preview-options></ul>
+                </div>
+
+                <ul
+                    class="home-estimate__selections"
+                    aria-label="{{ t('home.selected_stops', request.state.locale) }}"
+                    data-preview-selections
+                ></ul>
+
+                <div class="home-estimate__state">
+                    <h2 data-preview-heading>{{ t("home.preview_empty", request.state.locale) }}</h2>
+                    <p data-preview-prompt></p>
+                </div>
+                <p class="home-estimate__status" aria-live="polite" aria-atomic="true" data-preview-status></p>
+
+                <div class="home-estimate__disclosure">
+                    <p>
+                        <a
+                            class="home-estimate__method-link"
+                            href="/how-it-works#homepage-quick-estimate"
+                        >
+                            {{ t("home.preview_disclosure", request.state.locale) }}
+                        </a>
+                    </p>
+                    <a href="#session-name" data-preview-handoff>{{ t("home.preview_handoff", request.state.locale) }}</a>
+                </div>
+            </div>
+
+            <div class="home-estimate__visual">
+                <div
+                    class="home-estimate__map"
+                    role="region"
+                    aria-label="{{ t('home.preview_map_label', request.state.locale) }}"
+                    data-preview-map
+                ></div>
+
+                <ul
+                    class="home-estimate__legend"
+                    aria-label="{{ t('home.legend_label', request.state.locale) }}"
+                    data-preview-legend
+                >
+                    <li><span class="home-estimate__swatch home-estimate__swatch--short"></span>{{ t("home.legend_about_35", request.state.locale) }}</li>
+                    <li><span class="home-estimate__swatch home-estimate__swatch--medium"></span>{{ t("home.legend_36_50", request.state.locale) }}</li>
+                    <li><span class="home-estimate__swatch home-estimate__swatch--long"></span>{{ t("home.legend_51_65", request.state.locale) }}</li>
+                    <li><span class="home-estimate__swatch home-estimate__swatch--longest"></span>{{ t("home.legend_over_65", request.state.locale) }}</li>
+                    <li><span class="home-estimate__swatch home-estimate__swatch--missing"></span>{{ t("home.legend_no_estimate", request.state.locale) }}</li>
+                </ul>
             </div>
         </div>
     </section>
-</section>
 
 <section class="start-plan" aria-labelledby="start-plan-title">
     <div class="start-plan__intro">
@@ -155,8 +183,9 @@
 
 <h2 id="recent-plans-title" class="visually-hidden">Recent plans</h2>
 <section hidden data-session-history aria-labelledby="recent-plans-title" aria-label="Recent plans"></section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/home-preview.js?v=3"></script>
+<script type="module" src="/static/home-preview.js?v=4"></script>
 {% endblock %}

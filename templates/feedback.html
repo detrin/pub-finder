@@ -23,17 +23,6 @@
             <input type="hidden" name="_subject" value="Meet Somewhere feedback">
             <input class="feedback-form__honeypot" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true">
 
-            <div class="feedback-form__field feedback-form__field--wide">
-                <label for="feedback-type">{{ t("feedback.type") }}</label>
-                <select id="feedback-type" name="feedback_type" required>
-                    <option value="" selected disabled>{{ t("feedback.type_choose") }}</option>
-                    <option value="problem">{{ t("feedback.type_problem") }}</option>
-                    <option value="wrong_result">{{ t("feedback.type_wrong_result") }}</option>
-                    <option value="suggestion">{{ t("feedback.type_suggestion") }}</option>
-                    <option value="other">{{ t("feedback.type_other") }}</option>
-                </select>
-            </div>
-
             <div class="feedback-form__field">
                 <label for="feedback-email">
                     {{ t("feedback.email") }}
@@ -45,12 +34,31 @@
 
             <div class="feedback-form__field">
                 <label for="feedback-session">
-                    {{ t("feedback.session_code") }}
+                    {{ t("feedback.session_url") }}
                     <span>{{ t("feedback.optional") }}</span>
                 </label>
-                <input id="feedback-session" type="text" name="session_code" maxlength="64" autocomplete="off" aria-describedby="feedback-session-hint">
+                <input id="feedback-session" type="url" name="session_url" maxlength="2048" autocomplete="url" aria-describedby="feedback-session-hint">
                 <small id="feedback-session-hint">{{ t("feedback.session_hint") }}</small>
             </div>
+
+            <fieldset class="feedback-form__field feedback-form__field--wide feedback-form__rating" aria-describedby="feedback-rating-hint">
+                <legend>
+                    {{ t("feedback.rating") }}
+                    <span>{{ t("feedback.optional") }}</span>
+                </legend>
+                <div class="feedback-form__rating-options">
+                    {% for value in range(6) %}
+                    <div class="feedback-form__rating-option">
+                        <input class="feedback-form__rating-input" id="feedback-rating-{{ value }}" type="radio" name="rating" value="{{ value }}" aria-label="{{ t('feedback.rating_option', value=value) }}">
+                        <label for="feedback-rating-{{ value }}">
+                            <span>{{ value }}</span>
+                            {% if value > 0 %}<span aria-hidden="true">★</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <small id="feedback-rating-hint">{{ t("feedback.rating_hint") }}</small>
+            </fieldset>
 
             <div class="feedback-form__field feedback-form__field--wide">
                 <label for="feedback-message">{{ t("feedback.message") }}</label>

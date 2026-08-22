@@ -68,6 +68,13 @@ function participantLetter(index) {
     return String.fromCharCode(65 + index);
 }
 
+function normalizeSearch(value) {
+    return String(value)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase();
+}
+
 function preparePayload(payload, origins) {
     const validated = validateReachabilityPayload(payload);
     if (
@@ -151,6 +158,7 @@ export async function createHomePreview(root, dependencies = {}) {
     const handoff = root.querySelector("[data-preview-handoff]");
     const planName = document?.querySelector?.("#session-name") ?? null;
     const stops = parseStops(root.dataset?.stops);
+    const searchableStops = stops.map((stop) => ({ normalized: normalizeSearch(stop), stop }));
     // Keep every request value inside the server-rendered canonical stop allowlist.
     const canonicalStops = new Set(stops);
     const stopCoordinates = new Map();
@@ -168,7 +176,7 @@ export async function createHomePreview(root, dependencies = {}) {
     let hasValidatedPayload = false;
     let destroyed = false;
     const nativeSuggestionList = search.getAttribute?.("list");
-    const map = await createMap(mapRoot, { interactive: false, payload: EMPTY_PAYLOAD });
+    const map = await createMap(mapRoot, { interactive: true, payload: EMPTY_PAYLOAD });
 
     function listen(element, type, handler, registry = listeners) {
         element?.addEventListener?.(type, handler);
@@ -209,21 +217,21 @@ export async function createHomePreview(root, dependencies = {}) {
 
     function renderOptions() {
         detachAll(optionListeners);
-        const query = search.value.trim().toLocaleLowerCase();
+        const query = normalizeSearch(search.value.trim());
         if (!query) {
             dismissOptions();
             return;
         }
-        const matches = stops.filter((stop) => (
-            !selected.includes(stop) && stop.toLocaleLowerCase().includes(query)
+        const matches = searchableStops.filter(({ normalized, stop }) => (
+            !selected.includes(stop) && normalized.includes(query)
         ));
         matches.sort((left, right) => {
-            const leftPrefix = left.toLocaleLowerCase().startsWith(query);
-            const rightPrefix = right.toLocaleLowerCase().startsWith(query);
+            const leftPrefix = left.normalized.startsWith(query);
+            const rightPrefix = right.normalized.startsWith(query);
             if (leftPrefix !== rightPrefix) return leftPrefix ? -1 : 1;
-            return left.localeCompare(right);
+            return left.stop.localeCompare(right.stop);
         });
-        filteredStops = matches.slice(0, MAX_OPTIONS);
+        filteredStops = matches.slice(0, MAX_OPTIONS).map(({ stop }) => stop);
         activeOption = -1;
         const nodes = filteredStops.map((stop, index) => {
             const option = document.createElement("li");

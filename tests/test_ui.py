@@ -157,24 +157,32 @@ async def test_home_has_one_primary_start_form_and_secondary_join_path():
 
 @pytest.mark.asyncio
 async def test_home_renders_sessionless_preview_before_the_single_create_form():
-    """Catch regressions to the static hero or a competing preview form."""
+    """Catch regressions to the approved hero-first planning flow."""
     async with httpx.AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.get("/")
 
     page = BeautifulSoup(response.text, "html.parser")
+    hero = page.select_one(".home-hero")
+    convergence = hero.select_one(".home-convergence")
+    planning_flow = page.select_one(".home-planning-flow")
     preview = page.select_one("[data-home-preview]")
     create_forms = page.select('form[action="/session/create"][method="post"]')
 
+    assert convergence is not None
+    assert convergence.select_one('svg[aria-hidden="true"]') is not None
     assert preview is not None
+    assert preview.find_parent(class_="home-hero") is None
+    assert preview.find_parent(class_="home-planning-flow") is planning_flow
     assert preview.select_one("[data-preview-map]") is not None
     assert preview.select_one('[role="combobox"]') is not None
     assert preview.get("data-stops") == '["A", "B"]'
-    assert page.select_one(".home-preview svg") is None
     assert len(create_forms) == 1
     main_elements = list(page.select_one("main").descendants)
+    assert main_elements.index(hero) < main_elements.index(preview)
     assert main_elements.index(preview) < main_elements.index(create_forms[0])
+    assert planning_flow.select_one(":scope > .start-plan") is not None
     assert "Approximate · one way" in preview.get_text(" ", strip=True)
     assert "No selected date" in preview.get_text(" ", strip=True)
 
@@ -196,7 +204,6 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     status = preview.select_one('[data-preview-status][aria-live="polite"]')
     legend = preview.select_one("[data-preview-legend]")
     map_root = preview.select_one("[data-preview-map]")
-    attribution = preview.select_one("[data-preview-attribution]")
     handoff = preview.select_one('[data-preview-handoff][href="#session-name"]')
     disclosure = preview.select_one(
         '.home-estimate__disclosure a[href="/how-it-works#homepage-quick-estimate"]'
@@ -217,11 +224,11 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
         "home-estimate__swatch--missing",
     ]
     assert "no estimate" in legend.get_text(" ", strip=True)
-    assert map_root["aria-hidden"] == "true"
-    assert map_root.select_one("a, button, input, [tabindex]") is None
-    assert attribution is not None
-    assert attribution.find_parent("[aria-hidden='true']") is None
-    assert "OpenStreetMap contributors" in attribution.get_text(" ", strip=True)
+    assert map_root.get("role") == "region"
+    assert map_root.get("aria-label") == "Interactive approximate reach map"
+    assert not map_root.has_attr("aria-hidden")
+    assert preview.select_one("[data-preview-attribution]") is None
+    assert "OpenStreetMap contributors" not in preview.get_text(" ", strip=True)
     assert handoff is not None
     assert disclosure is not None
     assert "home-estimate__method-link" in disclosure.get("class", [])
@@ -231,9 +238,9 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert create_form.select_one("[data-preview-carry-status]") is not None
     assert [option["value"] for option in canonical_options] == ["A", "B"]
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
-    assert "/static/home-preview.js?v=3" in home_modules
+    assert "/static/home-preview.js?v=4" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=47"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=49"]') is not None
     assert preview["data-limit"] == (
         "The quick estimate supports up to six starting stops. For larger groups, start a plan."
     )
@@ -254,11 +261,32 @@ def test_home_preview_legend_styles_match_the_canvas_encoding():
         css,
         re.DOTALL,
     )
+    map_rule = re.search(r"\.home-estimate__map\s*\{(?P<body>[^}]*)}", css, re.DOTALL)
+    assert map_rule is not None
+    assert "pointer-events: none" not in map_rule.group("body")
+    assert re.search(r"\.home-estimate__map \.leaflet-control-attribution\s*\{", css)
+
+
+def test_home_cards_and_stop_pills_use_complete_shared_frames():
+    css = Path("static/app.css").read_text()
+
     assert re.search(
-        r"\.home-estimate__map\s*\{[^}]*pointer-events:\s*none;",
+        r"\.home-planning-flow\s*\{[^}]*width:\s*100%;",
         css,
         re.DOTALL,
     )
+    assert re.search(
+        r"\.home-estimate__selections li\s*\{[^}]*box-shadow:\s*var\(--control-shadow\);",
+        css,
+        re.DOTALL,
+    )
+    remove_rule = re.search(
+        r"\.home-estimate__selections button\s*\{(?P<body>[^}]*)}",
+        css,
+        re.DOTALL,
+    )
+    assert remove_rule is not None
+    assert "box-shadow: none" in remove_rule.group("body")
 
 
 def test_home_preview_disclosure_wraps_without_expanding_the_handoff():
@@ -296,6 +324,8 @@ async def test_home_preview_and_plan_support_copy_is_localized_in_czech():
     visible = page.select_one("main").get_text(" ", strip=True)
 
     for text in (
+        "Sejděme se",
+        "Někde tady",
         "Rychlý odhad",
         "Přibližně · jedním směrem",
         "Výchozí zastávky",
@@ -308,6 +338,9 @@ async def test_home_preview_and_plan_support_copy_is_localized_in_czech():
         assert text in visible
 
     assert preview["data-updating"] == "Aktualizuji odhad…"
+    assert preview.select_one("[data-preview-map]")["aria-label"] == (
+        "Interaktivní mapa přibližného dosahu"
+    )
     assert preview["data-duplicate"] == "Tato zastávka už je vybraná."
     assert preview["data-limit"] == (
         "Rychlý odhad podporuje nejvýše šest výchozích zastávek. "
@@ -903,21 +936,40 @@ async def test_feedback_uses_accessible_native_formspree_form():
     assert page.select_one("iframe") is None
     assert "docs.google.com/forms" not in response.text
 
-    feedback_type = form.select_one('select[name="feedback_type"][required]')
-    assert feedback_type is not None
-    assert [option.get("value") for option in feedback_type.select("option")] == [
-        "",
-        "problem",
-        "wrong_result",
-        "suggestion",
-        "other",
+    assert form.select_one("select") is None
+
+    email = form.select_one('input[type="email"][name="email"]')
+    assert email is not None
+    assert not email.has_attr("required")
+
+    session_url = form.select_one('input[type="url"][name="session_url"][maxlength="2048"]')
+    assert session_url is not None
+    assert not session_url.has_attr("required")
+
+    rating_group = form.select_one('fieldset[aria-describedby="feedback-rating-hint"]')
+    assert rating_group is not None
+    rating_inputs = rating_group.select('input[type="radio"][name="rating"]')
+    assert [radio.get("value") for radio in rating_inputs] == [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
     ]
-    assert form.select_one('input[type="email"][name="email"]') is not None
-    assert form.select_one('input[name="session_code"][maxlength="64"]') is not None
+    assert all(not radio.has_attr("required") for radio in rating_inputs)
+    assert all(not radio.has_attr("checked") for radio in rating_inputs)
+    rating_options = rating_group.select(".feedback-form__rating-option")
+    assert len(rating_options) == 6
+    for radio, option in zip(rating_inputs, rating_options, strict=True):
+        assert radio in option.select('input[type="radio"]')
+        assert "visually-hidden" not in radio.get("class", [])
+        assert option.select_one(f'label[for="{radio["id"]}"]') is not None
+
     assert form.select_one('textarea[name="message"][required][maxlength="4000"]') is not None
     assert form.select_one('button[type="submit"]') is not None
 
-    for control_id in ("feedback-type", "feedback-email", "feedback-session", "feedback-message"):
+    for control_id in ("feedback-email", "feedback-session", "feedback-message"):
         assert form.select_one(f'label[for="{control_id}"]') is not None
         assert form.select_one(f"#{control_id}") is not None
 
@@ -938,6 +990,10 @@ async def test_feedback_form_copy_is_localized_in_czech():
     assert page.select_one('label[for="feedback-message"]').get_text(" ", strip=True) == (
         "Co se stalo nebo co by mělo fungovat lépe?"
     )
+    assert page.select_one('label[for="feedback-session"]').get_text(" ", strip=True) == (
+        "URL relace Nepovinné"
+    )
+    assert page.select_one("fieldset legend").get_text(" ", strip=True) == ("Hodnocení Nepovinné")
     assert page.select_one('button[type="submit"]').get_text(" ", strip=True) == (
         "Odeslat zpětnou vazbu"
     )

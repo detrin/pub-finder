@@ -262,7 +262,7 @@ test("first stop renders individual reach and second stop renders shared reach",
     assert.equal(harness.prompt.textContent, "Colour shows the longest estimated journey among the selected starts.");
 });
 
-test("successful takeover disables native suggestions and creates a decorative map", async () => {
+test("successful takeover disables native suggestions and creates an interactive map", async () => {
     const harness = createPreviewHarness(["Anděl"]);
     await createHomePreview(harness.root, {
         fetch: async () => {},
@@ -270,7 +270,7 @@ test("successful takeover disables native suggestions and creates a decorative m
     });
 
     assert.equal(harness.search.getAttribute("list"), null);
-    assert.equal(harness.mapOptions.interactive, false);
+    assert.equal(harness.mapOptions.interactive, true);
 });
 
 test("failed takeover leaves native stop suggestions available", async () => {
@@ -372,6 +372,28 @@ test("combobox prioritizes prefix matches and supports keyboard selection", asyn
     assert.equal(harness.selections.children[0].children[1].textContent, "Dejvická");
     assert.equal(requests.requests.length, 1);
     assert.equal(harness.options.hidden, true);
+});
+
+test("combobox matches accented stop names from ASCII input", async () => {
+    const harness = createPreviewHarness(["Vršovické náměstí", "Viktoria Žižkov", "Anděl"]);
+    await createHomePreview(harness.root, {
+        fetch: async () => {},
+        createMap: harness.createMap,
+    });
+
+    harness.search.value = "vrsovicke";
+    harness.search.dispatch("input");
+    assert.deepEqual(
+        harness.options.children.map((option) => option.textContent),
+        ["Vršovické náměstí"],
+    );
+
+    harness.search.value = "zizkov";
+    harness.search.dispatch("input");
+    assert.deepEqual(
+        harness.options.children.map((option) => option.textContent),
+        ["Viktoria Žižkov"],
+    );
 });
 
 test("Escape dismisses combobox results without changing selections", async () => {
