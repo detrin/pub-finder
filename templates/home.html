@@ -137,17 +137,9 @@
                     data-preview-map
                 ></div>
 
-                <ul
-                    class="home-estimate__legend"
-                    aria-label="{{ t('home.legend_label', request.state.locale) }}"
-                    data-preview-legend
-                >
-                    <li><span class="home-estimate__swatch home-estimate__swatch--short"></span>{{ t("home.legend_about_35", request.state.locale) }}</li>
-                    <li><span class="home-estimate__swatch home-estimate__swatch--medium"></span>{{ t("home.legend_36_50", request.state.locale) }}</li>
-                    <li><span class="home-estimate__swatch home-estimate__swatch--long"></span>{{ t("home.legend_51_65", request.state.locale) }}</li>
-                    <li><span class="home-estimate__swatch home-estimate__swatch--longest"></span>{{ t("home.legend_over_65", request.state.locale) }}</li>
-                    <li><span class="home-estimate__swatch home-estimate__swatch--missing"></span>{{ t("home.legend_no_estimate", request.state.locale) }}</li>
-                </ul>
+                {% with legend_class="home-estimate__legend", preview_legend=true %}
+                    {% include "partials/travel_time_legend.html" %}
+                {% endwith %}
             </div>
         </div>
     </section>
@@ -187,5 +179,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/home-preview.js?v=4"></script>
+<script type="module" src="/static/home-preview.js?v=5"></script>
 {% endblock %}

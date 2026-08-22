@@ -52,10 +52,9 @@
                 <span>Maximum time <output data-threshold-value>35 min</output></span>
                 <input type="range" min="15" max="90" step="5" value="35" data-threshold>
             </label>
-            <div class="reach-legend" aria-label="Travel time legend">
-                <span><i class="reach-legend__swatch reach-legend__swatch--short"></i>Shorter</span>
-                <span><i class="reach-legend__swatch reach-legend__swatch--unshaded"></i>Further away: unshaded</span>
-            </div>
+            {% with legend_class="reach-legend", preview_legend=false %}
+                {% include "partials/travel_time_legend.html" %}
+            {% endwith %}
             {% with kind="warning", title="Approximate transit layer unavailable.",
                     body="Ranked results remain available.",
                     action_href="/session/" ~ session_code ~ "/results", action_label="Reload results",

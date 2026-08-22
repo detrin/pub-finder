@@ -23,7 +23,7 @@ export function classifyTime(value, threshold, step = 15) {
     ) {
         return null;
     }
-    return Math.max(0, Math.min(3, Math.ceil((value - threshold) / step)));
+    return Math.max(0, Math.min(4, Math.ceil((value - threshold) / step) + 1));
 }
 
 export function interpolateGrid(points, width, height, power = 2) {

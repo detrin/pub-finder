@@ -31,11 +31,15 @@ test("participant view rejects an ID outside the saved snapshot", () => {
     });
 });
 
-test("time bands get lighter above the threshold", () => {
+test("time bands add a distinct fastest band below the threshold", () => {
     assert.equal(classifyTime(20, 35, 15), 0);
-    assert.equal(classifyTime(35, 35, 15), 0);
-    assert.equal(classifyTime(50, 35, 15), 1);
-    assert.equal(classifyTime(80, 35, 15), 3);
+    assert.equal(classifyTime(21, 35, 15), 1);
+    assert.equal(classifyTime(35, 35, 15), 1);
+    assert.equal(classifyTime(36, 35, 15), 2);
+    assert.equal(classifyTime(50, 35, 15), 2);
+    assert.equal(classifyTime(51, 35, 15), 3);
+    assert.equal(classifyTime(65, 35, 15), 3);
+    assert.equal(classifyTime(66, 35, 15), 4);
     assert.equal(classifyTime(null, 35, 15), null);
 });
 

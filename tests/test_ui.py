@@ -216,13 +216,15 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert selections is not None
     assert status is not None
     assert legend.name == "ul"
-    assert [swatch.get("class", [])[-1] for swatch in legend.select(".home-estimate__swatch")] == [
-        "home-estimate__swatch--short",
-        "home-estimate__swatch--medium",
-        "home-estimate__swatch--long",
-        "home-estimate__swatch--longest",
-        "home-estimate__swatch--missing",
+    assert [swatch.get("class", [])[-1] for swatch in legend.select(".travel-time-swatch")] == [
+        "travel-time-swatch--fastest",
+        "travel-time-swatch--short",
+        "travel-time-swatch--medium",
+        "travel-time-swatch--long",
+        "travel-time-swatch--longest",
+        "travel-time-swatch--missing",
     ]
+    assert "20 min" in legend.get_text(" ", strip=True)
     assert "no estimate" in legend.get_text(" ", strip=True)
     assert map_root.get("role") == "region"
     assert map_root.get("aria-label") == "Interactive approximate reach map"
@@ -238,9 +240,13 @@ async def test_home_preview_exposes_accessible_recovery_and_handoff_structure():
     assert create_form.select_one("[data-preview-carry-status]") is not None
     assert [option["value"] for option in canonical_options] == ["A", "B"]
     home_modules = [script.get("src") for script in page.select('script[type="module"]')]
-    assert "/static/home-preview.js?v=4" in home_modules
+    assert "/static/home-preview.js?v=5" in home_modules
     assert "/static/home-preview.js" not in other_response.text
-    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=49"]') is not None
+    assert page.select_one('link[rel="stylesheet"][href="/static/app.css?v=50"]') is not None
+    assert (
+        page.select_one('link[rel="modulepreload"][href="/static/reachability-map.js?v=7"]')
+        is not None
+    )
     assert preview["data-limit"] == (
         "The quick estimate supports up to six starting stops. For larger groups, start a plan."
     )
@@ -250,14 +256,15 @@ def test_home_preview_legend_styles_match_the_canvas_encoding():
     css = Path("static/app.css").read_text()
 
     for selector, value in (
+        ("fastest", "var(--blue)"),
         ("short", "var(--mint)"),
         ("medium", "var(--yellow)"),
         ("long", "var(--coral)"),
         ("longest", "var(--sky-surface)"),
     ):
-        assert f".home-estimate__swatch--{selector} {{ background: {value}; }}" in css
+        assert f".travel-time-swatch--{selector} {{ background: {value}; }}" in css
     assert re.search(
-        r"\.home-estimate__swatch--missing\s*\{[^}]*repeating-linear-gradient\(",
+        r"\.travel-time-swatch--missing\s*\{[^}]*repeating-linear-gradient\(",
         css,
         re.DOTALL,
     )
@@ -265,6 +272,17 @@ def test_home_preview_legend_styles_match_the_canvas_encoding():
     assert map_rule is not None
     assert "pointer-events: none" not in map_rule.group("body")
     assert re.search(r"\.home-estimate__map \.leaflet-control-attribution\s*\{", css)
+
+
+def test_home_and_results_use_the_same_travel_time_legend():
+    home = Path("templates/home.html").read_text()
+    results = Path("templates/partials/results_table.html").read_text()
+    shared = Path("templates/partials/travel_time_legend.html").read_text()
+
+    assert '{% include "partials/travel_time_legend.html" %}' in home
+    assert '{% include "partials/travel_time_legend.html" %}' in results
+    assert shared.count('class="travel-time-swatch ') == 6
+    assert 't("home.legend_20"' in shared
 
 
 def test_home_cards_and_stop_pills_use_complete_shared_frames():

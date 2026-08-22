@@ -430,17 +430,25 @@ test("clearField hides stale heat values while retaining origin markers", async 
     assert.deepEqual(harness.createdGroups[0].layers, participantMarkers);
 });
 
-test("controller renders four fixed travel bands and hatches explicit missing estimates", async () => {
-    const harness = createHarness({ width: 5 });
+test("controller renders five shared travel bands and hatches explicit missing estimates", async () => {
+    const harness = createHarness({ width: 6 });
     const fetchCalls = [];
     const completeBandPayload = {
         ...payload,
         stops: [
-            ...payload.stops,
+            payload.stops[0],
+            {
+                name: "Within threshold",
+                lat: 0.5,
+                lon: 1.5,
+                participant_minutes: [35],
+                group_max_minutes: 35,
+            },
+            ...payload.stops.slice(1).map((stop) => ({ ...stop, lon: stop.lon + 1 })),
             {
                 name: "Missing",
                 lat: 0.5,
-                lon: 4.5,
+                lon: 5.5,
                 participant_minutes: [null],
                 group_max_minutes: null,
             },
@@ -475,6 +483,7 @@ test("controller renders four fixed travel bands and hatches explicit missing es
     harness.runFrame();
     const fieldPixels = harness.canvasOperations.filter((operation) => operation.type === "fillRect");
     assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.fillStyle))], [
+        "#2458df",
         "#4dc694",
         "#ffd447",
         "#ff6658",
@@ -483,7 +492,7 @@ test("controller renders four fixed travel bands and hatches explicit missing es
     ]);
     assert.deepEqual([...new Set(fieldPixels.map((operation) => operation.alpha))], [0.48]);
     assert.equal(harness.canvasOperations.filter((operation) => operation.type === "pattern").length, 1);
-    assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 4);
+    assert.equal(harness.canvasOperations.filter((operation) => operation.type === "dot").length, 5);
 
     controller.setParticipant(7);
     controller.setThreshold(50);
@@ -604,7 +613,7 @@ test("theme changes redraw homepage and results maps with fresh CSS colors witho
         harness.runFrame();
         assert.equal(harness.themeListenerCount, 1, mode);
 
-        harness.setThemeColor("--mint", "#123456");
+        harness.setThemeColor("--blue", "#123456");
         harness.dispatchThemeChange();
         harness.dispatchThemeChange();
         assert.equal(harness.frameQueue.length, 1, mode);

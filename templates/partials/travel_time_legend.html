@@ -1,0 +1,12 @@
+<ul
+    class="travel-time-legend {{ legend_class }}"
+    aria-label="{{ t('home.legend_label') }}"
+    {% if preview_legend %}data-preview-legend{% endif %}
+>
+    <li><span class="travel-time-swatch travel-time-swatch--fastest"></span>{{ t("home.legend_20") }}</li>
+    <li><span class="travel-time-swatch travel-time-swatch--short"></span>{{ t("home.legend_about_35") }}</li>
+    <li><span class="travel-time-swatch travel-time-swatch--medium"></span>{{ t("home.legend_36_50") }}</li>
+    <li><span class="travel-time-swatch travel-time-swatch--long"></span>{{ t("home.legend_51_65") }}</li>
+    <li><span class="travel-time-swatch travel-time-swatch--longest"></span>{{ t("home.legend_over_65") }}</li>
+    <li><span class="travel-time-swatch travel-time-swatch--missing"></span>{{ t("home.legend_no_estimate") }}</li>
+</ul>

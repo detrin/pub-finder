@@ -6,6 +6,7 @@ const DEFAULT_THRESHOLD = 35;
 const DEFAULT_STEP = 15;
 const MAX_RENDER_GRID_SIZE = 96;
 const BAND_COLORS = [
+    ["--blue", "#2458df"],
     ["--mint", "#4dc694"],
     ["--yellow", "#ffd447"],
     ["--coral", "#ff6658"],
